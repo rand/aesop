@@ -110,16 +110,16 @@ pub const Parser = struct {
 
     /// Parse incoming bytes and produce events
     pub fn parse(self: *Parser, allocator: std.mem.Allocator, input: []const u8) ![]Event {
-        var events = std.ArrayList(Event).init(allocator);
-        defer events.deinit();
+        var events: std.ArrayList(Event) = .empty;
+        defer events.deinit(allocator);
 
         for (input) |byte| {
             if (try self.parseByte(byte)) |event| {
-                try events.append(event);
+                try events.append(allocator, event);
             }
         }
 
-        return events.toOwnedSlice();
+        return events.toOwnedSlice(allocator);
     }
 
     fn parseByte(self: *Parser, byte: u8) !?Event {
@@ -183,7 +183,7 @@ pub const Parser = struct {
         }
     }
 
-    fn parseCsi(self: *Parser, seq: []const u8) !?Event {
+    fn parseCsi(_: *Parser, seq: []const u8) !?Event {
         if (seq.len == 0) return null;
 
         // Arrow keys

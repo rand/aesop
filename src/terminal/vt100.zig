@@ -12,35 +12,35 @@ pub const Cursor = struct {
     /// Move cursor to position (row, col) - 1-indexed
     pub fn goto(row: u16, col: u16) [32]u8 {
         var buf: [32]u8 = undefined;
-        const len = std.fmt.bufPrint(&buf, CSI ++ "{d};{d}H", .{ row, col }) catch unreachable;
+        _ = std.fmt.bufPrint(&buf, CSI ++ "{d};{d}H", .{ row, col }) catch unreachable;
         return buf;
     }
 
     /// Move cursor up by n lines
     pub fn up(n: u16) [16]u8 {
         var buf: [16]u8 = undefined;
-        const len = std.fmt.bufPrint(&buf, CSI ++ "{d}A", .{n}) catch unreachable;
+        _ = std.fmt.bufPrint(&buf, CSI ++ "{d}A", .{n}) catch unreachable;
         return buf;
     }
 
     /// Move cursor down by n lines
     pub fn down(n: u16) [16]u8 {
         var buf: [16]u8 = undefined;
-        const len = std.fmt.bufPrint(&buf, CSI ++ "{d}B", .{n}) catch unreachable;
+        _ = std.fmt.bufPrint(&buf, CSI ++ "{d}B", .{n}) catch unreachable;
         return buf;
     }
 
     /// Move cursor right by n columns
     pub fn right(n: u16) [16]u8 {
         var buf: [16]u8 = undefined;
-        const len = std.fmt.bufPrint(&buf, CSI ++ "{d}C", .{n}) catch unreachable;
+        _ = std.fmt.bufPrint(&buf, CSI ++ "{d}C", .{n}) catch unreachable;
         return buf;
     }
 
     /// Move cursor left by n columns
     pub fn left(n: u16) [16]u8 {
         var buf: [16]u8 = undefined;
-        const len = std.fmt.bufPrint(&buf, CSI ++ "{d}D", .{n}) catch unreachable;
+        _ = std.fmt.bufPrint(&buf, CSI ++ "{d}D", .{n}) catch unreachable;
         return buf;
     }
 
@@ -101,14 +101,14 @@ pub const Color = struct {
         /// Generate foreground color escape sequence
         pub fn fg(self: Rgb) [32]u8 {
             var buf: [32]u8 = undefined;
-            const len = std.fmt.bufPrint(&buf, CSI ++ "38;2;{d};{d};{d}m", .{ self.r, self.g, self.b }) catch unreachable;
+            _ = std.fmt.bufPrint(&buf, CSI ++ "38;2;{d};{d};{d}m", .{ self.r, self.g, self.b }) catch unreachable;
             return buf;
         }
 
         /// Generate background color escape sequence
         pub fn bg(self: Rgb) [32]u8 {
             var buf: [32]u8 = undefined;
-            const len = std.fmt.bufPrint(&buf, CSI ++ "48;2;{d};{d};{d}m", .{ self.r, self.g, self.b }) catch unreachable;
+            _ = std.fmt.bufPrint(&buf, CSI ++ "48;2;{d};{d};{d}m", .{ self.r, self.g, self.b }) catch unreachable;
             return buf;
         }
     };
@@ -135,14 +135,14 @@ pub const Color = struct {
         pub fn fg(self: Standard) [8]u8 {
             var buf: [8]u8 = undefined;
             const code = if (@intFromEnum(self) < 8) 30 + @intFromEnum(self) else 82 + @intFromEnum(self);
-            const len = std.fmt.bufPrint(&buf, CSI ++ "{d}m", .{code}) catch unreachable;
+            _ = std.fmt.bufPrint(&buf, CSI ++ "{d}m", .{code}) catch unreachable;
             return buf;
         }
 
         pub fn bg(self: Standard) [8]u8 {
             var buf: [8]u8 = undefined;
             const code = if (@intFromEnum(self) < 8) 40 + @intFromEnum(self) else 92 + @intFromEnum(self);
-            const len = std.fmt.bufPrint(&buf, CSI ++ "{d}m", .{code}) catch unreachable;
+            _ = std.fmt.bufPrint(&buf, CSI ++ "{d}m", .{code}) catch unreachable;
             return buf;
         }
     };

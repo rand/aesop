@@ -97,8 +97,8 @@ pub const Terminal = struct {
                 }
 
                 return .{
-                    .width = winsize.ws_col,
-                    .height = winsize.ws_row,
+                    .width = winsize.col,
+                    .height = winsize.row,
                 };
             },
 
@@ -117,7 +117,7 @@ pub const Terminal = struct {
     pub fn readInput(self: *const Terminal, buffer: []u8) !usize {
         _ = self;
 
-        const stdin = std.fs.File.fromHandle(std.posix.STDIN_FILENO);
+        const stdin = std.fs.File{ .handle = std.posix.STDIN_FILENO };
         return stdin.read(buffer) catch |err| {
             if (err == error.WouldBlock) return 0;
             return err;
@@ -128,6 +128,6 @@ pub const Terminal = struct {
 test "terminal: init" {
     if (builtin.os.tag == .windows) return error.SkipZigTest;
 
-    var term = try Terminal.init();
+    const term = try Terminal.init();
     try std.testing.expect(!term.raw_mode_enabled);
 }
