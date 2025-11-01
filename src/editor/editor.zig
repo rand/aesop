@@ -58,7 +58,7 @@ pub const Editor = struct {
     }
 
     /// Get active buffer
-    pub fn getActiveBuffer(self: *Editor) ?*Buffer.Buffer {
+    pub fn getActiveBuffer(self: *const Editor) ?*const Buffer.Buffer {
         return self.buffer_manager.getActiveBuffer();
     }
 

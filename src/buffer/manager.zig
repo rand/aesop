@@ -79,7 +79,7 @@ pub const Buffer = struct {
         defer allocator.free(content);
 
         // Create rope from content
-        var rope = try Rope.initFromString(allocator, content);
+        const rope = try Rope.initFromString(allocator, content);
 
         // Duplicate filepath for metadata
         const owned_path = try allocator.dupe(u8, filepath);
@@ -93,7 +93,7 @@ pub const Buffer = struct {
 
     /// Create buffer from string
     pub fn initFromString(allocator: std.mem.Allocator, id: BufferId, content: []const u8) !Buffer {
-        var rope = try Rope.initFromString(allocator, content);
+        const rope = try Rope.initFromString(allocator, content);
 
         return .{
             .metadata = BufferMetadata.init(id, null),
@@ -188,8 +188,7 @@ pub const BufferManager = struct {
 
     /// Clean up all buffers
     pub fn deinit(self: *BufferManager) void {
-        const items = self.buffers.items(self.allocator);
-        for (items) |*buffer| {
+        for (self.buffers.items) |*buffer| {
             buffer.deinit();
         }
         self.buffers.deinit(self.allocator);
@@ -232,9 +231,8 @@ pub const BufferManager = struct {
     }
 
     /// Get buffer by ID
-    pub fn getBuffer(self: *BufferManager, id: BufferId) ?*Buffer {
-        const items = self.buffers.items(self.allocator);
-        for (items) |*buffer| {
+    pub fn getBuffer(self: *const BufferManager, id: BufferId) ?*const Buffer {
+        for (self.buffers.items) |*buffer| {
             if (buffer.metadata.id == id) {
                 return buffer;
             }
@@ -243,7 +241,7 @@ pub const BufferManager = struct {
     }
 
     /// Get active buffer
-    pub fn getActiveBuffer(self: *BufferManager) ?*Buffer {
+    pub fn getActiveBuffer(self: *const BufferManager) ?*const Buffer {
         if (self.active_buffer_id) |id| {
             return self.getBuffer(id);
         }

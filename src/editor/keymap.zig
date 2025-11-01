@@ -40,7 +40,20 @@ pub const Key = union(enum) {
 };
 
 /// Key sequence (for chords like "g g")
-pub const KeySequence = std.BoundedArray(Key, 4);
+pub const KeySequence = struct {
+    keys: [4]Key = undefined,
+    len: usize = 0,
+
+    pub fn append(self: *KeySequence, key: Key) !void {
+        if (self.len >= self.keys.len) return error.SequenceFull;
+        self.keys[self.len] = key;
+        self.len += 1;
+    }
+
+    pub fn constSlice(self: *const KeySequence) []const Key {
+        return self.keys[0..self.len];
+    }
+};
 
 /// Key binding - maps key sequence to command
 pub const Binding = struct {
@@ -91,19 +104,19 @@ pub const Keymap = struct {
     pub fn init(allocator: std.mem.Allocator, mode: Mode) Keymap {
         return .{
             .mode = mode,
-            .bindings = std.ArrayList(Binding).init(allocator),
+            .bindings = std.ArrayList(Binding).empty,
             .allocator = allocator,
         };
     }
 
     /// Clean up keymap
     pub fn deinit(self: *Keymap) void {
-        self.bindings.deinit();
+        self.bindings.deinit(self.allocator);
     }
 
     /// Add a binding
     pub fn bind(self: *Keymap, binding: Binding) !void {
-        try self.bindings.append(binding);
+        try self.bindings.append(self.allocator, binding);
     }
 
     /// Find command for key sequence

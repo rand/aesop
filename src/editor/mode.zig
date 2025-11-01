@@ -66,14 +66,16 @@ pub const Transition = struct {
 pub const ModeManager = struct {
     current: Mode,
     previous: Mode,
-    history: std.BoundedArray(Transition, 100),
+    history: [100]Transition,
+    history_len: usize,
 
     /// Initialize in normal mode
     pub fn init() ModeManager {
         return .{
             .current = .normal,
             .previous = .normal,
-            .history = .{},
+            .history = undefined,
+            .history_len = 0,
         };
     }
 
@@ -98,7 +100,10 @@ pub const ModeManager = struct {
 
         // Record transition
         const transition = Transition.init(self.current, new_mode);
-        self.history.append(transition) catch {}; // Ignore if history is full
+        if (self.history_len < self.history.len) {
+            self.history[self.history_len] = transition;
+            self.history_len += 1;
+        }
 
         // Update state
         self.previous = self.current;
@@ -154,12 +159,12 @@ pub const ModeManager = struct {
 
     /// Get transition history
     pub fn getHistory(self: *const ModeManager) []const Transition {
-        return self.history.constSlice();
+        return self.history[0..self.history_len];
     }
 
     /// Clear transition history
     pub fn clearHistory(self: *ModeManager) void {
-        self.history.len = 0;
+        self.history_len = 0;
     }
 };
 

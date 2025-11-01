@@ -164,7 +164,7 @@ pub const Rope = struct {
 
         const actual_end = @min(end, self.len());
         const slice_len = actual_end - start;
-        var result = try allocator.alloc(u8, slice_len);
+        const result = try allocator.alloc(u8, slice_len);
         var pos: usize = 0;
 
         try self.collectRange(self.root.?, start, actual_end, result, &pos);
@@ -264,7 +264,7 @@ pub const Rope = struct {
         }
     }
 
-    fn rebalance(self: *Rope) !void {
+    fn rebalance(_: *Rope) !void {
         // TODO: Implement AVL-style rebalancing
         // For now, we accept potentially unbalanced trees
         // This will be optimized in later iterations
