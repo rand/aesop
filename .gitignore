@@ -1,0 +1,17 @@
+# Zig build artifacts
+.zig-cache/
+zig-out/
+
+# Editor temp files
+*.swp
+*.swo
+*~
+.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# Beads (tracked separately)
+.beads/daemon.lock
