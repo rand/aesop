@@ -290,6 +290,74 @@ pub const Search = struct {
 
         return matches.toOwnedSlice(allocator);
     }
+
+    /// Find all matches in text (for highlighting and count)
+    pub fn findAllMatches(
+        self: *Search,
+        text: []const u8,
+        allocator: std.mem.Allocator,
+    ) ![]Match {
+        if (self.query_len == 0) {
+            return &[_]Match{};
+        }
+
+        const query = self.getQuery();
+        var matches = std.ArrayList(Match).empty;
+        errdefer matches.deinit(allocator);
+
+        var offset: usize = 0;
+        var line: usize = 0;
+        var col: usize = 0;
+
+        while (offset + query.len <= text.len) {
+            // Check if query matches at current position
+            if (std.mem.eql(u8, text[offset .. offset + query.len], query)) {
+                // Found match - calculate positions
+                const match_start = Cursor.Position{ .line = line, .col = col };
+
+                // Calculate end position
+                var end_line = line;
+                var end_col = col;
+                for (query) |c| {
+                    if (c == '\n') {
+                        end_line += 1;
+                        end_col = 0;
+                    } else {
+                        end_col += 1;
+                    }
+                }
+
+                try matches.append(allocator, Match{
+                    .start = match_start,
+                    .end = Cursor.Position{ .line = end_line, .col = end_col },
+                });
+
+                // Skip past this match to find next one
+                offset += query.len;
+                col += query.len;
+                continue;
+            }
+
+            // Move to next position
+            if (text[offset] == '\n') {
+                line += 1;
+                col = 0;
+            } else {
+                col += 1;
+            }
+            offset += 1;
+        }
+
+        self.match_count = matches.items.len;
+        return matches.toOwnedSlice(allocator);
+    }
+
+    /// Update match count for current query in text
+    pub fn updateMatchCount(self: *Search, text: []const u8, allocator: std.mem.Allocator) !void {
+        const matches = try self.findAllMatches(text, allocator);
+        defer allocator.free(matches);
+        // match_count is already set by findAllMatches
+    }
 };
 
 // === Tests ===
