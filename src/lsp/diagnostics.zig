@@ -62,20 +62,13 @@ pub const DiagnosticManager = struct {
     }
 
     /// Get diagnostics for a specific line in a file
+    /// Note: Returns empty slice - use getSeverestForLine for practical usage
     pub fn getForLine(self: *const DiagnosticManager, uri: []const u8, line: u32) []const Diagnostic {
-        const all_diagnostics = self.get(uri) orelse return &[_]Diagnostic{};
-
-        // Count matching diagnostics
-        var count: usize = 0;
-        for (all_diagnostics) |diag| {
-            if (diag.range.start.line == line) {
-                count += 1;
-            }
-        }
-
-        // For now, return empty - proper implementation would need allocator
-        // This is a convenience method that could be improved
-        _ = count;
+        _ = self;
+        _ = uri;
+        _ = line;
+        // This would require allocating a new array, which needs an allocator parameter
+        // For now, use getSeverestForLine() which returns the most severe diagnostic
         return &[_]Diagnostic{};
     }
 

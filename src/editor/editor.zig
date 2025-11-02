@@ -26,6 +26,7 @@ const PluginSystem = @import("../plugin/system.zig");
 const Renderer = @import("../render/renderer.zig").Renderer;
 const LspClient = @import("../lsp/client.zig").Client;
 const LspHandlers = @import("../lsp/handlers.zig");
+const LspDiagnostics = @import("../lsp/diagnostics.zig");
 const CompletionList = @import("completion.zig").CompletionList;
 
 /// Pending command awaiting user input
@@ -89,6 +90,7 @@ pub const Editor = struct {
     buffer_switcher_selected: usize,
     lsp_client: ?LspClient, // Optional LSP client (null if not initialized)
     completion_list: CompletionList, // Code completion popup
+    diagnostic_manager: LspDiagnostics.DiagnosticManager, // LSP diagnostics storage
 
     // Viewport (legacy - will be replaced by window_manager)
     scroll_offset: usize, // Line offset for scrolling
@@ -138,6 +140,7 @@ pub const Editor = struct {
             .buffer_switcher_selected = 0,
             .lsp_client = null, // LSP client initialized on-demand
             .completion_list = CompletionList.init(allocator),
+            .diagnostic_manager = LspDiagnostics.DiagnosticManager.init(allocator),
             .scroll_offset = 0,
         };
 
@@ -152,6 +155,7 @@ pub const Editor = struct {
 
     /// Clean up editor
     pub fn deinit(self: *Editor) void {
+        self.diagnostic_manager.deinit();
         self.completion_list.deinit();
         if (self.lsp_client) |*client| {
             client.deinit();
@@ -206,6 +210,11 @@ pub const Editor = struct {
 
         // Notify LSP if available
         if (self.lsp_client) |*client| {
+            // Set notification handler if not already set
+            if (client.notification_handler == null) {
+                client.setNotificationHandler(handleLspNotification, self);
+            }
+
             if (client.isReady()) {
                 const buffer = self.buffer_manager.getActiveBuffer() orelse return;
                 const uri = try self.makeFileUri(filepath);
@@ -274,6 +283,44 @@ pub const Editor = struct {
             try self.buffer_manager.closeBuffer(id);
         } else {
             return error.NoActiveBuffer;
+        }
+    }
+
+    /// Handle LSP notifications from server
+    pub fn handleLspNotification(ctx: ?*anyopaque, method: []const u8, params_json: []const u8) !void {
+        const self: *Editor = @ptrCast(@alignCast(ctx orelse return));
+        const ResponseParser = @import("../lsp/response_parser.zig");
+
+        // Handle textDocument/publishDiagnostics
+        if (std.mem.eql(u8, method, "textDocument/publishDiagnostics")) {
+            // Parse the params JSON to extract diagnostics
+            const result = ResponseParser.parseDiagnosticsNotification(
+                self.allocator,
+                params_json,
+            ) catch |err| {
+                std.debug.print("[LSP] Failed to parse diagnostics: {}\n", .{err});
+                return;
+            };
+
+            // Update diagnostic manager
+            self.diagnostic_manager.update(result.uri, result.diagnostics) catch |err| {
+                std.debug.print("[LSP] Failed to update diagnostics: {}\n", .{err});
+                // Clean up on error
+                self.allocator.free(result.uri);
+                for (result.diagnostics) |*diag| {
+                    diag.deinit(self.allocator);
+                }
+                self.allocator.free(result.diagnostics);
+                return;
+            };
+
+            std.debug.print("[LSP] Updated diagnostics for {s}: {} items\n", .{
+                result.uri,
+                result.diagnostics.len,
+            });
+        } else {
+            // Unknown notification, ignore
+            std.debug.print("[LSP] Ignoring notification: {s}\n", .{method});
         }
     }
 
