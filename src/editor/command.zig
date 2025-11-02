@@ -1395,6 +1395,46 @@ fn toggleSyntaxHighlighting(ctx: *Context) Result {
     return Result.ok();
 }
 
+// === Line Operation Commands ===
+
+/// Move line up
+fn moveLineUp(ctx: *Context) Result {
+    if (ctx.editor.buffer_manager.active_buffer_id) |id| {
+        const buffer = ctx.editor.buffer_manager.getBufferMut(id) orelse return Result.err("No active buffer");
+
+        // Apply to primary selection
+        const sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+        const new_sel = Actions.moveLineUp(buffer, sel) catch {
+            return Result.err("Failed to move line up");
+        };
+        ctx.editor.selections.setSingleSelection(ctx.editor.allocator, new_sel) catch {
+            return Result.err("Failed to update selection");
+        };
+
+        return Result.ok();
+    }
+    return Result.err("No active buffer");
+}
+
+/// Move line down
+fn moveLineDown(ctx: *Context) Result {
+    if (ctx.editor.buffer_manager.active_buffer_id) |id| {
+        const buffer = ctx.editor.buffer_manager.getBufferMut(id) orelse return Result.err("No active buffer");
+
+        // Apply to primary selection
+        const sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+        const new_sel = Actions.moveLineDown(buffer, sel) catch {
+            return Result.err("Failed to move line down");
+        };
+        ctx.editor.selections.setSingleSelection(ctx.editor.allocator, new_sel) catch {
+            return Result.err("Failed to update selection");
+        };
+
+        return Result.ok();
+    }
+    return Result.err("No active buffer");
+}
+
 // === Window Split Commands ===
 
 /// Split window horizontally (top/bottom)
@@ -1676,6 +1716,20 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .name = "toggle_comment",
         .description = "Toggle line comments (gcc or Ctrl+/)",
         .handler = toggleLineComment,
+        .category = .edit,
+    });
+
+    try registry.register(.{
+        .name = "move_line_up",
+        .description = "Move current line up (Alt+Up)",
+        .handler = moveLineUp,
+        .category = .edit,
+    });
+
+    try registry.register(.{
+        .name = "move_line_down",
+        .description = "Move current line down (Alt+Down)",
+        .handler = moveLineDown,
         .category = .edit,
     });
 

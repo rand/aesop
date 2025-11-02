@@ -340,3 +340,126 @@ test "actions: clipboard yank and paste" {
 
     try std.testing.expectEqualStrings("hello worldhello", text);
 }
+
+// === Line Operations ===
+
+/// Get the start and end byte offsets of a line
+fn getLineRange(buffer: *const Buffer.Buffer, line_num: usize) !struct { start: usize, end: usize } {
+    const allocator = std.heap.page_allocator;
+    const total_bytes = buffer.rope.len();
+
+    var current_line: usize = 0;
+    var line_start: usize = 0;
+    var byte_offset: usize = 0;
+
+    // Find start of target line
+    while (current_line < line_num and byte_offset < total_bytes) {
+        const remaining = try buffer.rope.slice(allocator, byte_offset, total_bytes);
+        defer allocator.free(remaining);
+
+        if (std.mem.indexOfScalar(u8, remaining, '\n')) |newline_pos| {
+            byte_offset += newline_pos + 1;
+            current_line += 1;
+            if (current_line == line_num) {
+                line_start = byte_offset;
+            }
+        } else {
+            break;
+        }
+    }
+
+    // If we didn't reach the line, it doesn't exist
+    if (current_line < line_num) {
+        return error.LineNotFound;
+    }
+
+    if (current_line == line_num) {
+        line_start = byte_offset;
+    }
+
+    // Find end of line (next newline or EOF)
+    var line_end = line_start;
+    if (line_start < total_bytes) {
+        const remaining = try buffer.rope.slice(allocator, line_start, total_bytes);
+        defer allocator.free(remaining);
+
+        if (std.mem.indexOfScalar(u8, remaining, '\n')) |newline_pos| {
+            line_end = line_start + newline_pos + 1; // Include newline
+        } else {
+            line_end = total_bytes; // Last line without newline
+        }
+    }
+
+    return .{ .start = line_start, .end = line_end };
+}
+
+/// Move line up (swap with previous line)
+pub fn moveLineUp(
+    buffer: *Buffer.Buffer,
+    selection: Cursor.Selection,
+) !Cursor.Selection {
+    const line_num = selection.head.line;
+
+    // Can't move first line up
+    if (line_num == 0) {
+        return selection;
+    }
+
+    const allocator = std.heap.page_allocator;
+
+    // Get current line and previous line ranges
+    const curr_range = try getLineRange(buffer, line_num);
+    const prev_range = try getLineRange(buffer, line_num - 1);
+
+    // Get line contents
+    const curr_text = try buffer.rope.slice(allocator, curr_range.start, curr_range.end);
+    defer allocator.free(curr_text);
+    const prev_text = try buffer.rope.slice(allocator, prev_range.start, prev_range.end);
+    defer allocator.free(prev_text);
+
+    // Delete both lines
+    try buffer.rope.delete(prev_range.start, curr_range.end);
+
+    // Insert in swapped order
+    try buffer.rope.insert(prev_range.start, curr_text);
+    const curr_len = curr_text.len;
+    try buffer.rope.insert(prev_range.start + curr_len, prev_text);
+
+    // Move cursor up one line
+    const new_pos = Cursor.Position{ .line = line_num - 1, .col = selection.head.col };
+    return selection.moveTo(new_pos);
+}
+
+/// Move line down (swap with next line)
+pub fn moveLineDown(
+    buffer: *Buffer.Buffer,
+    selection: Cursor.Selection,
+) !Cursor.Selection {
+    const line_num = selection.head.line;
+    const allocator = std.heap.page_allocator;
+
+    // Check if next line exists
+    const curr_range = try getLineRange(buffer, line_num);
+    const next_range = getLineRange(buffer, line_num + 1) catch {
+        // No next line
+        return selection;
+    };
+
+    // Get line contents
+    const curr_text = try buffer.rope.slice(allocator, curr_range.start, curr_range.end);
+    defer allocator.free(curr_text);
+    const next_text = try buffer.rope.slice(allocator, next_range.start, next_range.end);
+    defer allocator.free(next_text);
+
+    // Delete both lines
+    try buffer.rope.delete(curr_range.start, next_range.end);
+
+    // Insert in swapped order
+    try buffer.rope.insert(curr_range.start, next_text);
+    const next_len = next_text.len;
+    try buffer.rope.insert(curr_range.start + next_len, curr_text);
+
+    // Move cursor down one line
+    const new_pos = Cursor.Position{ .line = line_num + 1, .col = selection.head.col };
+    return selection.moveTo(new_pos);
+}
