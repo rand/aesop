@@ -637,13 +637,12 @@ pub const EditorApp = struct {
                 );
             } else if (syntax_group) |group| {
                 // Syntax highlighting: use color from highlight group
-                // TODO: Map highlight groups to proper renderer colors
-                _ = group; // Unused for now - will be used when we add color support
+                const color = group.toColor();
                 self.renderer.writeText(
                     row,
                     screen_col,
                     char_slice,
-                    .default,
+                    color,
                     .default,
                     Attrs{},
                 );

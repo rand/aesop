@@ -35,15 +35,35 @@ pub const HighlightGroup = enum {
     punctuation,   // Delimiters
     error_node,    // Parse errors
 
+    /// Convert to renderer color (uses standard 16-color palette)
+    pub fn toColor(self: HighlightGroup) @import("../render/buffer.zig").Color {
+        const Color = @import("../render/buffer.zig").Color;
+
+        return switch (self) {
+            .keyword => Color.magenta,
+            .function_name => Color.yellow,
+            .type_name => Color.cyan,
+            .variable => Color.white,
+            .constant => Color.bright_magenta,
+            .string => Color.green,
+            .number => Color.bright_yellow,
+            .comment => Color.bright_black, // Gray
+            .operator => Color.white,
+            .punctuation => Color.white,
+            .error_node => Color.red,
+        };
+    }
+
+    /// Legacy ANSI code method (for reference)
     pub fn toAnsiCode(self: HighlightGroup) []const u8 {
         return switch (self) {
             .keyword => "\x1b[35m",       // Magenta
             .function_name => "\x1b[33m", // Yellow
             .type_name => "\x1b[36m",     // Cyan
             .variable => "\x1b[37m",      // White
-            .constant => "\x1b[35m",      // Magenta
+            .constant => "\x1b[95m",      // Bright Magenta
             .string => "\x1b[32m",        // Green
-            .number => "\x1b[33m",        // Yellow
+            .number => "\x1b[93m",        // Bright Yellow
             .comment => "\x1b[90m",       // Bright black (gray)
             .operator => "\x1b[37m",      // White
             .punctuation => "\x1b[37m",   // White

@@ -36,6 +36,24 @@ pub const Color = union(enum) {
                 r.b == other.rgb.b,
         };
     }
+
+    /// Common color constants
+    pub const black = Color{ .standard = vt100.Color.Standard.black };
+    pub const red = Color{ .standard = vt100.Color.Standard.red };
+    pub const green = Color{ .standard = vt100.Color.Standard.green };
+    pub const yellow = Color{ .standard = vt100.Color.Standard.yellow };
+    pub const blue = Color{ .standard = vt100.Color.Standard.blue };
+    pub const magenta = Color{ .standard = vt100.Color.Standard.magenta };
+    pub const cyan = Color{ .standard = vt100.Color.Standard.cyan };
+    pub const white = Color{ .standard = vt100.Color.Standard.white };
+    pub const bright_black = Color{ .standard = vt100.Color.Standard.bright_black };
+    pub const bright_red = Color{ .standard = vt100.Color.Standard.bright_red };
+    pub const bright_green = Color{ .standard = vt100.Color.Standard.bright_green };
+    pub const bright_yellow = Color{ .standard = vt100.Color.Standard.bright_yellow };
+    pub const bright_blue = Color{ .standard = vt100.Color.Standard.bright_blue };
+    pub const bright_magenta = Color{ .standard = vt100.Color.Standard.bright_magenta };
+    pub const bright_cyan = Color{ .standard = vt100.Color.Standard.bright_cyan };
+    pub const bright_white = Color{ .standard = vt100.Color.Standard.bright_white };
 };
 
 /// Text attributes
