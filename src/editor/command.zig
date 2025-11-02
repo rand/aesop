@@ -783,6 +783,174 @@ fn startSearch(ctx: *Context) Result {
     return Result.err("Select text to search");
 }
 
+/// Duplicate current line
+fn duplicateLine(ctx: *Context) Result {
+    const buffer_id = ctx.editor.buffer_manager.active_buffer_id orelse {
+        return Result.err("No active buffer");
+    };
+    const buffer = ctx.editor.buffer_manager.getBufferMut(buffer_id) orelse {
+        return Result.err("No active buffer");
+    };
+
+    const cursor_pos = ctx.editor.getCursorPosition();
+    const text = buffer.getText() catch {
+        return Result.err("Failed to get buffer text");
+    };
+    defer ctx.editor.allocator.free(text);
+
+    // Find current line bounds
+    var line: usize = 0;
+    var line_start: usize = 0;
+    var offset: usize = 0;
+
+    while (offset < text.len) {
+        if (line == cursor_pos.line) {
+            line_start = offset;
+            break;
+        }
+        if (text[offset] == '\n') {
+            line += 1;
+        }
+        offset += 1;
+    }
+
+    // Find line end
+    var line_end = line_start;
+    while (line_end < text.len and text[line_end] != '\n') {
+        line_end += 1;
+    }
+
+    const line_text = text[line_start..line_end];
+
+    // Build text with newline
+    const dup_text = std.fmt.allocPrint(ctx.editor.allocator, "\n{s}", .{line_text}) catch {
+        return Result.err("Failed to allocate");
+    };
+    defer ctx.editor.allocator.free(dup_text);
+
+    // Insert at end of current line
+    const end_of_line_pos = Cursor.Position{ .line = cursor_pos.line, .col = line_text.len };
+    const end_sel = Cursor.Selection.cursor(end_of_line_pos);
+
+    _ = Actions.insertText(buffer, end_sel, dup_text) catch {
+        return Result.err("Failed to insert");
+    };
+
+    buffer.metadata.markModified();
+
+    // Move cursor to duplicated line
+    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, .{ .line = cursor_pos.line + 1, .col = cursor_pos.col }) catch {};
+
+    return Result.ok();
+}
+
+/// Join current line with next line
+fn joinLines(ctx: *Context) Result {
+    const buffer_id = ctx.editor.buffer_manager.active_buffer_id orelse {
+        return Result.err("No active buffer");
+    };
+    const buffer = ctx.editor.buffer_manager.getBufferMut(buffer_id) orelse {
+        return Result.err("No active buffer");
+    };
+
+    const cursor_pos = ctx.editor.getCursorPosition();
+    const total_lines = buffer.lineCount();
+
+    if (cursor_pos.line + 1 >= total_lines) {
+        return Result.err("No next line to join");
+    }
+
+    const text = buffer.getText() catch {
+        return Result.err("Failed to get buffer text");
+    };
+    defer ctx.editor.allocator.free(text);
+
+    // Find newline at end of current line
+    var line: usize = 0;
+    var offset: usize = 0;
+
+    while (offset < text.len) {
+        if (line == cursor_pos.line) {
+            // Find the newline
+            while (offset < text.len and text[offset] != '\n') {
+                offset += 1;
+            }
+            if (offset < text.len) {
+                // Delete the newline by deleting character from start of next line
+                _ = Actions.deleteCharBefore(buffer, Cursor.Selection.cursor(.{ .line = cursor_pos.line + 1, .col = 0 })) catch {
+                    return Result.err("Failed to delete newline");
+                };
+
+                buffer.metadata.markModified();
+                return Result.ok();
+            }
+        }
+        if (text[offset] == '\n') {
+            line += 1;
+        }
+        offset += 1;
+    }
+
+    return Result.err("Failed to join lines");
+}
+
+/// Delete to end of line
+fn deleteToEndOfLine(ctx: *Context) Result {
+    const buffer_id = ctx.editor.buffer_manager.active_buffer_id orelse {
+        return Result.err("No active buffer");
+    };
+    const buffer = ctx.editor.buffer_manager.getBufferMut(buffer_id) orelse {
+        return Result.err("No active buffer");
+    };
+
+    const primary = ctx.editor.selections.primary(ctx.editor.allocator) orelse {
+        return Result.err("No selection");
+    };
+
+    const text = buffer.getText() catch {
+        return Result.err("Failed to get buffer text");
+    };
+    defer ctx.editor.allocator.free(text);
+
+    // Find end of current line
+    var line: usize = 0;
+    var col: usize = 0;
+    var offset: usize = 0;
+
+    while (offset < text.len) {
+        if (line == primary.head.line and col == primary.head.col) {
+            break;
+        }
+        if (text[offset] == '\n') {
+            line += 1;
+            col = 0;
+        } else {
+            col += 1;
+        }
+        offset += 1;
+    }
+
+    // Find end of line
+    var end_offset = offset;
+    while (end_offset < text.len and text[end_offset] != '\n') {
+        end_offset += 1;
+    }
+
+    // Create selection from cursor to end of line
+    const end_col = col + (end_offset - offset);
+    const delete_sel = Cursor.Selection{
+        .anchor = primary.head,
+        .head = Cursor.Position{ .line = primary.head.line, .col = end_col },
+    };
+
+    _ = Actions.deleteSelection(buffer, delete_sel, null) catch {
+        return Result.err("Failed to delete");
+    };
+
+    buffer.metadata.markModified();
+    return Result.ok();
+}
+
 /// Redo last undone operation
 fn redo(ctx: *Context) Result {
     if (!ctx.editor.undo_history.canRedo()) {
@@ -972,6 +1140,28 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .name = "delete_word",
         .description = "Delete word from cursor (dw)",
         .handler = deleteWord,
+        .category = .edit,
+    });
+
+    // Line manipulation commands
+    try registry.register(.{
+        .name = "duplicate_line",
+        .description = "Duplicate current line (Ctrl+D)",
+        .handler = duplicateLine,
+        .category = .edit,
+    });
+
+    try registry.register(.{
+        .name = "join_lines",
+        .description = "Join current line with next (J)",
+        .handler = joinLines,
+        .category = .edit,
+    });
+
+    try registry.register(.{
+        .name = "delete_to_end",
+        .description = "Delete to end of line (D or $d)",
+        .handler = deleteToEndOfLine,
         .category = .edit,
     });
 

@@ -272,6 +272,10 @@ pub fn setupDefaults(manager: *KeymapManager) !void {
     try normal_map.bind(Binding.fromSingleKey(.{ .char = 'X' }, "delete_char_before"));
     try normal_map.bind(Binding.fromChord(.{ .char = 'd' }, .{ .char = 'd' }, "delete_line"));
     try normal_map.bind(Binding.fromChord(.{ .char = 'd' }, .{ .char = 'w' }, "delete_word"));
+    try normal_map.bind(Binding.fromSingleKey(.{ .char = 'D' }, "delete_to_end"));
+
+    // Line manipulation
+    try normal_map.bind(Binding.fromSingleKey(.{ .char = 'J' }, "join_lines"));
 
     // Undo/redo
     try normal_map.bind(Binding.fromSingleKey(.{ .char = 'u' }, "undo"));

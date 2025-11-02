@@ -182,53 +182,67 @@ pub const Editor = struct {
         if (self.buffer_manager.active_buffer_id) |id| {
             const buffer = self.buffer_manager.getBufferMut(id) orelse return error.NoActiveBuffer;
 
-            // Get primary selection
-            const primary_sel = self.selections.primary(self.allocator) orelse return error.NoSelection;
+            // Get all selections
+            const all_selections = self.selections.all(self.allocator);
 
-            // Handle different key types
-            switch (key) {
-                .char => |codepoint| {
+            // Determine text to insert
+            const text_to_insert: ?[]const u8 = switch (key) {
+                .char => |codepoint| blk: {
                     // Convert character to UTF-8 bytes
                     var buf: [4]u8 = undefined;
                     const len = try std.unicode.utf8Encode(codepoint, &buf);
-                    const text = buf[0..len];
-
-                    // Insert the character
-                    const new_sel = try Actions.insertText(buffer, primary_sel, text);
-
-                    // Update selection
-                    try self.selections.setSingleCursor(self.allocator, new_sel.head);
-
-                    // Mark buffer as modified
-                    buffer.metadata.markModified();
+                    // Allocate persistent storage for the character
+                    const persistent = try self.allocator.alloc(u8, len);
+                    @memcpy(persistent, buf[0..len]);
+                    break :blk persistent;
                 },
-                .special => |special_key| {
-                    switch (special_key) {
-                        .enter => {
-                            // Insert newline
-                            const new_sel = try Actions.insertNewline(buffer, primary_sel);
-                            try self.selections.setSingleCursor(self.allocator, new_sel.head);
-                            buffer.metadata.markModified();
-                        },
-                        .backspace => {
-                            // Delete character before cursor
-                            const new_sel = try Actions.deleteCharBefore(buffer, primary_sel);
-                            try self.selections.setSingleCursor(self.allocator, new_sel.head);
-                            buffer.metadata.markModified();
-                        },
-                        .tab => {
-                            // Insert tab (TODO: make spaces configurable)
-                            const tab_text = "    "; // 4 spaces default
-                            const new_sel = try Actions.insertText(buffer, primary_sel, tab_text);
-                            try self.selections.setSingleCursor(self.allocator, new_sel.head);
-                            buffer.metadata.markModified();
-                        },
-                        else => {
-                            // Ignore other special keys in insert mode
-                        },
+                .special => |special_key| switch (special_key) {
+                    .enter => "\n",
+                    .tab => "    ", // 4 spaces default
+                    else => null,
+                },
+            };
+            defer if (text_to_insert) |txt| {
+                // Free if we allocated
+                if (key == .char) {
+                    self.allocator.free(txt);
+                }
+            };
+
+            // Apply operation to all cursors (in reverse order to maintain positions)
+            var new_selections = std.ArrayList(Cursor.Selection).empty;
+            defer new_selections.deinit(self.allocator);
+
+            var i: usize = all_selections.len;
+            while (i > 0) {
+                i -= 1;
+                const sel = all_selections[i];
+
+                const new_sel = blk: {
+                    if (text_to_insert) |txt| {
+                        break :blk try Actions.insertText(buffer, sel, txt);
+                    } else if (key == .special) {
+                        // Handle backspace specially
+                        if (key.special == .backspace) {
+                            break :blk try Actions.deleteCharBefore(buffer, sel);
+                        }
                     }
-                },
+                    break :blk sel;
+                };
+
+                // Prepend to maintain order
+                try new_selections.insert(self.allocator, 0, new_sel);
             }
+
+            // Update all selections
+            self.selections.clear(self.allocator);
+            for (new_selections.items) |sel| {
+                try self.selections.add(self.allocator, sel);
+            }
+            self.selections.primary_index = if (new_selections.items.len > 0) new_selections.items.len - 1 else 0;
+
+            // Mark buffer as modified
+            buffer.metadata.markModified();
         }
     }
 
