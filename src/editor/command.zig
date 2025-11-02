@@ -1516,6 +1516,168 @@ fn dedentLine(ctx: *Context) Result {
     return Result.ok();
 }
 
+/// Select all text in buffer
+fn selectAll(ctx: *Context) Result {
+    const buffer = ctx.editor.buffer_manager.getActiveBuffer() orelse {
+        return Result.err("No active buffer");
+    };
+
+    // Get the end position (last line, last column)
+    const line_count = buffer.lineCount();
+    if (line_count == 0) {
+        return Result.ok();
+    }
+
+    const last_line = line_count - 1;
+    const allocator = ctx.editor.allocator;
+
+    // Get length of last line
+    const text = buffer.getText() catch {
+        return Result.err("Failed to get buffer text");
+    };
+    defer allocator.free(text);
+
+    var current_line: usize = 0;
+    var offset: usize = 0;
+    var line_start: usize = 0;
+
+    // Find the last line
+    while (offset < text.len) {
+        if (text[offset] == '\n') {
+            current_line += 1;
+            if (current_line == last_line + 1) break;
+            line_start = offset + 1;
+        }
+        offset += 1;
+    }
+
+    // Calculate last column
+    var last_col: usize = 0;
+    while (line_start < text.len and text[line_start] != '\n') {
+        last_col += 1;
+        line_start += 1;
+    }
+
+    // Create selection from start to end
+    const selection = Cursor.Selection.init(
+        Cursor.Position{ .line = 0, .col = 0 },
+        Cursor.Position{ .line = last_line, .col = last_col },
+    );
+
+    ctx.editor.selections.setSingleSelection(allocator, selection) catch {
+        return Result.err("Failed to update selection");
+    };
+
+    return Result.ok();
+}
+
+/// Select entire current line
+fn selectLine(ctx: *Context) Result {
+    const buffer = ctx.editor.buffer_manager.getActiveBuffer() orelse {
+        return Result.err("No active buffer");
+    };
+
+    const cursor_pos = ctx.editor.getCursorPosition();
+    const allocator = ctx.editor.allocator;
+
+    // Get line length
+    const text = buffer.getText() catch {
+        return Result.err("Failed to get buffer text");
+    };
+    defer allocator.free(text);
+
+    var current_line: usize = 0;
+    var offset: usize = 0;
+    var line_start: usize = 0;
+
+    // Find the target line
+    while (offset < text.len and current_line < cursor_pos.line) {
+        if (text[offset] == '\n') {
+            current_line += 1;
+            line_start = offset + 1;
+        }
+        offset += 1;
+    }
+
+    if (current_line == cursor_pos.line) {
+        line_start = offset;
+    }
+
+    // Find line end
+    var line_end = line_start;
+    while (line_end < text.len and text[line_end] != '\n') {
+        line_end += 1;
+    }
+
+    const line_len = line_end - line_start;
+
+    // Select from line start to line end
+    const selection = Cursor.Selection.init(
+        Cursor.Position{ .line = cursor_pos.line, .col = 0 },
+        Cursor.Position{ .line = cursor_pos.line, .col = line_len },
+    );
+
+    ctx.editor.selections.setSingleSelection(allocator, selection) catch {
+        return Result.err("Failed to update selection");
+    };
+
+    return Result.ok();
+}
+
+/// Extend selection to end of line
+fn extendToLineEnd(ctx: *Context) Result {
+    const buffer = ctx.editor.buffer_manager.getActiveBuffer() orelse {
+        return Result.err("No active buffer");
+    };
+
+    const primary = ctx.editor.selections.primary(ctx.editor.allocator) orelse {
+        return Result.err("No selection");
+    };
+
+    const allocator = ctx.editor.allocator;
+    const head = primary.head;
+
+    // Get line length
+    const text = buffer.getText() catch {
+        return Result.err("Failed to get buffer text");
+    };
+    defer allocator.free(text);
+
+    var current_line: usize = 0;
+    var offset: usize = 0;
+    var line_start: usize = 0;
+
+    // Find the current line
+    while (offset < text.len and current_line < head.line) {
+        if (text[offset] == '\n') {
+            current_line += 1;
+            line_start = offset + 1;
+        }
+        offset += 1;
+    }
+
+    if (current_line == head.line) {
+        line_start = offset;
+    }
+
+    // Find line end
+    var line_end = line_start;
+    while (line_end < text.len and text[line_end] != '\n') {
+        line_end += 1;
+    }
+
+    const line_len = line_end - line_start;
+
+    // Extend selection to end of line
+    const new_selection = primary.moveTo(Cursor.Position{ .line = head.line, .col = line_len });
+
+    ctx.editor.selections.setSingleSelection(allocator, new_selection) catch {
+        return Result.err("Failed to update selection");
+    };
+
+    return Result.ok();
+}
+
 /// Switch to next buffer
 fn nextBuffer(ctx: *Context) Result {
     const current_id = ctx.editor.buffer_manager.active_buffer_id orelse {
@@ -2381,6 +2543,27 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .name = "select_word",
         .description = "Select word under cursor (iw)",
         .handler = selectCurrentWord,
+        .category = .selection,
+    });
+
+    try registry.register(.{
+        .name = "select_all",
+        .description = "Select all text in buffer (Ctrl+A)",
+        .handler = selectAll,
+        .category = .selection,
+    });
+
+    try registry.register(.{
+        .name = "select_line",
+        .description = "Select entire current line (V)",
+        .handler = selectLine,
+        .category = .selection,
+    });
+
+    try registry.register(.{
+        .name = "extend_to_line_end",
+        .description = "Extend selection to end of line (Shift+End)",
+        .handler = extendToLineEnd,
         .category = .selection,
     });
 
