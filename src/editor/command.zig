@@ -387,6 +387,101 @@ fn deleteWord(ctx: *Context) Result {
     return Result.err("No active buffer");
 }
 
+/// Yank (copy) current line
+fn yankLine(ctx: *Context) Result {
+    const buffer = ctx.editor.buffer_manager.getActiveBuffer() orelse {
+        return Result.err("No active buffer");
+    };
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse {
+        return Result.err("No selection");
+    };
+
+    // Create selection spanning the entire line
+    const line_start = Motions.moveLineStart(primary_sel, buffer);
+    const line_end = Motions.moveLineEnd(line_start, buffer);
+    const line_selection = Cursor.Selection.init(line_start.head, line_end.head);
+
+    // Yank to clipboard
+    Actions.yankSelection(buffer, line_selection, &ctx.editor.clipboard) catch {
+        return Result.err("Failed to yank line");
+    };
+
+    // Show message
+    ctx.editor.messages.add("Yanked line", .success) catch {};
+
+    return Result.ok();
+}
+
+/// Paste clipboard content after cursor
+fn pasteAfter(ctx: *Context) Result {
+    const buffer_id = ctx.editor.buffer_manager.active_buffer_id orelse {
+        return Result.err("No active buffer");
+    };
+    const buffer = ctx.editor.buffer_manager.getBufferMut(buffer_id) orelse {
+        return Result.err("No active buffer");
+    };
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse {
+        return Result.err("No selection");
+    };
+
+    // Check clipboard has content
+    if (ctx.editor.clipboard.getContent() == null) {
+        return Result.err("Clipboard is empty");
+    }
+
+    // Paste using Actions
+    const new_sel = Actions.pasteAfter(buffer, primary_sel, &ctx.editor.clipboard) catch {
+        return Result.err("Failed to paste");
+    };
+
+    // Update cursor
+    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch {
+        return Result.err("Failed to update cursor");
+    };
+
+    buffer.metadata.markModified();
+
+    // Show message
+    ctx.editor.messages.add("Pasted after cursor", .success) catch {};
+
+    return Result.ok();
+}
+
+/// Paste clipboard content before cursor
+fn pasteBefore(ctx: *Context) Result {
+    const buffer_id = ctx.editor.buffer_manager.active_buffer_id orelse {
+        return Result.err("No active buffer");
+    };
+    const buffer = ctx.editor.buffer_manager.getBufferMut(buffer_id) orelse {
+        return Result.err("No active buffer");
+    };
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse {
+        return Result.err("No selection");
+    };
+
+    // Check clipboard has content
+    if (ctx.editor.clipboard.getContent() == null) {
+        return Result.err("Clipboard is empty");
+    }
+
+    // Paste using Actions
+    const new_sel = Actions.pasteBefore(buffer, primary_sel, &ctx.editor.clipboard) catch {
+        return Result.err("Failed to paste");
+    };
+
+    // Update cursor
+    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch {
+        return Result.err("Failed to update cursor");
+    };
+
+    buffer.metadata.markModified();
+
+    // Show message
+    ctx.editor.messages.add("Pasted before cursor", .success) catch {};
+
+    return Result.ok();
+}
+
 /// Undo last operation
 fn undo(ctx: *Context) Result {
     if (!ctx.editor.undo_history.canUndo()) {
@@ -612,8 +707,30 @@ pub fn registerBuiltins(registry: *Registry) !void {
 
     try registry.register(.{
         .name = "redo",
-        .description = "Redo last undone operation (Ctrl+r)",
+        .description = "Redo last undone operation (U)",
         .handler = redo,
+        .category = .edit,
+    });
+
+    // Clipboard commands
+    try registry.register(.{
+        .name = "yank_line",
+        .description = "Yank (copy) current line (yy)",
+        .handler = yankLine,
+        .category = .edit,
+    });
+
+    try registry.register(.{
+        .name = "paste_after",
+        .description = "Paste after cursor (p)",
+        .handler = pasteAfter,
+        .category = .edit,
+    });
+
+    try registry.register(.{
+        .name = "paste_before",
+        .description = "Paste before cursor (P)",
+        .handler = pasteBefore,
         .category = .edit,
     });
 }

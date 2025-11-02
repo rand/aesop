@@ -277,6 +277,11 @@ pub fn setupDefaults(manager: *KeymapManager) !void {
     try normal_map.bind(Binding.fromSingleKey(.{ .char = 'u' }, "undo"));
     try normal_map.bind(Binding.fromSingleKey(.{ .char = 'U' }, "redo"));
 
+    // Clipboard (yank/paste)
+    try normal_map.bind(Binding.fromChord(.{ .char = 'y' }, .{ .char = 'y' }, "yank_line"));
+    try normal_map.bind(Binding.fromSingleKey(.{ .char = 'p' }, "paste_after"));
+    try normal_map.bind(Binding.fromSingleKey(.{ .char = 'P' }, "paste_before"));
+
     // Insert mode bindings
     const insert_map = manager.getKeymap(.insert);
     try insert_map.bind(Binding.fromSingleKey(.{ .special = .escape }, "normal_mode"));
