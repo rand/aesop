@@ -31,7 +31,7 @@ pub const Config = struct {
     auto_pair_brackets: bool = true,
 
     // Performance settings
-    scroll_offset: usize = 3,  // Lines to keep above/below cursor
+    scroll_offset: usize = 3, // Lines to keep above/below cursor
     max_undo_history: usize = 1000,
 
     // File handling

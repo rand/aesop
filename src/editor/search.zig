@@ -221,7 +221,7 @@ pub const Search = struct {
         const query = self.getQuery();
         if (offset + query.len > text.len) return false;
 
-        const slice = text[offset..offset + query.len];
+        const slice = text[offset .. offset + query.len];
 
         // Check match based on case sensitivity
         const matches = if (self.options.case_sensitive)
@@ -352,7 +352,8 @@ pub const Search = struct {
 
             // Skip positions at or after start_pos
             if (pos.line > start_pos.line or
-                (pos.line == start_pos.line and pos.col >= start_pos.col)) {
+                (pos.line == start_pos.line and pos.col >= start_pos.col))
+            {
                 continue;
             }
 

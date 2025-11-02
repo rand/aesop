@@ -7,8 +7,8 @@ const input = @import("../terminal/input.zig");
 
 /// Key representation
 pub const Key = union(enum) {
-    char: u21,              // Regular character
-    special: input.Key,     // Special key (arrow, enter, etc.)
+    char: u21, // Regular character
+    special: input.Key, // Special key (arrow, enter, etc.)
 
     pub fn eql(self: Key, other: Key) bool {
         return switch (self) {

@@ -10,15 +10,15 @@ pub const WindowId = u32;
 /// Split direction
 pub const SplitDirection = enum {
     horizontal, // Split top/bottom
-    vertical,   // Split left/right
+    vertical, // Split left/right
 };
 
 /// Window dimensions
 pub const Dimensions = struct {
-    row: u16,    // Top-left row
-    col: u16,    // Top-left column
+    row: u16, // Top-left row
+    col: u16, // Top-left column
     height: u16, // Height in rows
-    width: u16,  // Width in columns
+    width: u16, // Width in columns
 
     pub fn contains(self: Dimensions, row: u16, col: u16) bool {
         return row >= self.row and row < self.row + self.height and
@@ -43,7 +43,7 @@ pub const WindowNode = union(enum) {
         direction: SplitDirection,
         dimensions: Dimensions,
         split_ratio: f32, // 0.0 to 1.0, position of split
-        left: *WindowNode,  // For horizontal: top, for vertical: left
+        left: *WindowNode, // For horizontal: top, for vertical: left
         right: *WindowNode, // For horizontal: bottom, for vertical: right
     };
 

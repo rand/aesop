@@ -583,13 +583,13 @@ pub fn selectInnerWord(
 
 /// Pair character types
 pub const PairType = enum {
-    paren,  // ()
+    paren, // ()
     bracket, // []
-    brace,   // {}
-    angle,   // <>
+    brace, // {}
+    angle, // <>
     single_quote, // ''
     double_quote, // ""
-    backtick,     // ``
+    backtick, // ``
 
     pub fn open(self: PairType) u8 {
         return switch (self) {

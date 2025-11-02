@@ -5,10 +5,10 @@ const std = @import("std");
 
 /// Prompt type determines input validation and handling
 pub const PromptType = enum {
-    text,      // Free-form text input
+    text, // Free-form text input
     character, // Single character input
-    number,    // Integer input
-    choice,    // Y/N or multiple choice
+    number, // Integer input
+    choice, // Y/N or multiple choice
 };
 
 /// Prompt state and input buffer

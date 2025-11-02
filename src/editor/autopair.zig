@@ -75,7 +75,7 @@ pub fn getPairedText(
 
     const result = try allocator.alloc(u8, open_len + close_len);
     @memcpy(result[0..open_len], buf[0..open_len]);
-    @memcpy(result[open_len..], buf[open_len..open_len + close_len]);
+    @memcpy(result[open_len..], buf[open_len .. open_len + close_len]);
 
     return result;
 }

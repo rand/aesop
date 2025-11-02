@@ -25,7 +25,7 @@ pub const Position = struct {
 
 /// Selection direction
 pub const Direction = enum {
-    forward,  // anchor < head
+    forward, // anchor < head
     backward, // head < anchor
 
     pub fn reverse(self: Direction) Direction {

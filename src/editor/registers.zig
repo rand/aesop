@@ -5,11 +5,11 @@ const std = @import("std");
 
 /// Register identifier
 pub const RegisterId = union(enum) {
-    named: u8,        // a-z: 26 named registers
-    numbered: u8,     // 0-9: history registers (0 is most recent yank)
-    unnamed,          // "": default register
-    system,           // +: system clipboard
-    black_hole,       // _: delete without saving
+    named: u8, // a-z: 26 named registers
+    numbered: u8, // 0-9: history registers (0 is most recent yank)
+    unnamed, // "": default register
+    system, // +: system clipboard
+    black_hole, // _: delete without saving
 
     pub fn fromChar(ch: u8) ?RegisterId {
         if (ch >= 'a' and ch <= 'z') {

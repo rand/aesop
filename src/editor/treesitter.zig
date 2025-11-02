@@ -23,17 +23,17 @@ pub const SyntaxNode = struct {
 
 /// Highlight group - maps to terminal colors/styles
 pub const HighlightGroup = enum {
-    keyword,       // if, for, return, etc.
+    keyword, // if, for, return, etc.
     function_name, // Function identifiers
-    type_name,     // Type/struct names
-    variable,      // Variable names
-    constant,      // Constants/enums
-    string,        // String literals
-    number,        // Numeric literals
-    comment,       // Comments
-    operator,      // +, -, *, etc.
-    punctuation,   // Delimiters
-    error_node,    // Parse errors
+    type_name, // Type/struct names
+    variable, // Variable names
+    constant, // Constants/enums
+    string, // String literals
+    number, // Numeric literals
+    comment, // Comments
+    operator, // +, -, *, etc.
+    punctuation, // Delimiters
+    error_node, // Parse errors
 
     /// Convert to renderer color (uses standard 16-color palette)
     pub fn toColor(self: HighlightGroup) @import("../render/buffer.zig").Color {
@@ -57,17 +57,17 @@ pub const HighlightGroup = enum {
     /// Legacy ANSI code method (for reference)
     pub fn toAnsiCode(self: HighlightGroup) []const u8 {
         return switch (self) {
-            .keyword => "\x1b[35m",       // Magenta
+            .keyword => "\x1b[35m", // Magenta
             .function_name => "\x1b[33m", // Yellow
-            .type_name => "\x1b[36m",     // Cyan
-            .variable => "\x1b[37m",      // White
-            .constant => "\x1b[95m",      // Bright Magenta
-            .string => "\x1b[32m",        // Green
-            .number => "\x1b[93m",        // Bright Yellow
-            .comment => "\x1b[90m",       // Bright black (gray)
-            .operator => "\x1b[37m",      // White
-            .punctuation => "\x1b[37m",   // White
-            .error_node => "\x1b[31m",    // Red
+            .type_name => "\x1b[36m", // Cyan
+            .variable => "\x1b[37m", // White
+            .constant => "\x1b[95m", // Bright Magenta
+            .string => "\x1b[32m", // Green
+            .number => "\x1b[93m", // Bright Yellow
+            .comment => "\x1b[90m", // Bright black (gray)
+            .operator => "\x1b[37m", // White
+            .punctuation => "\x1b[37m", // White
+            .error_node => "\x1b[31m", // Red
         };
     }
 };
@@ -208,7 +208,8 @@ fn basicHighlight(allocator: std.mem.Allocator, text: []const u8, language: Lang
 
         // Comment detection (basic: //)
         if (!in_string and byte_offset + 1 < text.len and
-            text[byte_offset] == '/' and text[byte_offset + 1] == '/') {
+            text[byte_offset] == '/' and text[byte_offset + 1] == '/')
+        {
             in_comment = true;
             token_start = byte_offset;
             continue;
@@ -271,32 +272,33 @@ fn isKeyword(word: []const u8, keywords: []const []const u8) bool {
 fn getKeywords(language: Language) []const []const u8 {
     return switch (language) {
         .zig => &[_][]const u8{
-            "const", "var", "fn", "pub", "struct", "enum", "union",
-            "if", "else", "while", "for", "switch", "return", "break",
-            "continue", "defer", "try", "catch", "comptime", "inline",
-            "export", "extern", "packed", "anytype", "void", "bool",
-            "u8", "i8", "u16", "i16", "u32", "i32", "u64", "i64",
-            "f32", "f64", "usize", "isize", "true", "false", "null",
+            "const",    "var",    "fn",      "pub",   "struct",   "enum",   "union",
+            "if",       "else",   "while",   "for",   "switch",   "return", "break",
+            "continue", "defer",  "try",     "catch", "comptime", "inline", "export",
+            "extern",   "packed", "anytype", "void",  "bool",     "u8",     "i8",
+            "u16",      "i16",    "u32",     "i32",   "u64",      "i64",    "f32",
+            "f64",      "usize",  "isize",   "true",  "false",    "null",
         },
         .c => &[_][]const u8{
-            "int", "char", "float", "double", "void", "struct", "enum",
-            "if", "else", "while", "for", "switch", "return", "break",
+            "int",      "char",  "float",  "double", "void",    "struct", "enum",
+            "if",       "else",  "while",  "for",    "switch",  "return", "break",
             "continue", "const", "static", "extern", "typedef", "sizeof",
         },
         .rust => &[_][]const u8{
-            "fn", "let", "mut", "const", "struct", "enum", "impl", "trait",
-            "if", "else", "while", "for", "loop", "match", "return", "break",
-            "continue", "pub", "use", "mod", "crate", "self", "super",
+            "fn",       "let",  "mut",   "const", "struct", "enum",  "impl",   "trait",
+            "if",       "else", "while", "for",   "loop",   "match", "return", "break",
+            "continue", "pub",  "use",   "mod",   "crate",  "self",  "super",
         },
         .go => &[_][]const u8{
-            "func", "var", "const", "type", "struct", "interface",
-            "if", "else", "for", "switch", "return", "break", "continue",
-            "go", "defer", "package", "import", "chan", "map", "range",
+            "func",     "var",   "const", "type",    "struct", "interface",
+            "if",       "else",  "for",   "switch",  "return", "break",
+            "continue", "go",    "defer", "package", "import", "chan",
+            "map",      "range",
         },
         .python => &[_][]const u8{
-            "def", "class", "if", "elif", "else", "while", "for", "return",
-            "break", "continue", "import", "from", "as", "try", "except",
-            "finally", "with", "lambda", "yield", "async", "await",
+            "def",   "class",    "if",     "elif",  "else",  "while", "for",    "return",
+            "break", "continue", "import", "from",  "as",    "try",   "except", "finally",
+            "with",  "lambda",   "yield",  "async", "await",
         },
         else => &[_][]const u8{},
     };

@@ -599,9 +599,9 @@ pub fn movePrevParagraph(selection: Cursor.Selection, buffer: *const Buffer.Buff
 
 /// Find/till state for repeating operations
 pub const FindTillState = struct {
-    char: ?u8 = null,           // Character to find
-    mode: enum { find, till } = .find,  // Find or till mode
-    forward: bool = true,        // Direction
+    char: ?u8 = null, // Character to find
+    mode: enum { find, till } = .find, // Find or till mode
+    forward: bool = true, // Direction
 
     /// Create state for find forward (f)
     pub fn findForward(ch: u8) FindTillState {

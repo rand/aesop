@@ -56,15 +56,15 @@ pub const Command = struct {
     category: Category,
 
     pub const Category = enum {
-        motion,      // Cursor movement
-        edit,        // Text editing
-        selection,   // Selection manipulation
-        buffer,      // Buffer operations
-        mode,        // Mode changes
-        file,        // File I/O
-        search,      // Search/replace
-        view,        // Viewport control
-        system,      // System commands
+        motion, // Cursor movement
+        edit, // Text editing
+        selection, // Selection manipulation
+        buffer, // Buffer operations
+        mode, // Mode changes
+        file, // File I/O
+        search, // Search/replace
+        view, // Viewport control
+        system, // System commands
     };
 };
 
@@ -2375,7 +2375,7 @@ fn gotoLineNumber(ctx: *Context, line_number: usize) Result {
     ctx.editor.scroll_offset = if (target_line > 5) target_line - 5 else 0;
 
     var msg_buf: [64]u8 = undefined;
-    const msg = std.fmt.bufPrint(&msg_buf, "Line {d}/{d}", .{line_number, total_lines}) catch "Jumped to line";
+    const msg = std.fmt.bufPrint(&msg_buf, "Line {d}/{d}", .{ line_number, total_lines }) catch "Jumped to line";
     ctx.editor.messages.add(msg, .success) catch {};
 
     return Result.ok();

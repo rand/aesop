@@ -16,9 +16,9 @@ pub const Rope = struct {
 
     /// Metrics tracked at each node
     pub const Metrics = struct {
-        bytes: usize = 0,      // Byte count
-        chars: usize = 0,      // Character count (UTF-8 codepoints)
-        lines: usize = 0,      // Line count
+        bytes: usize = 0, // Byte count
+        chars: usize = 0, // Character count (UTF-8 codepoints)
+        lines: usize = 0, // Line count
         line_breaks: usize = 0, // Number of \n characters
 
         pub fn add(self: Metrics, other: Metrics) Metrics {

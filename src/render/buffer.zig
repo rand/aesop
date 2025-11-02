@@ -69,9 +69,9 @@ pub const Attrs = packed struct {
 pub const OutputBuffer = struct {
     width: u16,
     height: u16,
-    screen_buf: []Cell,      // Current screen state
-    back_buf: []Cell,        // Next frame buffer
-    dirty_lines: []bool,     // Track which lines need redraw
+    screen_buf: []Cell, // Current screen state
+    back_buf: []Cell, // Next frame buffer
+    dirty_lines: []bool, // Track which lines need redraw
     allocator: std.mem.Allocator,
 
     /// Initialize output buffer with given dimensions
