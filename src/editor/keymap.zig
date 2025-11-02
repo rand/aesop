@@ -293,6 +293,9 @@ pub fn setupDefaults(manager: *KeymapManager) !void {
     // Command palette
     try normal_map.bind(Binding.fromChord(.{ .char = ' ' }, .{ .char = 'p' }, "toggle_palette"));
 
+    // File finder
+    try normal_map.bind(Binding.fromChord(.{ .char = ' ' }, .{ .char = 'f' }, "toggle_file_finder"));
+
     // File operations
     try normal_map.bind(Binding.fromChord(.{ .char = ' ' }, .{ .char = 'w' }, "save"));
 

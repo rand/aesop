@@ -161,6 +161,38 @@ pub const OutputBuffer = struct {
         return self.back_buf[idx];
     }
 
+    /// Write line number in gutter
+    pub fn writeLineNumber(self: *OutputBuffer, row: u16, line_num: usize, gutter_width: u16) void {
+        var buf: [16]u8 = undefined;
+        const num_str = std.fmt.bufPrint(&buf, "{d}", .{line_num}) catch return;
+
+        // Right-align line number in gutter
+        const padding = if (gutter_width > num_str.len)
+            gutter_width - @as(u16, @intCast(num_str.len))
+        else
+            0;
+
+        // Write line number with dimmed color
+        self.writeText(
+            row,
+            padding,
+            num_str,
+            Color.bright_black, // Gray for line numbers
+            Color.default,
+            Attrs{},
+        );
+
+        // Add separator after gutter
+        if (gutter_width > 0 and gutter_width - 1 < self.width) {
+            self.setCell(row, gutter_width - 1, .{
+                .char = ' ',
+                .fg = Color.default,
+                .bg = Color.default,
+                .attrs = Attrs{},
+            });
+        }
+    }
+
     /// Write text at position with given style
     pub fn writeText(self: *OutputBuffer, row: u16, col: u16, text: []const u8, fg: Color, bg: Color, attrs: Attrs) void {
         var current_col = col;

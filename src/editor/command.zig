@@ -585,6 +585,22 @@ fn togglePalette(ctx: *Context) Result {
     return Result.ok();
 }
 
+/// Toggle file finder
+fn toggleFileFinder(ctx: *Context) Result {
+    if (ctx.editor.file_finder.visible) {
+        ctx.editor.file_finder.hide();
+    } else {
+        ctx.editor.file_finder.show();
+        // Scan current directory if cache not valid
+        if (!ctx.editor.file_finder.cache_valid) {
+            ctx.editor.file_finder.scanDirectory(".") catch {
+                return Result.err("Failed to scan directory");
+            };
+        }
+    }
+    return Result.ok();
+}
+
 /// Find next occurrence of search query
 fn findNext(ctx: *Context) Result {
     if (!ctx.editor.search.active) {
@@ -1708,6 +1724,14 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .name = "toggle_palette",
         .description = "Toggle command palette (Space P)",
         .handler = togglePalette,
+        .category = .system,
+    });
+
+    // File finder
+    try registry.register(.{
+        .name = "toggle_file_finder",
+        .description = "Toggle file finder (Ctrl P)",
+        .handler = toggleFileFinder,
         .category = .system,
     });
 

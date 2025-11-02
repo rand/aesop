@@ -15,6 +15,7 @@ const Palette = @import("palette.zig");
 const Search = @import("search.zig");
 const Config = @import("config.zig");
 const Window = @import("window.zig");
+const FileFinder = @import("file_finder.zig");
 const PluginSystem = @import("../plugin/system.zig");
 const Renderer = @import("../render/renderer.zig").Renderer;
 
@@ -36,6 +37,7 @@ pub const Editor = struct {
     config: Config.Config,
     window_manager: Window.WindowManager,
     plugin_manager: PluginSystem.PluginManager,
+    file_finder: FileFinder.FileFinder,
 
     // Viewport (legacy - will be replaced by window_manager)
     scroll_offset: usize, // Line offset for scrolling
@@ -65,6 +67,7 @@ pub const Editor = struct {
             .config = Config.Config.init(allocator),
             .window_manager = try Window.WindowManager.init(allocator, initial_dims),
             .plugin_manager = PluginSystem.PluginManager.init(allocator),
+            .file_finder = FileFinder.FileFinder.init(allocator),
             .scroll_offset = 0,
         };
 
@@ -79,6 +82,7 @@ pub const Editor = struct {
 
     /// Clean up editor
     pub fn deinit(self: *Editor) void {
+        self.file_finder.deinit();
         self.plugin_manager.deinit();
         self.window_manager.deinit();
         self.config.deinit();

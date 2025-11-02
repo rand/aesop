@@ -103,9 +103,8 @@ pub const FileFinder = struct {
 
     /// Recursive directory scanner
     fn scanDirectoryRecursive(self: *FileFinder, base_path: []const u8, current_path: []const u8) !void {
-        var dir = std.fs.cwd().openDir(current_path, .{ .iterate = true }) catch |err| {
+        var dir = std.fs.cwd().openDir(current_path, .{ .iterate = true }) catch {
             // Skip directories we can't open
-            _ = err;
             return;
         };
         defer dir.close();
