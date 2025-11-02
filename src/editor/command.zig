@@ -560,7 +560,7 @@ fn saveBuffer(ctx: *Context) Result {
     ctx.editor.save() catch |err| {
         const msg = switch (err) {
             error.NoActiveBuffer => "No active buffer to save",
-            error.NoFilePath => "No file path (use save_as)",
+            error.NoFilepath => "No file path (use save_as)",
             else => "Failed to save file",
         };
         return Result.err(msg);
