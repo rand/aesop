@@ -158,10 +158,49 @@ n          - Next match
 N          - Previous match
 ```
 
+## Configuration
+
+Aesop supports comprehensive configuration through a simple key=value config file:
+
+### Config File Location
+
+1. `$XDG_CONFIG_HOME/aesop/config.conf` (if XDG_CONFIG_HOME is set)
+2. `~/.config/aesop/config.conf` (default)
+3. `./aesop.conf` (current directory)
+
+### Example Configuration
+
+```conf
+# Editor behavior
+tab_width=4
+expand_tabs=true
+line_numbers=true
+relative_line_numbers=false
+
+# Visual settings
+syntax_highlighting=true
+highlight_current_line=true
+
+# Search defaults
+search_case_sensitive=false
+search_wrap_around=true
+
+# Auto-pairing
+auto_pair_brackets=true
+```
+
+### Config Commands
+
+- **config_show** (via Space+P command palette) - Display current settings
+- **config_write** (via Space+P command palette) - Save configuration to `~/.config/aesop/config.conf`
+
+See **[Configuration System](docs/features/configuration.md)** documentation for complete details on all available settings.
+
 ## Documentation
 
 Detailed documentation is available in the `docs/` directory:
 
+- **[Configuration System](docs/features/configuration.md)** - Configuration file format, settings, and usage
 - **[Prompt System Architecture](docs/architecture/prompt-system.md)** - Design and implementation of non-blocking interactive commands
 - **[Interactive Commands](docs/features/interactive-commands.md)** - User guide for prompted commands (find/till, marks, macros)
 
@@ -265,13 +304,13 @@ The priority system ensures search and interactive commands capture input before
 - Basic syntax highlighting
 - Prompt system for interactive commands
 - File finder and buffer management
+- Configuration system (XDG-compliant, comprehensive settings)
 - Cross-platform support (Linux, macOS, Windows)
 
 **In Progress**:
 - LSP integration
 - Advanced syntax highlighting (tree-sitter)
 - Plugin system
-- Configuration file support
 
 **Planned**:
 - Split windows and tabs
