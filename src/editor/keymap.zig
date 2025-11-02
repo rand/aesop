@@ -288,6 +288,10 @@ pub fn setupDefaults(manager: *KeymapManager) !void {
     // File operations
     try normal_map.bind(Binding.fromChord(.{ .char = ' ' }, .{ .char = 'w' }, "save"));
 
+    // Search operations
+    try normal_map.bind(Binding.fromSingleKey(.{ .char = 'n' }, "find_next"));
+    try normal_map.bind(Binding.fromSingleKey(.{ .char = 'N' }, "find_previous"));
+
     // Insert mode bindings
     const insert_map = manager.getKeymap(.insert);
     try insert_map.bind(Binding.fromSingleKey(.{ .special = .escape }, "normal_mode"));

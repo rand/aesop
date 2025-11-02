@@ -12,6 +12,7 @@ const Actions = @import("actions.zig");
 const Message = @import("message.zig");
 const Undo = @import("undo.zig");
 const Palette = @import("palette.zig");
+const Search = @import("search.zig");
 const Renderer = @import("../render/renderer.zig").Renderer;
 
 /// Editor state - the main coordinator
@@ -28,6 +29,7 @@ pub const Editor = struct {
     messages: Message.MessageQueue,
     undo_history: Undo.UndoHistory,
     palette: Palette.Palette,
+    search: Search.Search,
 
     // Viewport
     scroll_offset: usize, // Line offset for scrolling
@@ -45,6 +47,7 @@ pub const Editor = struct {
             .messages = Message.MessageQueue.init(allocator),
             .undo_history = Undo.UndoHistory.init(allocator),
             .palette = Palette.Palette.init(allocator),
+            .search = Search.Search.init(allocator),
             .scroll_offset = 0,
         };
 
@@ -59,6 +62,7 @@ pub const Editor = struct {
 
     /// Clean up editor
     pub fn deinit(self: *Editor) void {
+        self.search.deinit();
         self.palette.deinit();
         self.undo_history.deinit();
         self.messages.deinit();

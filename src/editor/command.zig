@@ -585,6 +585,78 @@ fn togglePalette(ctx: *Context) Result {
     return Result.ok();
 }
 
+/// Find next occurrence of search query
+fn findNext(ctx: *Context) Result {
+    if (!ctx.editor.search.active) {
+        return Result.err("No active search");
+    }
+
+    const buffer = ctx.editor.buffer_manager.getActiveBuffer() orelse {
+        return Result.err("No active buffer");
+    };
+
+    const text = buffer.getText() catch {
+        return Result.err("Failed to get buffer text");
+    };
+    defer ctx.editor.allocator.free(text);
+
+    const cursor_pos = ctx.editor.getCursorPosition();
+
+    // Search from next position
+    const search_start = Cursor.Position{
+        .line = cursor_pos.line,
+        .col = cursor_pos.col + 1,
+    };
+
+    if (ctx.editor.search.findNext(text, search_start)) |match| {
+        // Move cursor to match start
+        ctx.editor.selections.setSingleCursor(ctx.editor.allocator, match.start) catch {
+            return Result.err("Failed to update cursor");
+        };
+        ctx.editor.ensureCursorVisible();
+        return Result.ok();
+    } else {
+        // Wrap around to beginning
+        if (ctx.editor.search.findNext(text, .{ .line = 0, .col = 0 })) |match| {
+            ctx.editor.selections.setSingleCursor(ctx.editor.allocator, match.start) catch {
+                return Result.err("Failed to update cursor");
+            };
+            ctx.editor.ensureCursorVisible();
+            ctx.editor.messages.add("Search wrapped", .info) catch {};
+            return Result.ok();
+        }
+        return Result.err("No match found");
+    }
+}
+
+/// Find previous occurrence of search query
+fn findPrevious(ctx: *Context) Result {
+    if (!ctx.editor.search.active) {
+        return Result.err("No active search");
+    }
+
+    const buffer = ctx.editor.buffer_manager.getActiveBuffer() orelse {
+        return Result.err("No active buffer");
+    };
+
+    const text = buffer.getText() catch {
+        return Result.err("Failed to get buffer text");
+    };
+    defer ctx.editor.allocator.free(text);
+
+    const cursor_pos = ctx.editor.getCursorPosition();
+
+    if (ctx.editor.search.findPrevious(text, cursor_pos)) |match| {
+        ctx.editor.selections.setSingleCursor(ctx.editor.allocator, match.start) catch {
+            return Result.err("Failed to update cursor");
+        };
+        ctx.editor.ensureCursorVisible();
+        return Result.ok();
+    } else {
+        return Result.err("No previous match");
+    }
+}
+
 /// Redo last undone operation
 fn redo(ctx: *Context) Result {
     if (!ctx.editor.undo_history.canRedo()) {
@@ -850,6 +922,21 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .description = "Write current buffer (alias for save)",
         .handler = writeBuffer,
         .category = .file,
+    });
+
+    // Search operations
+    try registry.register(.{
+        .name = "find_next",
+        .description = "Find next occurrence (n)",
+        .handler = findNext,
+        .category = .search,
+    });
+
+    try registry.register(.{
+        .name = "find_previous",
+        .description = "Find previous occurrence (N)",
+        .handler = findPrevious,
+        .category = .search,
     });
 }
 

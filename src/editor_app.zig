@@ -23,6 +23,7 @@ pub const EditorApp = struct {
     allocator: std.mem.Allocator,
     running: bool,
     gutter_config: gutter.GutterConfig,
+    mouse_drag_start: ?Cursor.Position,
 
     /// Initialize editor application
     pub fn init(allocator: std.mem.Allocator) !EditorApp {
@@ -38,6 +39,7 @@ pub const EditorApp = struct {
             .allocator = allocator,
             .running = false,
             .gutter_config = .{},
+            .mouse_drag_start = null,
         };
     }
 
@@ -207,14 +209,20 @@ pub const EditorApp = struct {
     fn handleMouse(self: *EditorApp, mouse: anytype) !void {
         switch (mouse.kind) {
             .press_left => {
-                try self.handleMouseClick(mouse.row, mouse.col);
+                try self.handleMousePress(mouse.row, mouse.col);
+            },
+            .drag => {
+                try self.handleMouseDrag(mouse.row, mouse.col);
+            },
+            .release => {
+                self.handleMouseRelease();
             },
             else => {},
         }
     }
 
-    /// Handle mouse click - position cursor
-    fn handleMouseClick(self: *EditorApp, screen_row: u16, screen_col: u16) !void {
+    /// Handle mouse press - start selection
+    fn handleMousePress(self: *EditorApp, screen_row: u16, screen_col: u16) !void {
         const size = self.renderer.getSize();
         const buffer = self.editor.getActiveBuffer() orelse return;
 
@@ -239,18 +247,75 @@ pub const EditorApp = struct {
         const total_lines = buffer.lineCount();
         if (buffer_line >= total_lines) return;
 
-        // Create position and update cursor
+        // Create position
         const pos = Cursor.Position{
             .line = buffer_line,
             .col = buffer_col,
         };
 
+        // Start drag tracking
+        self.mouse_drag_start = pos;
+
+        // Set cursor position
         try self.editor.selections.setSingleCursor(self.allocator, pos);
 
-        // If in visual mode, return to normal mode
+        // Return to normal mode if in visual mode
         if (self.editor.getMode() == .select) {
             try self.editor.enterNormalMode();
         }
+    }
+
+    /// Handle mouse drag - extend selection
+    fn handleMouseDrag(self: *EditorApp, screen_row: u16, screen_col: u16) !void {
+        const drag_start = self.mouse_drag_start orelse return;
+
+        const size = self.renderer.getSize();
+        const buffer = self.editor.getActiveBuffer() orelse return;
+
+        // Check if we have a message displayed
+        const has_message = self.editor.messages.current() != null;
+        const reserved_lines: usize = if (has_message) 2 else 1;
+
+        // Ignore drags on status/message lines
+        if (screen_row >= size.height - reserved_lines) return;
+
+        const viewport = self.editor.getViewport(size.height - reserved_lines);
+        const gutter_width = gutter.calculateWidth(self.gutter_config, buffer.lineCount());
+
+        // Ignore drags in gutter
+        if (screen_col < gutter_width) return;
+
+        // Convert screen position to buffer position
+        const buffer_line = viewport.start_line + screen_row;
+        const buffer_col = screen_col - gutter_width;
+
+        // Clamp to valid buffer position
+        const total_lines = buffer.lineCount();
+        if (buffer_line >= total_lines) return;
+
+        // Create drag end position
+        const drag_end = Cursor.Position{
+            .line = buffer_line,
+            .col = buffer_col,
+        };
+
+        // Enter select mode if not already
+        if (self.editor.getMode() != .select) {
+            try self.editor.enterSelectMode();
+        }
+
+        // Create selection from drag start to drag end
+        const selection = Cursor.Selection{
+            .anchor = drag_start,
+            .head = drag_end,
+        };
+
+        try self.editor.selections.setSingleSelection(self.allocator, selection);
+    }
+
+    /// Handle mouse release - finalize selection
+    fn handleMouseRelease(self: *EditorApp) void {
+        self.mouse_drag_start = null;
     }
 
     /// Render the editor
