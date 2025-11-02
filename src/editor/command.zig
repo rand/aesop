@@ -1121,6 +1121,66 @@ fn changeCurrentWord(ctx: *Context) Result {
     return Result.err("No active buffer");
 }
 
+/// Convert selection to uppercase
+fn uppercaseSelection(ctx: *Context) Result {
+    if (ctx.editor.buffer_manager.active_buffer_id) |id| {
+        const buffer = ctx.editor.buffer_manager.getBufferMut(id) orelse return Result.err("No active buffer");
+        const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+        const new_sel = Actions.uppercaseSelection(buffer, primary_sel, ctx.editor.allocator) catch {
+            return Result.err("Failed to convert to uppercase");
+        };
+        buffer.metadata.markModified();
+
+        ctx.editor.selections.setSingleSelection(ctx.editor.allocator, new_sel) catch {
+            return Result.err("Failed to update selection");
+        };
+
+        return Result.ok();
+    }
+    return Result.err("No active buffer");
+}
+
+/// Convert selection to lowercase
+fn lowercaseSelection(ctx: *Context) Result {
+    if (ctx.editor.buffer_manager.active_buffer_id) |id| {
+        const buffer = ctx.editor.buffer_manager.getBufferMut(id) orelse return Result.err("No active buffer");
+        const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+        const new_sel = Actions.lowercaseSelection(buffer, primary_sel, ctx.editor.allocator) catch {
+            return Result.err("Failed to convert to lowercase");
+        };
+        buffer.metadata.markModified();
+
+        ctx.editor.selections.setSingleSelection(ctx.editor.allocator, new_sel) catch {
+            return Result.err("Failed to update selection");
+        };
+
+        return Result.ok();
+    }
+    return Result.err("No active buffer");
+}
+
+/// Convert selection to title case
+fn titlecaseSelection(ctx: *Context) Result {
+    if (ctx.editor.buffer_manager.active_buffer_id) |id| {
+        const buffer = ctx.editor.buffer_manager.getBufferMut(id) orelse return Result.err("No active buffer");
+        const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+        const new_sel = Actions.titlecaseSelection(buffer, primary_sel, ctx.editor.allocator) catch {
+            return Result.err("Failed to convert to title case");
+        };
+        buffer.metadata.markModified();
+
+        ctx.editor.selections.setSingleSelection(ctx.editor.allocator, new_sel) catch {
+            return Result.err("Failed to update selection");
+        };
+
+        return Result.ok();
+    }
+    return Result.err("No active buffer");
+}
+
 /// Indent current line or selection
 fn indentLine(ctx: *Context) Result {
     const buffer_id = ctx.editor.buffer_manager.active_buffer_id orelse {
@@ -1455,6 +1515,68 @@ fn scrollDown(ctx: *Context) Result {
     if (ctx.editor.scroll_offset < max_scroll) {
         ctx.editor.scroll_offset += 1;
     }
+    return Result.ok();
+}
+
+/// Scroll viewport up by one page
+fn scrollPageUp(ctx: *Context) Result {
+    const viewport_height: usize = 24;
+    const visible_lines = viewport_height -| 2;
+
+    if (ctx.editor.scroll_offset >= visible_lines) {
+        ctx.editor.scroll_offset -= visible_lines;
+    } else {
+        ctx.editor.scroll_offset = 0;
+    }
+    return Result.ok();
+}
+
+/// Scroll viewport down by one page
+fn scrollPageDown(ctx: *Context) Result {
+    const buffer = ctx.editor.buffer_manager.getActiveBuffer() orelse {
+        return Result.err("No active buffer");
+    };
+
+    const total_lines = buffer.lineCount();
+    const viewport_height: usize = 24;
+    const visible_lines = viewport_height -| 2;
+    const max_scroll = if (total_lines > visible_lines) total_lines - visible_lines else 0;
+
+    ctx.editor.scroll_offset += visible_lines;
+    ctx.editor.scroll_offset = @min(ctx.editor.scroll_offset, max_scroll);
+
+    return Result.ok();
+}
+
+/// Scroll viewport up by half a page
+fn scrollHalfPageUp(ctx: *Context) Result {
+    const viewport_height: usize = 24;
+    const visible_lines = viewport_height -| 2;
+    const half_page = visible_lines / 2;
+
+    if (ctx.editor.scroll_offset >= half_page) {
+        ctx.editor.scroll_offset -= half_page;
+    } else {
+        ctx.editor.scroll_offset = 0;
+    }
+    return Result.ok();
+}
+
+/// Scroll viewport down by half a page
+fn scrollHalfPageDown(ctx: *Context) Result {
+    const buffer = ctx.editor.buffer_manager.getActiveBuffer() orelse {
+        return Result.err("No active buffer");
+    };
+
+    const total_lines = buffer.lineCount();
+    const viewport_height: usize = 24;
+    const visible_lines = viewport_height -| 2;
+    const max_scroll = if (total_lines > visible_lines) total_lines - visible_lines else 0;
+    const half_page = visible_lines / 2;
+
+    ctx.editor.scroll_offset += half_page;
+    ctx.editor.scroll_offset = @min(ctx.editor.scroll_offset, max_scroll);
+
     return Result.ok();
 }
 
@@ -2039,6 +2161,27 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .category = .edit,
     });
 
+    try registry.register(.{
+        .name = "uppercase",
+        .description = "Convert selection to uppercase (U or gU)",
+        .handler = uppercaseSelection,
+        .category = .edit,
+    });
+
+    try registry.register(.{
+        .name = "lowercase",
+        .description = "Convert selection to lowercase (u or gu)",
+        .handler = lowercaseSelection,
+        .category = .edit,
+    });
+
+    try registry.register(.{
+        .name = "titlecase",
+        .description = "Convert selection to title case (gt)",
+        .handler = titlecaseSelection,
+        .category = .edit,
+    });
+
     // Line manipulation commands
     try registry.register(.{
         .name = "duplicate_line",
@@ -2328,6 +2471,34 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .name = "scroll_down",
         .description = "Scroll viewport down (Ctrl+E)",
         .handler = scrollDown,
+        .category = .view,
+    });
+
+    try registry.register(.{
+        .name = "scroll_page_up",
+        .description = "Scroll viewport up by one page (Page Up)",
+        .handler = scrollPageUp,
+        .category = .view,
+    });
+
+    try registry.register(.{
+        .name = "scroll_page_down",
+        .description = "Scroll viewport down by one page (Page Down)",
+        .handler = scrollPageDown,
+        .category = .view,
+    });
+
+    try registry.register(.{
+        .name = "scroll_half_page_up",
+        .description = "Scroll viewport up by half page (Ctrl+U)",
+        .handler = scrollHalfPageUp,
+        .category = .view,
+    });
+
+    try registry.register(.{
+        .name = "scroll_half_page_down",
+        .description = "Scroll viewport down by half page (Ctrl+D)",
+        .handler = scrollHalfPageDown,
         .category = .view,
     });
 

@@ -578,3 +578,127 @@ pub fn selectInnerWord(
 ) !Cursor.Selection {
     return selectWord(buffer, selection);
 }
+
+// === Case conversion functions ===
+
+/// Convert ASCII character to uppercase
+fn toUpper(ch: u8) u8 {
+    if (ch >= 'a' and ch <= 'z') {
+        return ch - ('a' - 'A');
+    }
+    return ch;
+}
+
+/// Convert ASCII character to lowercase
+fn toLower(ch: u8) u8 {
+    if (ch >= 'A' and ch <= 'Z') {
+        return ch + ('a' - 'A');
+    }
+    return ch;
+}
+
+/// Convert selection to uppercase
+pub fn uppercaseSelection(
+    buffer: *Buffer.Buffer,
+    selection: Cursor.Selection,
+    allocator: std.mem.Allocator,
+) !Cursor.Selection {
+    const start = selection.start();
+    const end = selection.end();
+
+    // Get selected text
+    const start_offset = try positionToByteOffset(buffer, start);
+    const end_offset = try positionToByteOffset(buffer, end);
+
+    if (start_offset >= end_offset) return selection;
+
+    const text = try buffer.rope.slice(allocator, start_offset, end_offset);
+    defer allocator.free(text);
+
+    // Convert to uppercase
+    var upper = try allocator.alloc(u8, text.len);
+    defer allocator.free(upper);
+
+    for (text, 0..) |ch, i| {
+        upper[i] = toUpper(ch);
+    }
+
+    // Replace text
+    try buffer.rope.delete(start_offset, end_offset);
+    try buffer.rope.insert(start_offset, upper);
+
+    return selection;
+}
+
+/// Convert selection to lowercase
+pub fn lowercaseSelection(
+    buffer: *Buffer.Buffer,
+    selection: Cursor.Selection,
+    allocator: std.mem.Allocator,
+) !Cursor.Selection {
+    const start = selection.start();
+    const end = selection.end();
+
+    // Get selected text
+    const start_offset = try positionToByteOffset(buffer, start);
+    const end_offset = try positionToByteOffset(buffer, end);
+
+    if (start_offset >= end_offset) return selection;
+
+    const text = try buffer.rope.slice(allocator, start_offset, end_offset);
+    defer allocator.free(text);
+
+    // Convert to lowercase
+    var lower = try allocator.alloc(u8, text.len);
+    defer allocator.free(lower);
+
+    for (text, 0..) |ch, i| {
+        lower[i] = toLower(ch);
+    }
+
+    // Replace text
+    try buffer.rope.delete(start_offset, end_offset);
+    try buffer.rope.insert(start_offset, lower);
+
+    return selection;
+}
+
+/// Convert selection to title case (first letter of each word capitalized)
+pub fn titlecaseSelection(
+    buffer: *Buffer.Buffer,
+    selection: Cursor.Selection,
+    allocator: std.mem.Allocator,
+) !Cursor.Selection {
+    const start = selection.start();
+    const end = selection.end();
+
+    // Get selected text
+    const start_offset = try positionToByteOffset(buffer, start);
+    const end_offset = try positionToByteOffset(buffer, end);
+
+    if (start_offset >= end_offset) return selection;
+
+    const text = try buffer.rope.slice(allocator, start_offset, end_offset);
+    defer allocator.free(text);
+
+    // Convert to title case
+    var title = try allocator.alloc(u8, text.len);
+    defer allocator.free(title);
+
+    var at_word_start = true;
+    for (text, 0..) |ch, i| {
+        if (isWordChar(ch)) {
+            title[i] = if (at_word_start) toUpper(ch) else toLower(ch);
+            at_word_start = false;
+        } else {
+            title[i] = ch;
+            at_word_start = true;
+        }
+    }
+
+    // Replace text
+    try buffer.rope.delete(start_offset, end_offset);
+    try buffer.rope.insert(start_offset, title);
+
+    return selection;
+}
