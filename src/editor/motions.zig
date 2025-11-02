@@ -595,6 +595,158 @@ pub fn movePrevParagraph(selection: Cursor.Selection, buffer: *const Buffer.Buff
     return selection.moveTo(.{ .line = line, .col = 0 });
 }
 
+// === Find/Till Character Motions ===
+
+/// Find/till state for repeating operations
+pub const FindTillState = struct {
+    char: ?u8 = null,           // Character to find
+    mode: enum { find, till } = .find,  // Find or till mode
+    forward: bool = true,        // Direction
+
+    /// Create state for find forward (f)
+    pub fn findForward(ch: u8) FindTillState {
+        return .{ .char = ch, .mode = .find, .forward = true };
+    }
+
+    /// Create state for find backward (F)
+    pub fn findBackward(ch: u8) FindTillState {
+        return .{ .char = ch, .mode = .find, .forward = false };
+    }
+
+    /// Create state for till forward (t)
+    pub fn tillForward(ch: u8) FindTillState {
+        return .{ .char = ch, .mode = .till, .forward = true };
+    }
+
+    /// Create state for till backward (T)
+    pub fn tillBackward(ch: u8) FindTillState {
+        return .{ .char = ch, .mode = .till, .forward = false };
+    }
+
+    /// Reverse direction (for , command)
+    pub fn reversed(self: FindTillState) FindTillState {
+        return .{
+            .char = self.char,
+            .mode = self.mode,
+            .forward = !self.forward,
+        };
+    }
+};
+
+/// Find character forward on current line (f)
+pub fn findCharForward(selection: Cursor.Selection, buffer: *const Buffer.Buffer, ch: u8) Cursor.Selection {
+    const allocator = std.heap.page_allocator;
+    const pos = selection.head;
+
+    const line_text = getLineText(allocator, buffer, pos.line) catch return selection;
+    defer allocator.free(line_text);
+
+    // Search from cursor position + 1
+    var col = pos.col + 1;
+    while (col < line_text.len) : (col += 1) {
+        if (line_text[col] == ch) {
+            return selection.moveTo(.{ .line = pos.line, .col = col });
+        }
+    }
+
+    return selection; // Not found
+}
+
+/// Find character backward on current line (F)
+pub fn findCharBackward(selection: Cursor.Selection, buffer: *const Buffer.Buffer, ch: u8) Cursor.Selection {
+    const allocator = std.heap.page_allocator;
+    const pos = selection.head;
+
+    const line_text = getLineText(allocator, buffer, pos.line) catch return selection;
+    defer allocator.free(line_text);
+
+    // Search from cursor position - 1 backward
+    if (pos.col == 0) return selection;
+
+    var col = pos.col - 1;
+    while (true) {
+        if (line_text[col] == ch) {
+            return selection.moveTo(.{ .line = pos.line, .col = col });
+        }
+        if (col == 0) break;
+        col -= 1;
+    }
+
+    return selection; // Not found
+}
+
+/// Till character forward on current line (t)
+pub fn tillCharForward(selection: Cursor.Selection, buffer: *const Buffer.Buffer, ch: u8) Cursor.Selection {
+    const allocator = std.heap.page_allocator;
+    const pos = selection.head;
+
+    const line_text = getLineText(allocator, buffer, pos.line) catch return selection;
+    defer allocator.free(line_text);
+
+    // Search from cursor position + 1
+    var col = pos.col + 1;
+    while (col < line_text.len) : (col += 1) {
+        if (line_text[col] == ch) {
+            // Stop one character before
+            if (col > 0) {
+                return selection.moveTo(.{ .line = pos.line, .col = col - 1 });
+            }
+            return selection;
+        }
+    }
+
+    return selection; // Not found
+}
+
+/// Till character backward on current line (T)
+pub fn tillCharBackward(selection: Cursor.Selection, buffer: *const Buffer.Buffer, ch: u8) Cursor.Selection {
+    const allocator = std.heap.page_allocator;
+    const pos = selection.head;
+
+    const line_text = getLineText(allocator, buffer, pos.line) catch return selection;
+    defer allocator.free(line_text);
+
+    // Search from cursor position - 1 backward
+    if (pos.col == 0) return selection;
+
+    var col = pos.col - 1;
+    while (true) {
+        if (line_text[col] == ch) {
+            // Stop one character after
+            if (col + 1 < line_text.len) {
+                return selection.moveTo(.{ .line = pos.line, .col = col + 1 });
+            }
+            return selection;
+        }
+        if (col == 0) break;
+        col -= 1;
+    }
+
+    return selection; // Not found
+}
+
+/// Repeat last find/till operation (;)
+pub fn repeatFind(selection: Cursor.Selection, buffer: *const Buffer.Buffer, state: FindTillState) Cursor.Selection {
+    const ch = state.char orelse return selection;
+
+    return switch (state.mode) {
+        .find => if (state.forward)
+            findCharForward(selection, buffer, ch)
+        else
+            findCharBackward(selection, buffer, ch),
+        .till => if (state.forward)
+            tillCharForward(selection, buffer, ch)
+        else
+            tillCharBackward(selection, buffer, ch),
+    };
+}
+
+/// Reverse last find/till operation (,)
+pub fn reverseFind(selection: Cursor.Selection, buffer: *const Buffer.Buffer, state: FindTillState) Cursor.Selection {
+    const reversed_state = state.reversed();
+    return repeatFind(selection, buffer, reversed_state);
+}
+
 // === Tests ===
 
 test "motion: move left" {
@@ -672,4 +824,100 @@ test "motion: file start/end" {
 
     const end = moveFileEnd(sel, &buffer);
     try std.testing.expectEqual(@as(usize, 1), end.head.line);
+}
+
+test "motion: find char forward" {
+    const allocator = std.testing.allocator;
+    const buffer = try Buffer.Buffer.initFromString(allocator, 0, "hello world");
+    defer buffer.deinit();
+
+    // Find 'o' from position 0
+    const sel = Cursor.Selection.cursor(.{ .line = 0, .col = 0 });
+    const moved = findCharForward(sel, &buffer, 'o');
+
+    try std.testing.expectEqual(@as(usize, 0), moved.head.line);
+    try std.testing.expectEqual(@as(usize, 4), moved.head.col); // First 'o' at position 4
+
+    // Find second 'o' from position 4
+    const moved2 = findCharForward(moved, &buffer, 'o');
+    try std.testing.expectEqual(@as(usize, 7), moved2.head.col); // Second 'o' at position 7
+}
+
+test "motion: find char backward" {
+    const allocator = std.testing.allocator;
+    const buffer = try Buffer.Buffer.initFromString(allocator, 0, "hello world");
+    defer buffer.deinit();
+
+    // Find 'o' backward from position 10
+    const sel = Cursor.Selection.cursor(.{ .line = 0, .col = 10 });
+    const moved = findCharBackward(sel, &buffer, 'o');
+
+    try std.testing.expectEqual(@as(usize, 0), moved.head.line);
+    try std.testing.expectEqual(@as(usize, 7), moved.head.col); // Second 'o' at position 7
+
+    // Find first 'o' backward from position 7
+    const moved2 = findCharBackward(moved, &buffer, 'o');
+    try std.testing.expectEqual(@as(usize, 4), moved2.head.col); // First 'o' at position 4
+}
+
+test "motion: till char forward" {
+    const allocator = std.testing.allocator;
+    const buffer = try Buffer.Buffer.initFromString(allocator, 0, "hello world");
+    defer buffer.deinit();
+
+    // Till 'o' from position 0 (stop at position 3, one before 'o')
+    const sel = Cursor.Selection.cursor(.{ .line = 0, .col = 0 });
+    const moved = tillCharForward(sel, &buffer, 'o');
+
+    try std.testing.expectEqual(@as(usize, 0), moved.head.line);
+    try std.testing.expectEqual(@as(usize, 3), moved.head.col); // One before first 'o'
+}
+
+test "motion: till char backward" {
+    const allocator = std.testing.allocator;
+    const buffer = try Buffer.Buffer.initFromString(allocator, 0, "hello world");
+    defer buffer.deinit();
+
+    // Till 'o' backward from position 10 (stop at position 8, one after 'o')
+    const sel = Cursor.Selection.cursor(.{ .line = 0, .col = 10 });
+    const moved = tillCharBackward(sel, &buffer, 'o');
+
+    try std.testing.expectEqual(@as(usize, 0), moved.head.line);
+    try std.testing.expectEqual(@as(usize, 8), moved.head.col); // One after second 'o'
+}
+
+test "motion: repeat find" {
+    const allocator = std.testing.allocator;
+    const buffer = try Buffer.Buffer.initFromString(allocator, 0, "hello world");
+    defer buffer.deinit();
+
+    const sel = Cursor.Selection.cursor(.{ .line = 0, .col = 0 });
+
+    // Create find state for 'o'
+    const state = FindTillState.findForward('o');
+
+    // Repeat find
+    const moved1 = repeatFind(sel, &buffer, state);
+    try std.testing.expectEqual(@as(usize, 4), moved1.head.col);
+
+    const moved2 = repeatFind(moved1, &buffer, state);
+    try std.testing.expectEqual(@as(usize, 7), moved2.head.col);
+}
+
+test "motion: reverse find" {
+    const allocator = std.testing.allocator;
+    const buffer = try Buffer.Buffer.initFromString(allocator, 0, "hello world");
+    defer buffer.deinit();
+
+    const sel = Cursor.Selection.cursor(.{ .line = 0, .col = 10 });
+
+    // Create find forward state, but use reverse
+    const state = FindTillState.findForward('o');
+
+    // Reverse find (becomes find backward)
+    const moved1 = reverseFind(sel, &buffer, state);
+    try std.testing.expectEqual(@as(usize, 7), moved1.head.col);
+
+    const moved2 = reverseFind(moved1, &buffer, state);
+    try std.testing.expectEqual(@as(usize, 4), moved2.head.col);
 }

@@ -249,6 +249,116 @@ fn jumpToMatchingBracket(ctx: *Context) Result {
     return applyMotion(ctx, new_sel);
 }
 
+// Find/Till Character Motions
+
+fn findCharForward(ctx: *Context) Result {
+    // TODO: Get character from user input (prompt system)
+    // For now, use 'e' as example
+    const ch: u8 = 'e';
+
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+    const new_sel = Motions.findCharForward(primary_sel, buffer, ch);
+
+    if (new_sel.head.eql(primary_sel.head)) {
+        return Result.err("Character not found");
+    }
+
+    // Update find/till state for repeat
+    ctx.editor.find_till_state = Motions.FindTillState.findForward(ch);
+
+    return applyMotion(ctx, new_sel);
+}
+
+fn findCharBackward(ctx: *Context) Result {
+    // TODO: Get character from user input (prompt system)
+    const ch: u8 = 'e';
+
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+    const new_sel = Motions.findCharBackward(primary_sel, buffer, ch);
+
+    if (new_sel.head.eql(primary_sel.head)) {
+        return Result.err("Character not found");
+    }
+
+    ctx.editor.find_till_state = Motions.FindTillState.findBackward(ch);
+
+    return applyMotion(ctx, new_sel);
+}
+
+fn tillCharForward(ctx: *Context) Result {
+    // TODO: Get character from user input (prompt system)
+    const ch: u8 = 'e';
+
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+    const new_sel = Motions.tillCharForward(primary_sel, buffer, ch);
+
+    if (new_sel.head.eql(primary_sel.head)) {
+        return Result.err("Character not found");
+    }
+
+    ctx.editor.find_till_state = Motions.FindTillState.tillForward(ch);
+
+    return applyMotion(ctx, new_sel);
+}
+
+fn tillCharBackward(ctx: *Context) Result {
+    // TODO: Get character from user input (prompt system)
+    const ch: u8 = 'e';
+
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+    const new_sel = Motions.tillCharBackward(primary_sel, buffer, ch);
+
+    if (new_sel.head.eql(primary_sel.head)) {
+        return Result.err("Character not found");
+    }
+
+    ctx.editor.find_till_state = Motions.FindTillState.tillBackward(ch);
+
+    return applyMotion(ctx, new_sel);
+}
+
+fn repeatFindTill(ctx: *Context) Result {
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+    if (ctx.editor.find_till_state.char == null) {
+        return Result.err("No previous find/till operation");
+    }
+
+    const new_sel = Motions.repeatFind(primary_sel, buffer, ctx.editor.find_till_state);
+
+    if (new_sel.head.eql(primary_sel.head)) {
+        return Result.err("Character not found");
+    }
+
+    return applyMotion(ctx, new_sel);
+}
+
+fn reverseFindTill(ctx: *Context) Result {
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+    if (ctx.editor.find_till_state.char == null) {
+        return Result.err("No previous find/till operation");
+    }
+
+    const new_sel = Motions.reverseFind(primary_sel, buffer, ctx.editor.find_till_state);
+
+    if (new_sel.head.eql(primary_sel.head)) {
+        return Result.err("Character not found");
+    }
+
+    return applyMotion(ctx, new_sel);
+}
+
 fn insertMode(ctx: *Context) Result {
     ctx.editor.enterInsertMode() catch return Result.err("Failed to enter insert mode");
     return Result.ok();
@@ -2775,6 +2885,49 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .name = "jump_to_matching_bracket",
         .description = "Jump to matching bracket/brace/paren (%)",
         .handler = jumpToMatchingBracket,
+        .category = .motion,
+    });
+
+    // Find/till character motions
+    try registry.register(.{
+        .name = "find_char_forward",
+        .description = "Find character forward on line (f)",
+        .handler = findCharForward,
+        .category = .motion,
+    });
+
+    try registry.register(.{
+        .name = "find_char_backward",
+        .description = "Find character backward on line (F)",
+        .handler = findCharBackward,
+        .category = .motion,
+    });
+
+    try registry.register(.{
+        .name = "till_char_forward",
+        .description = "Till character forward on line (t)",
+        .handler = tillCharForward,
+        .category = .motion,
+    });
+
+    try registry.register(.{
+        .name = "till_char_backward",
+        .description = "Till character backward on line (T)",
+        .handler = tillCharBackward,
+        .category = .motion,
+    });
+
+    try registry.register(.{
+        .name = "repeat_find_till",
+        .description = "Repeat last find/till (;)",
+        .handler = repeatFindTill,
+        .category = .motion,
+    });
+
+    try registry.register(.{
+        .name = "reverse_find_till",
+        .description = "Reverse last find/till (,)",
+        .handler = reverseFindTill,
         .category = .motion,
     });
 
