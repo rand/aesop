@@ -2993,6 +2993,77 @@ fn playMacro(ctx: *Context) Result {
     return Result.ok();
 }
 
+// === LSP Commands ===
+
+/// Trigger code completion at cursor position
+fn lspTriggerCompletion(ctx: *Context) Result {
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    _ = buffer;
+
+    // Get cursor position
+    const cursor = (ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No cursor")).head;
+
+    // Show completion list at cursor position
+    ctx.editor.completion_list.show(cursor.line, cursor.col);
+
+    // TODO: Trigger LSP completion request when LSP client is initialized
+    // For now, just show the UI (items will be populated by LSP)
+
+    return Result.ok();
+}
+
+/// Hide completion list
+fn lspHideCompletion(ctx: *Context) Result {
+    ctx.editor.completion_list.hide();
+    return Result.ok();
+}
+
+/// Navigate completion list up
+fn lspCompletionPrevious(ctx: *Context) Result {
+    ctx.editor.completion_list.selectPrevious();
+    return Result.ok();
+}
+
+/// Navigate completion list down
+fn lspCompletionNext(ctx: *Context) Result {
+    ctx.editor.completion_list.selectNext();
+    return Result.ok();
+}
+
+/// Accept selected completion item
+fn lspAcceptCompletion(ctx: *Context) Result {
+    if (ctx.editor.completion_list.getSelectedItem()) |item| {
+        // TODO: Insert completion text at cursor
+        // For now, just hide the list
+        _ = item;
+        ctx.editor.completion_list.hide();
+        return Result.ok();
+    }
+    return Result.err("No completion selected");
+}
+
+/// Go to definition of symbol under cursor
+fn lspGotoDefinition(ctx: *Context) Result {
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    _ = buffer;
+
+    // TODO: Trigger LSP goto definition request
+    ctx.editor.messages.add("LSP goto definition not yet implemented", .info) catch {};
+
+    return Result.ok();
+}
+
+/// Show hover information for symbol under cursor
+fn lspShowHover(ctx: *Context) Result {
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    _ = buffer;
+
+    // TODO: Trigger LSP hover request and display result
+    ctx.editor.messages.add("LSP hover not yet implemented", .info) catch {};
+
+    return Result.ok();
+}
+
 /// Register all built-in commands
 pub fn registerBuiltins(registry: *Registry) !void {
     // Motion commands - basic
@@ -3885,6 +3956,56 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .name = "play_macro",
         .description = "Play macro from register (@)",
         .handler = playMacro,
+        .category = .system,
+    });
+
+    // LSP commands
+    try registry.register(.{
+        .name = "lsp_trigger_completion",
+        .description = "Trigger code completion (Ctrl+Space)",
+        .handler = lspTriggerCompletion,
+        .category = .system,
+    });
+
+    try registry.register(.{
+        .name = "lsp_hide_completion",
+        .description = "Hide completion list (Esc)",
+        .handler = lspHideCompletion,
+        .category = .system,
+    });
+
+    try registry.register(.{
+        .name = "lsp_completion_previous",
+        .description = "Select previous completion item",
+        .handler = lspCompletionPrevious,
+        .category = .system,
+    });
+
+    try registry.register(.{
+        .name = "lsp_completion_next",
+        .description = "Select next completion item",
+        .handler = lspCompletionNext,
+        .category = .system,
+    });
+
+    try registry.register(.{
+        .name = "lsp_accept_completion",
+        .description = "Accept selected completion (Enter/Tab)",
+        .handler = lspAcceptCompletion,
+        .category = .system,
+    });
+
+    try registry.register(.{
+        .name = "lsp_goto_definition",
+        .description = "Go to definition of symbol under cursor (gd)",
+        .handler = lspGotoDefinition,
+        .category = .system,
+    });
+
+    try registry.register(.{
+        .name = "lsp_show_hover",
+        .description = "Show hover information for symbol (K)",
+        .handler = lspShowHover,
         .category = .system,
     });
 }

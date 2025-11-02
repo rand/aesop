@@ -352,6 +352,11 @@ pub fn setupDefaults(manager: *KeymapManager) !void {
     try select_map.bind(Binding.fromSingleKey(.{ .char = '$' }, "move_line_end"));
     try select_map.bind(Binding.fromChord(.{ .char = 'g' }, .{ .char = 'g' }, "move_file_start"));
     try select_map.bind(Binding.fromSingleKey(.{ .char = 'G' }, "move_file_end"));
+
+    // LSP keybindings (normal mode)
+    // Ctrl+Space for completion (note: ctrl modifier doesn't work yet, needs terminal input support)
+    try normal_map.bind(Binding.fromChord(.{ .char = 'g' }, .{ .char = 'd' }, "lsp_goto_definition"));
+    try normal_map.bind(Binding.fromSingleKey(.{ .char = 'K' }, "lsp_show_hover"));
 }
 
 test "keymap: bind and lookup" {
