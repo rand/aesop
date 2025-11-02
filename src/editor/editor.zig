@@ -15,6 +15,7 @@ const Palette = @import("palette.zig");
 const Search = @import("search.zig");
 const Config = @import("config.zig");
 const Window = @import("window.zig");
+const PluginSystem = @import("../plugin/system.zig");
 const Renderer = @import("../render/renderer.zig").Renderer;
 
 /// Editor state - the main coordinator
@@ -34,6 +35,7 @@ pub const Editor = struct {
     search: Search.Search,
     config: Config.Config,
     window_manager: Window.WindowManager,
+    plugin_manager: PluginSystem.PluginManager,
 
     // Viewport (legacy - will be replaced by window_manager)
     scroll_offset: usize, // Line offset for scrolling
@@ -62,6 +64,7 @@ pub const Editor = struct {
             .search = Search.Search.init(allocator),
             .config = Config.Config.init(allocator),
             .window_manager = try Window.WindowManager.init(allocator, initial_dims),
+            .plugin_manager = PluginSystem.PluginManager.init(allocator),
             .scroll_offset = 0,
         };
 
@@ -76,6 +79,7 @@ pub const Editor = struct {
 
     /// Clean up editor
     pub fn deinit(self: *Editor) void {
+        self.plugin_manager.deinit();
         self.window_manager.deinit();
         self.config.deinit();
         self.search.deinit();
@@ -109,10 +113,13 @@ pub const Editor = struct {
 
     /// Open file
     pub fn openFile(self: *Editor, filepath: []const u8) !void {
-        _ = try self.buffer_manager.openFile(filepath);
+        const buffer_id = try self.buffer_manager.openFile(filepath);
         // Reset selections for new buffer
         try self.selections.setSingleCursor(self.allocator, .{ .line = 0, .col = 0 });
         self.scroll_offset = 0;
+
+        // Dispatch buffer open event to plugins
+        self.plugin_manager.dispatchBufferOpen(buffer_id) catch {};
     }
 
     /// Save active buffer
@@ -120,6 +127,9 @@ pub const Editor = struct {
         if (self.buffer_manager.active_buffer_id) |id| {
             const buffer = self.buffer_manager.getBufferMut(id) orelse return error.NoActiveBuffer;
             try buffer.save();
+
+            // Dispatch buffer save event to plugins
+            self.plugin_manager.dispatchBufferSave(id) catch {};
         } else {
             return error.NoActiveBuffer;
         }
@@ -322,18 +332,30 @@ pub const Editor = struct {
 
     /// Handle mode transitions
     pub fn enterNormalMode(self: *Editor) !void {
+        const old_mode = self.mode_manager.getMode();
         try self.mode_manager.enterNormal();
         self.keymap_manager.clearPending();
+
+        // Dispatch mode change to plugins
+        self.plugin_manager.dispatchModeChange(@intFromEnum(old_mode), @intFromEnum(Mode.Mode.normal)) catch {};
     }
 
     pub fn enterInsertMode(self: *Editor) !void {
+        const old_mode = self.mode_manager.getMode();
         try self.mode_manager.enterInsert();
         self.keymap_manager.clearPending();
+
+        // Dispatch mode change to plugins
+        self.plugin_manager.dispatchModeChange(@intFromEnum(old_mode), @intFromEnum(Mode.Mode.insert)) catch {};
     }
 
     pub fn enterSelectMode(self: *Editor) !void {
+        const old_mode = self.mode_manager.getMode();
         try self.mode_manager.enterSelect();
         self.keymap_manager.clearPending();
+
+        // Dispatch mode change to plugins
+        self.plugin_manager.dispatchModeChange(@intFromEnum(old_mode), @intFromEnum(Mode.Mode.select)) catch {};
     }
 
     /// Get viewport info for rendering

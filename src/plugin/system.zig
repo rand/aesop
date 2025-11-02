@@ -32,7 +32,7 @@ pub const PluginManager = struct {
     pub fn init(allocator: std.mem.Allocator) PluginManager {
         return .{
             .allocator = allocator,
-            .plugins = std.ArrayList(*Plugin).init(allocator),
+            .plugins = std.ArrayList(*Plugin).empty,
             .enabled = std.StringHashMap(bool).init(allocator),
         };
     }
@@ -45,7 +45,7 @@ pub const PluginManager = struct {
             self.allocator.destroy(plugin);
         }
 
-        self.plugins.deinit();
+        self.plugins.deinit(self.allocator);
         self.enabled.deinit();
     }
 

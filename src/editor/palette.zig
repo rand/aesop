@@ -11,15 +11,25 @@ pub const Palette = struct {
     selected_index: usize = 0,
     visible: bool = false,
     allocator: std.mem.Allocator,
+    history: std.ArrayList([]const u8),
+    frequency: std.StringHashMap(usize),
+    max_history: usize = 50,
 
     pub fn init(allocator: std.mem.Allocator) Palette {
         return .{
             .allocator = allocator,
+            .history = std.ArrayList([]const u8).empty,
+            .frequency = std.StringHashMap(usize).init(allocator),
         };
     }
 
     pub fn deinit(self: *Palette) void {
-        _ = self;
+        // Free history entries
+        for (self.history.items) |entry| {
+            self.allocator.free(entry);
+        }
+        self.history.deinit(self.allocator);
+        self.frequency.deinit();
     }
 
     /// Show the palette
@@ -84,6 +94,35 @@ pub const Palette = struct {
         }
     }
 
+    /// Record command execution for history and frequency tracking
+    pub fn recordExecution(self: *Palette, command_name: []const u8) !void {
+        // Update frequency
+        const current = self.frequency.get(command_name) orelse 0;
+        try self.frequency.put(command_name, current + 1);
+
+        // Add to history (most recent first)
+        const name_copy = try self.allocator.dupe(u8, command_name);
+        errdefer self.allocator.free(name_copy);
+
+        try self.history.insert(0, name_copy);
+
+        // Trim history if too long
+        while (self.history.items.len > self.max_history) {
+            const removed = self.history.pop();
+            self.allocator.free(removed);
+        }
+    }
+
+    /// Get command frequency (0 if never used)
+    pub fn getFrequency(self: *const Palette, command_name: []const u8) usize {
+        return self.frequency.get(command_name) orelse 0;
+    }
+
+    /// Get recent history (most recent first)
+    pub fn getHistory(self: *const Palette) []const []const u8 {
+        return self.history.items;
+    }
+
     /// Filter commands based on query
     pub fn filterCommands(
         self: *const Palette,
@@ -113,7 +152,12 @@ pub const Palette = struct {
                 const desc = entry.value_ptr.description;
 
                 if (fuzzyMatch(query, name) or fuzzyMatch(query, desc)) {
-                    const score = fuzzyScore(query, name);
+                    var score = fuzzyScore(query, name);
+
+                    // Boost score based on usage frequency
+                    const frequency = self.getFrequency(name);
+                    score += frequency * 100; // Heavily weight frequently used commands
+
                     try matches.append(allocator, .{
                         .name = name,
                         .description = desc,
@@ -212,4 +256,23 @@ test "palette: query handling" {
 
     palette.backspace();
     try std.testing.expectEqualStrings("tes", palette.getQuery());
+}
+
+test "palette: command history" {
+    const allocator = std.testing.allocator;
+    var palette = Palette.init(allocator);
+    defer palette.deinit();
+
+    try palette.recordExecution("move_left");
+    try palette.recordExecution("save");
+    try palette.recordExecution("move_left");
+
+    const history = palette.getHistory();
+    try std.testing.expectEqual(@as(usize, 3), history.len);
+    try std.testing.expectEqualStrings("move_left", history[0]); // Most recent
+
+    // Check frequency
+    try std.testing.expectEqual(@as(usize, 2), palette.getFrequency("move_left"));
+    try std.testing.expectEqual(@as(usize, 1), palette.getFrequency("save"));
+    try std.testing.expectEqual(@as(usize, 0), palette.getFrequency("unknown"));
 }
