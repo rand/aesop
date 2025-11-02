@@ -97,7 +97,8 @@ pub const Editor = struct {
 
     /// Save active buffer
     pub fn save(self: *Editor) !void {
-        if (self.getActiveBuffer()) |buffer| {
+        if (self.buffer_manager.active_buffer_id) |id| {
+            const buffer = self.buffer_manager.getBufferMut(id) orelse return error.NoActiveBuffer;
             try buffer.save();
         } else {
             return error.NoActiveBuffer;
@@ -106,7 +107,8 @@ pub const Editor = struct {
 
     /// Save active buffer as...
     pub fn saveAs(self: *Editor, filepath: []const u8) !void {
-        if (self.getActiveBuffer()) |buffer| {
+        if (self.buffer_manager.active_buffer_id) |id| {
+            const buffer = self.buffer_manager.getBufferMut(id) orelse return error.NoActiveBuffer;
             try buffer.saveAs(filepath);
         } else {
             return error.NoActiveBuffer;
