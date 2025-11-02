@@ -1423,6 +1423,22 @@ fn previousWindow(ctx: *Context) Result {
     return Result.ok();
 }
 
+// === Search Commands ===
+
+/// Start incremental search
+fn startIncrementalSearch(ctx: *Context) Result {
+    ctx.editor.search.startIncremental();
+    ctx.editor.messages.add("Search: ", .info) catch {};
+    return Result.ok();
+}
+
+/// Cancel search
+fn cancelSearch(ctx: *Context) Result {
+    ctx.editor.search.clear();
+    ctx.editor.messages.clear();
+    return Result.ok();
+}
+
 /// Register all built-in commands
 pub fn registerBuiltins(registry: *Registry) !void {
     // Motion commands - basic
@@ -1854,6 +1870,21 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .description = "Navigate to previous window (Space W)",
         .handler = previousWindow,
         .category = .view,
+    });
+
+    // Search commands
+    try registry.register(.{
+        .name = "incremental_search",
+        .description = "Start incremental search (/)",
+        .handler = startIncrementalSearch,
+        .category = .search,
+    });
+
+    try registry.register(.{
+        .name = "cancel_search",
+        .description = "Cancel search (Escape)",
+        .handler = cancelSearch,
+        .category = .search,
     });
 }
 

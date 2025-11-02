@@ -9,7 +9,10 @@ pub const Search = struct {
     query: [128]u8 = undefined,
     query_len: usize = 0,
     active: bool = false,
+    incremental: bool = false, // If true, search updates as you type
     current_match: ?Match = null,
+    match_count: usize = 0,
+    match_index: usize = 0,
     allocator: std.mem.Allocator,
 
     pub const Match = struct {
@@ -44,7 +47,42 @@ pub const Search = struct {
     pub fn clear(self: *Search) void {
         self.query_len = 0;
         self.active = false;
+        self.incremental = false;
         self.current_match = null;
+        self.match_count = 0;
+        self.match_index = 0;
+    }
+
+    /// Start incremental search
+    pub fn startIncremental(self: *Search) void {
+        self.clear();
+        self.incremental = true;
+        self.active = true;
+    }
+
+    /// Append character to search query (for incremental search)
+    pub fn appendChar(self: *Search, c: u8) !void {
+        if (self.query_len >= self.query.len) return error.QueryTooLong;
+        self.query[self.query_len] = c;
+        self.query_len += 1;
+    }
+
+    /// Remove last character from query (backspace in incremental search)
+    pub fn backspace(self: *Search) void {
+        if (self.query_len > 0) {
+            self.query_len -= 1;
+        }
+    }
+
+    /// Get match statistics string
+    pub fn getMatchInfo(self: *const Search) [64]u8 {
+        var buf: [64]u8 = undefined;
+        if (self.match_count == 0) {
+            _ = std.fmt.bufPrint(&buf, "No matches", .{}) catch unreachable;
+        } else {
+            _ = std.fmt.bufPrint(&buf, "Match {d}/{d}", .{ self.match_index + 1, self.match_count }) catch unreachable;
+        }
+        return buf;
     }
 
     /// Find next match in text starting from position

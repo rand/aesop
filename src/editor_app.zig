@@ -247,7 +247,29 @@ pub const EditorApp = struct {
             .release => {
                 self.handleMouseRelease();
             },
+            .scroll_up => {
+                self.handleMouseScroll(-3); // Scroll up 3 lines
+            },
+            .scroll_down => {
+                self.handleMouseScroll(3); // Scroll down 3 lines
+            },
             else => {},
+        }
+    }
+
+    /// Handle mouse scroll
+    fn handleMouseScroll(self: *EditorApp, delta: isize) void {
+        if (delta < 0) {
+            const abs_delta: usize = @intCast(@abs(delta));
+            self.editor.scroll_offset -|= abs_delta;
+        } else {
+            const buffer = self.editor.getActiveBuffer() orelse return;
+            const size = self.renderer.getSize();
+            const total_lines = buffer.lineCount();
+            const viewport_height: usize = size.height -| 2;
+            const max_scroll = if (total_lines > viewport_height) total_lines - viewport_height else 0;
+
+            self.editor.scroll_offset = @min(self.editor.scroll_offset + @as(usize, @intCast(delta)), max_scroll);
         }
     }
 

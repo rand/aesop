@@ -139,6 +139,12 @@ pub const Editor = struct {
     pub fn processKey(self: *Editor, key: Keymap.Key) !void {
         const mode = self.getMode();
 
+        // Special handling for incremental search
+        if (self.search.incremental) {
+            try self.handleSearchInput(key);
+            return;
+        }
+
         // Try to match key to command
         if (try self.keymap_manager.processKey(mode, key)) |command_name| {
             // Execute command with editor context
@@ -161,6 +167,58 @@ pub const Editor = struct {
 
             // Auto-scroll viewport to follow cursor
             self.ensureCursorVisible();
+        }
+    }
+
+    /// Handle input during incremental search
+    fn handleSearchInput(self: *Editor, key: Keymap.Key) !void {
+        switch (key) {
+            .char => |c| {
+                // Add character to search query
+                const char_byte = @as(u8, @intCast(c));
+                try self.search.appendChar(char_byte);
+
+                // Update message with current query
+                const query = self.search.getQuery();
+                const msg = try std.fmt.allocPrint(self.allocator, "Search: {s}", .{query});
+                defer self.allocator.free(msg);
+                self.messages.add(msg, .info) catch {};
+
+                // Find first match and jump to it
+                if (self.buffer_manager.active_buffer_id) |id| {
+                    const buffer = self.buffer_manager.getBuffer(id) orelse return;
+                    const text = try buffer.getText();
+                    defer self.allocator.free(text);
+
+                    const cursor_pos = self.getCursorPosition();
+                    if (self.search.findNext(text, cursor_pos)) |match| {
+                        try self.selections.setSingleCursor(self.allocator, match.start);
+                        self.ensureCursorVisible();
+                    }
+                }
+            },
+            .special => |special| {
+                switch (special) {
+                    .backspace => {
+                        self.search.backspace();
+                        const query = self.search.getQuery();
+                        const msg = try std.fmt.allocPrint(self.allocator, "Search: {s}", .{query});
+                        defer self.allocator.free(msg);
+                        self.messages.add(msg, .info) catch {};
+                    },
+                    .enter => {
+                        // Accept search and exit incremental mode
+                        self.search.incremental = false;
+                        self.messages.clear();
+                    },
+                    .escape => {
+                        // Cancel search
+                        self.search.clear();
+                        self.messages.clear();
+                    },
+                    else => {},
+                }
+            },
         }
     }
 
