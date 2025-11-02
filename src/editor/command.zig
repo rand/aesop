@@ -951,6 +951,218 @@ fn deleteToEndOfLine(ctx: *Context) Result {
     return Result.ok();
 }
 
+/// Indent current line or selection
+fn indentLine(ctx: *Context) Result {
+    const buffer_id = ctx.editor.buffer_manager.active_buffer_id orelse {
+        return Result.err("No active buffer");
+    };
+    const buffer = ctx.editor.buffer_manager.getBufferMut(buffer_id) orelse {
+        return Result.err("No active buffer");
+    };
+
+    const primary = ctx.editor.selections.primary(ctx.editor.allocator) orelse {
+        return Result.err("No selection");
+    };
+
+    const range = primary.range();
+
+    // Indent all lines in selection
+    var current_line = range.start.line;
+    while (current_line <= range.end.line) {
+        const line_start_pos = Cursor.Position{ .line = current_line, .col = 0 };
+        const line_start_sel = Cursor.Selection.cursor(line_start_pos);
+
+        _ = Actions.insertText(buffer, line_start_sel, "    ") catch {
+            return Result.err("Failed to indent");
+        };
+
+        current_line += 1;
+    }
+
+    buffer.metadata.markModified();
+    return Result.ok();
+}
+
+/// Dedent current line or selection
+fn dedentLine(ctx: *Context) Result {
+    const buffer_id = ctx.editor.buffer_manager.active_buffer_id orelse {
+        return Result.err("No active buffer");
+    };
+    const buffer = ctx.editor.buffer_manager.getBufferMut(buffer_id) orelse {
+        return Result.err("No active buffer");
+    };
+
+    const primary = ctx.editor.selections.primary(ctx.editor.allocator) orelse {
+        return Result.err("No selection");
+    };
+
+    const text = buffer.getText() catch {
+        return Result.err("Failed to get buffer text");
+    };
+    defer ctx.editor.allocator.free(text);
+
+    const range = primary.range();
+
+    // Dedent all lines in selection (in reverse to maintain positions)
+    var current_line_signed: isize = @intCast(range.end.line);
+    while (current_line_signed >= @as(isize, @intCast(range.start.line))) : (current_line_signed -= 1) {
+        const current_line: usize = @intCast(current_line_signed);
+
+        // Find line start in text
+        var line: usize = 0;
+        var offset: usize = 0;
+        while (offset < text.len and line < current_line) {
+            if (text[offset] == '\n') {
+                line += 1;
+            }
+            offset += 1;
+        }
+
+        // Count leading spaces/tabs (up to 4 spaces or 1 tab)
+        var spaces_to_remove: usize = 0;
+        var check_offset = offset;
+        while (check_offset < text.len and spaces_to_remove < 4 and text[check_offset] != '\n') {
+            if (text[check_offset] == ' ') {
+                spaces_to_remove += 1;
+                check_offset += 1;
+            } else if (text[check_offset] == '\t') {
+                spaces_to_remove = 1; // Remove one tab
+                break;
+            } else {
+                break; // Non-whitespace, stop
+            }
+        }
+
+        // Remove the spaces
+        if (spaces_to_remove > 0) {
+            const delete_sel = Cursor.Selection{
+                .anchor = Cursor.Position{ .line = current_line, .col = 0 },
+                .head = Cursor.Position{ .line = current_line, .col = spaces_to_remove },
+            };
+            _ = Actions.deleteSelection(buffer, delete_sel, null) catch {
+                return Result.err("Failed to dedent");
+            };
+        }
+    }
+
+    buffer.metadata.markModified();
+    return Result.ok();
+}
+
+/// Toggle line comments (add/remove //)
+fn toggleLineComment(ctx: *Context) Result {
+    const buffer_id = ctx.editor.buffer_manager.active_buffer_id orelse {
+        return Result.err("No active buffer");
+    };
+    const buffer = ctx.editor.buffer_manager.getBufferMut(buffer_id) orelse {
+        return Result.err("No active buffer");
+    };
+
+    const primary = ctx.editor.selections.primary(ctx.editor.allocator) orelse {
+        return Result.err("No selection");
+    };
+
+    const text = buffer.getText() catch {
+        return Result.err("Failed to get buffer text");
+    };
+    defer ctx.editor.allocator.free(text);
+
+    const range = primary.range();
+
+    // Check if all lines are commented
+    var all_commented = true;
+    var current_line = range.start.line;
+    while (current_line <= range.end.line) : (current_line += 1) {
+        // Find line start in text
+        var line: usize = 0;
+        var offset: usize = 0;
+        while (offset < text.len and line < current_line) {
+            if (text[offset] == '\n') {
+                line += 1;
+            }
+            offset += 1;
+        }
+
+        // Skip leading whitespace
+        while (offset < text.len and (text[offset] == ' ' or text[offset] == '\t')) {
+            offset += 1;
+        }
+
+        // Check for //
+        if (offset + 2 > text.len or text[offset] != '/' or text[offset + 1] != '/') {
+            all_commented = false;
+            break;
+        }
+    }
+
+    // Toggle comments
+    if (all_commented) {
+        // Remove comments (in reverse to maintain positions)
+        var current_line_signed: isize = @intCast(range.end.line);
+        while (current_line_signed >= @as(isize, @intCast(range.start.line))) : (current_line_signed -= 1) {
+            const line_num: usize = @intCast(current_line_signed);
+
+            // Find line start
+            var line: usize = 0;
+            var offset: usize = 0;
+            while (offset < text.len and line < line_num) {
+                if (text[offset] == '\n') {
+                    line += 1;
+                }
+                offset += 1;
+            }
+
+            // Find comment marker position (skip whitespace)
+            var col: usize = 0;
+            while (offset < text.len and (text[offset] == ' ' or text[offset] == '\t')) {
+                offset += 1;
+                col += 1;
+            }
+
+            // Remove // and optional space
+            var chars_to_remove: usize = 2; // "//"
+            if (offset + 2 < text.len and text[offset + 2] == ' ') {
+                chars_to_remove = 3; // "// "
+            }
+
+            const delete_sel = Cursor.Selection{
+                .anchor = Cursor.Position{ .line = line_num, .col = col },
+                .head = Cursor.Position{ .line = line_num, .col = col + chars_to_remove },
+            };
+            _ = Actions.deleteSelection(buffer, delete_sel, null) catch {};
+        }
+    } else {
+        // Add comments
+        current_line = range.start.line;
+        while (current_line <= range.end.line) : (current_line += 1) {
+            // Find line start
+            var line: usize = 0;
+            var offset: usize = 0;
+            while (offset < text.len and line < current_line) {
+                if (text[offset] == '\n') {
+                    line += 1;
+                }
+                offset += 1;
+            }
+
+            // Find first non-whitespace position
+            var col: usize = 0;
+            while (offset < text.len and (text[offset] == ' ' or text[offset] == '\t')) {
+                offset += 1;
+                col += 1;
+            }
+
+            // Insert // at first non-whitespace position
+            const insert_pos = Cursor.Position{ .line = current_line, .col = col };
+            const insert_sel = Cursor.Selection.cursor(insert_pos);
+            _ = Actions.insertText(buffer, insert_sel, "// ") catch {};
+        }
+    }
+
+    buffer.metadata.markModified();
+    return Result.ok();
+}
+
 /// Redo last undone operation
 fn redo(ctx: *Context) Result {
     if (!ctx.editor.undo_history.canRedo()) {
@@ -1162,6 +1374,27 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .name = "delete_to_end",
         .description = "Delete to end of line (D or $d)",
         .handler = deleteToEndOfLine,
+        .category = .edit,
+    });
+
+    try registry.register(.{
+        .name = "indent_line",
+        .description = "Indent line or selection (>)",
+        .handler = indentLine,
+        .category = .edit,
+    });
+
+    try registry.register(.{
+        .name = "dedent_line",
+        .description = "Dedent line or selection (<)",
+        .handler = dedentLine,
+        .category = .edit,
+    });
+
+    try registry.register(.{
+        .name = "toggle_comment",
+        .description = "Toggle line comments (gcc or Ctrl+/)",
+        .handler = toggleLineComment,
         .category = .edit,
     });
 

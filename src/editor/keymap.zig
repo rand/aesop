@@ -277,6 +277,10 @@ pub fn setupDefaults(manager: *KeymapManager) !void {
     // Line manipulation
     try normal_map.bind(Binding.fromSingleKey(.{ .char = 'J' }, "join_lines"));
 
+    // Indentation
+    try normal_map.bind(Binding.fromSingleKey(.{ .char = '>' }, "indent_line"));
+    try normal_map.bind(Binding.fromSingleKey(.{ .char = '<' }, "dedent_line"));
+
     // Undo/redo
     try normal_map.bind(Binding.fromSingleKey(.{ .char = 'u' }, "undo"));
     try normal_map.bind(Binding.fromSingleKey(.{ .char = 'U' }, "redo"));
