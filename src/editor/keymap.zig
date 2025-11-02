@@ -267,6 +267,12 @@ pub fn setupDefaults(manager: *KeymapManager) !void {
     // Select mode
     try normal_map.bind(Binding.fromSingleKey(.{ .char = 'v' }, "select_mode"));
 
+    // Deletion
+    try normal_map.bind(Binding.fromSingleKey(.{ .char = 'x' }, "delete_char"));
+    try normal_map.bind(Binding.fromSingleKey(.{ .char = 'X' }, "delete_char_before"));
+    try normal_map.bind(Binding.fromChord(.{ .char = 'd' }, .{ .char = 'd' }, "delete_line"));
+    try normal_map.bind(Binding.fromChord(.{ .char = 'd' }, .{ .char = 'w' }, "delete_word"));
+
     // Insert mode bindings
     const insert_map = manager.getKeymap(.insert);
     try insert_map.bind(Binding.fromSingleKey(.{ .special = .escape }, "normal_mode"));

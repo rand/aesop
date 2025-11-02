@@ -122,6 +122,7 @@ pub const Registry = struct {
 
 const Motions = @import("motions.zig");
 const Actions = @import("actions.zig");
+const Cursor = @import("cursor.zig");
 const Buffer = @import("../buffer/manager.zig");
 
 fn moveLeft(ctx: *Context) Result {
@@ -317,6 +318,75 @@ fn selectMode(ctx: *Context) Result {
     return Result.ok();
 }
 
+// === Deletion commands ===
+
+fn deleteCharAtCursor(ctx: *Context) Result {
+    if (ctx.editor.buffer_manager.active_buffer_id) |id| {
+        const buffer = ctx.editor.buffer_manager.getBufferMut(id) orelse return Result.err("No active buffer");
+        const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+        const new_sel = Actions.deleteChar(buffer, primary_sel) catch return Result.err("Failed to delete character");
+        buffer.metadata.markModified();
+        ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch return Result.err("Failed to update cursor");
+        return Result.ok();
+    }
+    return Result.err("No active buffer");
+}
+
+fn deleteCharBeforeCursor(ctx: *Context) Result {
+    if (ctx.editor.buffer_manager.active_buffer_id) |id| {
+        const buffer = ctx.editor.buffer_manager.getBufferMut(id) orelse return Result.err("No active buffer");
+        const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+        const new_sel = Actions.deleteCharBefore(buffer, primary_sel) catch return Result.err("Failed to delete character");
+        buffer.metadata.markModified();
+        ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch return Result.err("Failed to update cursor");
+        return Result.ok();
+    }
+    return Result.err("No active buffer");
+}
+
+fn deleteLine(ctx: *Context) Result {
+    if (ctx.editor.buffer_manager.active_buffer_id) |id| {
+        const buffer = ctx.editor.buffer_manager.getBufferMut(id) orelse return Result.err("No active buffer");
+        const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+        // Move to line start, select entire line (including newline), delete
+        const line_start = Motions.moveLineStart(primary_sel, buffer);
+        const line_end = Motions.moveLineEnd(line_start, buffer);
+
+        // Create selection from start to end of line
+        const line_selection = Cursor.Selection.init(line_start.head, line_end.head);
+
+        // Delete the selection (TODO: should yank to clipboard)
+        const new_sel = Actions.deleteSelection(buffer, line_selection, null) catch return Result.err("Failed to delete line");
+        buffer.metadata.markModified();
+        ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch return Result.err("Failed to update cursor");
+        return Result.ok();
+    }
+    return Result.err("No active buffer");
+}
+
+fn deleteWord(ctx: *Context) Result {
+    if (ctx.editor.buffer_manager.active_buffer_id) |id| {
+        const buffer = ctx.editor.buffer_manager.getBufferMut(id) orelse return Result.err("No active buffer");
+        const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+        // Get end of word
+        const word_end = Motions.moveWordEnd(primary_sel, buffer);
+
+        // Create selection from cursor to end of word
+        const word_selection = Cursor.Selection.init(primary_sel.head, word_end.head);
+
+        // Delete the selection (TODO: should yank to clipboard)
+        const new_sel = Actions.deleteSelection(buffer, word_selection, null) catch return Result.err("Failed to delete word");
+        buffer.metadata.markModified();
+        ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch return Result.err("Failed to update cursor");
+        return Result.ok();
+    }
+    return Result.err("No active buffer");
+}
+
 /// Register all built-in commands
 pub fn registerBuiltins(registry: *Registry) !void {
     // Motion commands - basic
@@ -455,6 +525,35 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .description = "Enter select mode",
         .handler = selectMode,
         .category = .mode,
+    });
+
+    // Deletion commands
+    try registry.register(.{
+        .name = "delete_char",
+        .description = "Delete character at cursor (x)",
+        .handler = deleteCharAtCursor,
+        .category = .edit,
+    });
+
+    try registry.register(.{
+        .name = "delete_char_before",
+        .description = "Delete character before cursor (X)",
+        .handler = deleteCharBeforeCursor,
+        .category = .edit,
+    });
+
+    try registry.register(.{
+        .name = "delete_line",
+        .description = "Delete current line (dd)",
+        .handler = deleteLine,
+        .category = .edit,
+    });
+
+    try registry.register(.{
+        .name = "delete_word",
+        .description = "Delete word from cursor (dw)",
+        .handler = deleteWord,
+        .category = .edit,
     });
 }
 
