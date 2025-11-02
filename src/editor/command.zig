@@ -898,6 +898,74 @@ fn togglePalette(ctx: *Context) Result {
     return Result.ok();
 }
 
+/// Write configuration to file
+fn configWrite(ctx: *Context) Result {
+    // Get config file path (XDG_CONFIG_HOME/aesop/config.conf or ~/.config/aesop/config.conf)
+    const config_dir_path = blk: {
+        if (std.process.getEnvVarOwned(ctx.editor.allocator, "XDG_CONFIG_HOME")) |xdg_config_home| {
+            defer ctx.editor.allocator.free(xdg_config_home);
+            break :blk std.fs.path.join(ctx.editor.allocator, &[_][]const u8{ xdg_config_home, "aesop" }) catch {
+                return Result.err("Failed to construct config directory path");
+            };
+        } else |_| {
+            if (std.process.getEnvVarOwned(ctx.editor.allocator, "HOME")) |home| {
+                defer ctx.editor.allocator.free(home);
+                break :blk std.fs.path.join(ctx.editor.allocator, &[_][]const u8{ home, ".config", "aesop" }) catch {
+                    return Result.err("Failed to construct config directory path");
+                };
+            } else |_| {
+                return Result.err("Could not determine config directory (HOME not set)");
+            }
+        }
+    };
+    defer ctx.editor.allocator.free(config_dir_path);
+
+    // Create directory if it doesn't exist
+    std.fs.cwd().makePath(config_dir_path) catch {
+        return Result.err("Failed to create config directory");
+    };
+
+    // Construct full config file path
+    const config_file_path = std.fs.path.join(
+        ctx.editor.allocator,
+        &[_][]const u8{ config_dir_path, "config.conf" },
+    ) catch {
+        return Result.err("Failed to construct config file path");
+    };
+    defer ctx.editor.allocator.free(config_file_path);
+
+    // Save config to file
+    ctx.editor.config.saveToFile(config_file_path) catch {
+        return Result.err("Failed to write config file");
+    };
+
+    var msg_buf: [256]u8 = undefined;
+    const msg = std.fmt.bufPrint(&msg_buf, "Configuration written to {s}", .{config_file_path}) catch "Configuration written";
+    ctx.editor.messages.add(msg, .success) catch {};
+
+    return Result.ok();
+}
+
+/// Show current configuration settings
+fn configShow(ctx: *Context) Result {
+    const cfg = &ctx.editor.config;
+    var msg_buf: [256]u8 = undefined;
+    const msg = std.fmt.bufPrint(
+        &msg_buf,
+        "tab_width={d} expand_tabs={s} line_numbers={s} relative_line_numbers={s} syntax_highlighting={s}",
+        .{
+            cfg.tab_width,
+            if (cfg.expand_tabs) "true" else "false",
+            if (cfg.line_numbers) "true" else "false",
+            if (cfg.relative_line_numbers) "true" else "false",
+            if (cfg.syntax_highlighting) "true" else "false",
+        },
+    ) catch "Config settings";
+
+    ctx.editor.messages.add(msg, .info) catch {};
+    return Result.ok();
+}
+
 /// Toggle file finder
 fn toggleFileFinder(ctx: *Context) Result {
     if (ctx.editor.file_finder.visible) {
@@ -3571,6 +3639,21 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .description = "Force close buffer without saving",
         .handler = forceCloseBuffer,
         .category = .file,
+    });
+
+    // Configuration commands
+    try registry.register(.{
+        .name = "config_write",
+        .description = "Write configuration to file (~/.config/aesop/config.conf)",
+        .handler = configWrite,
+        .category = .system,
+    });
+
+    try registry.register(.{
+        .name = "config_show",
+        .description = "Show current configuration settings",
+        .handler = configShow,
+        .category = .system,
     });
 
     // Search operations

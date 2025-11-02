@@ -35,9 +35,14 @@ pub const Search = struct {
     };
 
     pub fn init(allocator: std.mem.Allocator) Search {
+        return initWithOptions(allocator, .{});
+    }
+
+    pub fn initWithOptions(allocator: std.mem.Allocator, options: SearchOptions) Search {
         return .{
             .allocator = allocator,
             .history = std.ArrayList([]const u8).empty,
+            .options = options,
         };
     }
 

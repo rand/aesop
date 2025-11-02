@@ -19,6 +19,46 @@ const input_mod = @import("terminal/input.zig");
 const Keymap = @import("editor/keymap.zig");
 const TreeSitter = @import("editor/treesitter.zig");
 
+/// Get configuration file path using XDG Base Directory specification
+/// Priority:
+/// 1. $XDG_CONFIG_HOME/aesop/config.conf
+/// 2. ~/.config/aesop/config.conf
+/// 3. ./aesop.conf (current directory)
+fn getConfigPath(allocator: std.mem.Allocator) !?[]const u8 {
+    // Try XDG_CONFIG_HOME first
+    if (std.process.getEnvVarOwned(allocator, "XDG_CONFIG_HOME")) |xdg_config_home| {
+        defer allocator.free(xdg_config_home);
+        const path = try std.fs.path.join(allocator, &[_][]const u8{ xdg_config_home, "aesop", "config.conf" });
+        // Check if file exists
+        std.fs.accessAbsolute(path, .{}) catch {
+            allocator.free(path);
+            // Fall through to next option
+        } else {
+            return path;
+        };
+    } else |_| {}
+
+    // Try ~/.config/aesop/config.conf
+    if (std.process.getEnvVarOwned(allocator, "HOME")) |home| {
+        defer allocator.free(home);
+        const path = try std.fs.path.join(allocator, &[_][]const u8{ home, ".config", "aesop", "config.conf" });
+        // Check if file exists
+        std.fs.accessAbsolute(path, .{}) catch {
+            allocator.free(path);
+            // Fall through to current directory
+        } else {
+            return path;
+        };
+    } else |_| {}
+
+    // Try ./aesop.conf in current directory
+    std.fs.cwd().access("aesop.conf", .{}) catch {
+        // No config file found - return null to use defaults
+        return null;
+    };
+    return try allocator.dupe(u8, "aesop.conf");
+}
+
 /// Editor application
 pub const EditorApp = struct {
     editor: Editor,
@@ -36,25 +76,44 @@ pub const EditorApp = struct {
 
         // Load configuration from file (if it exists)
         const Config = @import("editor/config.zig").Config;
-        const config = Config.loadFromFile(allocator, "aesop.conf") catch |err| blk: {
-            // If file doesn't exist or can't be read, use defaults
-            if (err == error.FileNotFound) {
-                break :blk Config.init(allocator);
+        const config_path = try getConfigPath(allocator);
+        defer if (config_path) |path| allocator.free(path);
+
+        const config = if (config_path) |path|
+            Config.loadFromFile(allocator, path) catch |err| blk: {
+                // If file doesn't exist or can't be read, use defaults
+                if (err == error.FileNotFound) {
+                    break :blk Config.init(allocator);
+                }
+                return err;
             }
-            return err;
-        };
+        else
+            Config.init(allocator);
+
         editor.config.deinit();
         editor.config = config;
 
         var renderer = try Renderer.init(allocator);
         errdefer renderer.deinit();
 
+        // Initialize gutter config from editor config
+        const gutter_cfg = gutter.GutterConfig{
+            .show_line_numbers = editor.config.line_numbers,
+            .line_number_style = if (editor.config.relative_line_numbers)
+                .relative
+            else
+                .absolute,
+            .show_git_status = false, // TODO: Future feature
+            .show_diagnostics = false, // TODO: Future feature
+            .width = 5,
+        };
+
         return .{
             .editor = editor,
             .renderer = renderer,
             .allocator = allocator,
             .running = false,
-            .gutter_config = .{},
+            .gutter_config = gutter_cfg,
             .mouse_drag_start = null,
             .syntax_parser = null,
         };

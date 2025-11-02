@@ -98,6 +98,14 @@ pub const Editor = struct {
             .width = 80,
         };
 
+        // Initialize config first so we can use it during other initialization
+        const config = Config.Config.init(allocator);
+        const search_options = Search.SearchOptions{
+            .case_sensitive = config.search_case_sensitive,
+            .whole_word = false,
+            .wrap_around = config.search_wrap_around,
+        };
+
         var editor = Editor{
             .allocator = allocator,
             .mode_manager = Mode.ModeManager.init(),
@@ -109,7 +117,7 @@ pub const Editor = struct {
             .messages = Message.MessageQueue.init(allocator),
             .undo_history = Undo.UndoHistory.init(allocator),
             .palette = Palette.Palette.init(allocator),
-            .search = Search.Search.init(allocator),
+            .search = Search.Search.initWithOptions(allocator, search_options),
             .marks = Marks.MarkRegistry.init(allocator),
             .repeat_system = Repeat.RepeatSystem.init(allocator),
             .prompt = Prompt.Prompt.init(allocator),
@@ -117,7 +125,7 @@ pub const Editor = struct {
             .find_till_state = Motions.FindTillState{},
             .macro_recorder = Macros.MacroRecorder.init(allocator),
             .pending_command = .none,
-            .config = Config.Config.init(allocator),
+            .config = config,
             .window_manager = try Window.WindowManager.init(allocator, initial_dims),
             .plugin_manager = PluginSystem.PluginManager.init(allocator),
             .file_finder = FileFinder.FileFinder.init(allocator),
@@ -434,13 +442,13 @@ pub const Editor = struct {
                 },
                 .special => |special_key| switch (special_key) {
                     .enter => "\n",
-                    .tab => "    ", // 4 spaces default
+                    .tab => try self.config.getTabString(self.allocator),
                     else => null,
                 },
             };
             defer if (text_to_insert) |txt| {
                 // Free if we allocated
-                if (key == .char) {
+                if (key == .char or (key == .special and key.special == .tab)) {
                     self.allocator.free(txt);
                 }
             };
