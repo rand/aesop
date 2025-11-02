@@ -314,6 +314,108 @@ pub fn parseHoverResponse(allocator: std.mem.Allocator, json_text: []const u8) !
     return error.InvalidContentsFormat;
 }
 
+/// Location from LSP - represents a position in a file
+pub const Location = struct {
+    uri: []const u8, // Allocated, must free
+    range: Range,
+
+    pub fn deinit(self: *Location, allocator: std.mem.Allocator) void {
+        allocator.free(self.uri);
+    }
+};
+
+/// Parse goto definition response and extract location(s)
+/// Returns array of locations (can be empty if no definition found)
+pub fn parseDefinitionResponse(allocator: std.mem.Allocator, json_text: []const u8) ![]Location {
+    const parsed = try std.json.parseFromSlice(std.json.Value, allocator, json_text, .{});
+    defer parsed.deinit();
+
+    const root = parsed.value;
+
+    // Definition response can be:
+    // - null (no definition)
+    // - Location (single)
+    // - Location[] (array)
+    // - LocationLink[] (more complex, treat as Location for now)
+
+    if (root == .null) {
+        // No definition found
+        return try allocator.alloc(Location, 0);
+    }
+
+    var locations = std.ArrayList(Location).empty;
+    errdefer {
+        for (locations.items) |*loc| {
+            loc.deinit(allocator);
+        }
+        locations.deinit(allocator);
+    }
+
+    if (root == .object) {
+        // Single Location
+        const loc = try parseLocation(allocator, root);
+        try locations.append(allocator, loc);
+    } else if (root == .array) {
+        // Array of Location or LocationLink
+        for (root.array.items) |item| {
+            if (item != .object) continue;
+            const loc = parseLocation(allocator, item) catch continue;
+            try locations.append(allocator, loc);
+        }
+    } else {
+        return error.InvalidDefinitionResponse;
+    }
+
+    return locations.toOwnedSlice(allocator);
+}
+
+/// Parse a single Location from JSON
+fn parseLocation(allocator: std.mem.Allocator, value: std.json.Value) !Location {
+    if (value != .object) return error.InvalidLocation;
+    const obj = value.object;
+
+    // Extract URI
+    const uri_value = obj.get("uri") orelse return error.MissingUri;
+    if (uri_value != .string) return error.InvalidUri;
+    const uri = try allocator.dupe(u8, uri_value.string);
+    errdefer allocator.free(uri);
+
+    // Extract range
+    const range_value = obj.get("range") orelse return error.MissingRange;
+    if (range_value != .object) return error.InvalidRange;
+    const range_obj = range_value.object;
+
+    const start_value = range_obj.get("start") orelse return error.MissingStart;
+    const end_value = range_obj.get("end") orelse return error.MissingEnd;
+    if (start_value != .object or end_value != .object) return error.InvalidPosition;
+
+    const start_line = if (start_value.object.get("line")) |v| blk: {
+        if (v == .integer) break :blk @as(u32, @intCast(v.integer)) else return error.InvalidLine;
+    } else return error.MissingLine;
+
+    const start_char = if (start_value.object.get("character")) |v| blk: {
+        if (v == .integer) break :blk @as(u32, @intCast(v.integer)) else return error.InvalidCharacter;
+    } else return error.MissingCharacter;
+
+    const end_line = if (end_value.object.get("line")) |v| blk: {
+        if (v == .integer) break :blk @as(u32, @intCast(v.integer)) else return error.InvalidLine;
+    } else return error.MissingLine;
+
+    const end_char = if (end_value.object.get("character")) |v| blk: {
+        if (v == .integer) break :blk @as(u32, @intCast(v.integer)) else return error.InvalidCharacter;
+    } else return error.MissingCharacter;
+
+    const range = Range{
+        .start = .{ .line = start_line, .character = start_char },
+        .end = .{ .line = end_line, .character = end_char },
+    };
+
+    return Location{
+        .uri = uri,
+        .range = range,
+    };
+}
+
 // === Tests ===
 
 test "parse completion response: CompletionList format" {
@@ -529,4 +631,79 @@ test "parse hover response: array format" {
     try std.testing.expect(std.mem.indexOf(u8, text, "Line 1") != null);
     try std.testing.expect(std.mem.indexOf(u8, text, "Line 2") != null);
     try std.testing.expect(std.mem.indexOf(u8, text, "Line 3") != null);
+}
+
+test "parse definition response: single location" {
+    const allocator = std.testing.allocator;
+
+    const json =
+        \\{
+        \\  "uri": "file:///src/main.zig",
+        \\  "range": {
+        \\    "start": {"line": 42, "character": 10},
+        \\    "end": {"line": 42, "character": 20}
+        \\  }
+        \\}
+    ;
+
+    const locations = try parseDefinitionResponse(allocator, json);
+    defer {
+        for (locations) |*loc| {
+            loc.deinit(allocator);
+        }
+        allocator.free(locations);
+    }
+
+    try std.testing.expectEqual(@as(usize, 1), locations.len);
+    try std.testing.expectEqualStrings("file:///src/main.zig", locations[0].uri);
+    try std.testing.expectEqual(@as(u32, 42), locations[0].range.start.line);
+    try std.testing.expectEqual(@as(u32, 10), locations[0].range.start.character);
+}
+
+test "parse definition response: array of locations" {
+    const allocator = std.testing.allocator;
+
+    const json =
+        \\[
+        \\  {
+        \\    "uri": "file:///src/foo.zig",
+        \\    "range": {
+        \\      "start": {"line": 10, "character": 5},
+        \\      "end": {"line": 10, "character": 15}
+        \\    }
+        \\  },
+        \\  {
+        \\    "uri": "file:///src/bar.zig",
+        \\    "range": {
+        \\      "start": {"line": 20, "character": 8},
+        \\      "end": {"line": 20, "character": 18}
+        \\    }
+        \\  }
+        \\]
+    ;
+
+    const locations = try parseDefinitionResponse(allocator, json);
+    defer {
+        for (locations) |*loc| {
+            loc.deinit(allocator);
+        }
+        allocator.free(locations);
+    }
+
+    try std.testing.expectEqual(@as(usize, 2), locations.len);
+    try std.testing.expectEqualStrings("file:///src/foo.zig", locations[0].uri);
+    try std.testing.expectEqual(@as(u32, 10), locations[0].range.start.line);
+    try std.testing.expectEqualStrings("file:///src/bar.zig", locations[1].uri);
+    try std.testing.expectEqual(@as(u32, 20), locations[1].range.start.line);
+}
+
+test "parse definition response: null (no definition)" {
+    const allocator = std.testing.allocator;
+
+    const json = "null";
+
+    const locations = try parseDefinitionResponse(allocator, json);
+    defer allocator.free(locations);
+
+    try std.testing.expectEqual(@as(usize, 0), locations.len);
 }

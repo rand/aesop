@@ -91,6 +91,7 @@ pub const Editor = struct {
     lsp_client: ?LspClient, // Optional LSP client (null if not initialized)
     completion_list: CompletionList, // Code completion popup
     diagnostic_manager: LspDiagnostics.DiagnosticManager, // LSP diagnostics storage
+    hover_content: ?[]const u8, // Current hover text (allocated, must free)
 
     // Viewport (legacy - will be replaced by window_manager)
     scroll_offset: usize, // Line offset for scrolling
@@ -141,6 +142,7 @@ pub const Editor = struct {
             .lsp_client = null, // LSP client initialized on-demand
             .completion_list = CompletionList.init(allocator),
             .diagnostic_manager = LspDiagnostics.DiagnosticManager.init(allocator),
+            .hover_content = null,
             .scroll_offset = 0,
         };
 
@@ -155,6 +157,9 @@ pub const Editor = struct {
 
     /// Clean up editor
     pub fn deinit(self: *Editor) void {
+        if (self.hover_content) |content| {
+            self.allocator.free(content);
+        }
         self.diagnostic_manager.deinit();
         self.completion_list.deinit();
         if (self.lsp_client) |*client| {

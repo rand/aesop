@@ -637,6 +637,42 @@ pub const EditorApp = struct {
         // Render completion popup (overlay on top of everything)
         try completionline.render(&self.renderer, &self.editor, &self.editor.completion_list);
 
+        // Render hover popup (overlay on top of everything)
+        if (self.editor.hover_content) |hover_text| {
+            const popup = @import("render/popup.zig");
+            const hover_cursor_pos = (self.editor.selections.primary(self.allocator) orelse return);
+            const hover_cursor = hover_cursor_pos.head;
+
+            // Calculate popup dimensions
+            const config = popup.PopupConfig{
+                .max_width = 60,
+                .max_height = 15,
+                .border = .single,
+                .title = "Hover",
+            };
+            const dims = popup.calculateDimensions(hover_text, config);
+
+            // Calculate position near cursor
+            const position = popup.calculatePosition(
+                size.width,
+                size.height,
+                @intCast(hover_cursor.line -| self.editor.scroll_offset),
+                @intCast(hover_cursor.col),
+                dims.width,
+                dims.height,
+            );
+
+            // Render popup
+            try popup.render(
+                &self.renderer,
+                position,
+                dims.width,
+                dims.height,
+                hover_text,
+                config,
+            );
+        }
+
         // Render buffer switcher (overlay on top of everything)
         try bufferswitcher.render(
             &self.renderer,

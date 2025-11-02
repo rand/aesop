@@ -3130,13 +3130,101 @@ fn lspAcceptCompletion(ctx: *Context) Result {
     return Result.ok();
 }
 
+/// Callback for LSP hover response
+fn lspHoverCallback(ctx: ?*anyopaque, result_json: []const u8) !void {
+    const ResponseParser = @import("../lsp/response_parser.zig");
+    const editor: *Editor = @ptrCast(@alignCast(ctx orelse return error.NullContext));
+
+    // Parse hover response
+    const hover_text = ResponseParser.parseHoverResponse(editor.allocator, result_json) catch |err| {
+        std.debug.print("[LSP] Failed to parse hover response: {}\n", .{err});
+        editor.messages.add("Failed to parse hover information", .error_msg) catch {};
+        return;
+    };
+
+    // Free old hover content if exists
+    if (editor.hover_content) |old_content| {
+        editor.allocator.free(old_content);
+    }
+
+    // Store new hover content
+    editor.hover_content = hover_text;
+}
+
+/// Callback for LSP goto definition response
+fn lspDefinitionCallback(ctx: ?*anyopaque, result_json: []const u8) !void {
+    const ResponseParser = @import("../lsp/response_parser.zig");
+    const editor: *Editor = @ptrCast(@alignCast(ctx orelse return error.NullContext));
+
+    // Parse definition response
+    const locations = ResponseParser.parseDefinitionResponse(editor.allocator, result_json) catch |err| {
+        std.debug.print("[LSP] Failed to parse definition response: {}\n", .{err});
+        editor.messages.add("Failed to parse definition location", .error_msg) catch {};
+        return;
+    };
+    defer {
+        for (locations) |*loc| {
+            loc.deinit(editor.allocator);
+        }
+        editor.allocator.free(locations);
+    }
+
+    if (locations.len == 0) {
+        editor.messages.add("No definition found", .info) catch {};
+        return;
+    }
+
+    // Navigate to first location
+    const location = locations[0];
+
+    // Convert file:// URI to filepath
+    const uri_prefix = "file://";
+    const filepath = if (std.mem.startsWith(u8, location.uri, uri_prefix))
+        location.uri[uri_prefix.len..]
+    else
+        location.uri;
+
+    // Open file and navigate to position
+    editor.openFile(filepath) catch |err| {
+        std.debug.print("[LSP] Failed to open file {s}: {}\n", .{ filepath, err });
+        editor.messages.add("Failed to open definition file", .error_msg) catch {};
+        return;
+    };
+
+    // Set cursor to definition position
+    editor.selections.setSingleCursor(editor.allocator, .{
+        .line = location.range.start.line,
+        .col = location.range.start.character,
+    }) catch {};
+
+    editor.messages.add("Navigated to definition", .success) catch {};
+}
+
 /// Go to definition of symbol under cursor
 fn lspGotoDefinition(ctx: *Context) Result {
     const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
-    _ = buffer;
+    const client = &(ctx.editor.lsp_client orelse return Result.err("LSP not initialized"));
 
-    // TODO: Trigger LSP goto definition request
-    ctx.editor.messages.add("LSP goto definition not yet implemented", .info) catch {};
+    // Get cursor position
+    const cursor = (ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No cursor")).head;
+
+    // Get file URI
+    const filepath = buffer.metadata.filepath orelse return Result.err("Buffer has no file path");
+    const uri = ctx.editor.makeFileUri(filepath) catch return Result.err("Failed to create URI");
+    defer ctx.editor.allocator.free(uri);
+
+    // Send LSP definition request
+    _ = LspHandlers.definition(
+        client,
+        uri,
+        @intCast(cursor.line),
+        @intCast(cursor.col),
+        lspDefinitionCallback,
+        ctx.editor,
+    ) catch |err| {
+        std.debug.print("[LSP] Failed to request definition: {}\n", .{err});
+        return Result.err("LSP definition request failed");
+    };
 
     return Result.ok();
 }
@@ -3144,10 +3232,28 @@ fn lspGotoDefinition(ctx: *Context) Result {
 /// Show hover information for symbol under cursor
 fn lspShowHover(ctx: *Context) Result {
     const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
-    _ = buffer;
+    const client = &(ctx.editor.lsp_client orelse return Result.err("LSP not initialized"));
 
-    // TODO: Trigger LSP hover request and display result
-    ctx.editor.messages.add("LSP hover not yet implemented", .info) catch {};
+    // Get cursor position
+    const cursor = (ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No cursor")).head;
+
+    // Get file URI
+    const filepath = buffer.metadata.filepath orelse return Result.err("Buffer has no file path");
+    const uri = ctx.editor.makeFileUri(filepath) catch return Result.err("Failed to create URI");
+    defer ctx.editor.allocator.free(uri);
+
+    // Send LSP hover request
+    _ = LspHandlers.hover(
+        client,
+        uri,
+        @intCast(cursor.line),
+        @intCast(cursor.col),
+        lspHoverCallback,
+        ctx.editor,
+    ) catch |err| {
+        std.debug.print("[LSP] Failed to request hover: {}\n", .{err});
+        return Result.err("LSP hover request failed");
+    };
 
     return Result.ok();
 }
