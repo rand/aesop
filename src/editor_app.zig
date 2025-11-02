@@ -33,6 +33,18 @@ pub const EditorApp = struct {
         var editor = try Editor.init(allocator);
         errdefer editor.deinit();
 
+        // Load configuration from file (if it exists)
+        const Config = @import("editor/config.zig").Config;
+        const config = Config.loadFromFile(allocator, "aesop.conf") catch |err| blk: {
+            // If file doesn't exist or can't be read, use defaults
+            if (err == error.FileNotFound) {
+                break :blk Config.init(allocator);
+            }
+            return err;
+        };
+        editor.config.deinit();
+        editor.config = config;
+
         var renderer = try Renderer.init(allocator);
         errdefer renderer.deinit();
 

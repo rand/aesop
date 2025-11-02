@@ -27,6 +27,9 @@ pub const Config = struct {
     multi_cursor_enabled: bool = true,
     max_cursors: usize = 100,
 
+    // Auto-pairing settings
+    auto_pair_brackets: bool = true,
+
     // Performance settings
     scroll_offset: usize = 3,  // Lines to keep above/below cursor
     max_undo_history: usize = 1000,
@@ -70,14 +73,14 @@ pub const Config = struct {
         defer allocator.free(contents);
 
         // Parse line by line
-        var lines = std.mem.split(u8, contents, "\n");
+        var lines = std.mem.splitSequence(u8, contents, "\n");
         while (lines.next()) |line| {
             // Skip empty lines and comments
             const trimmed = std.mem.trim(u8, line, " \t\r");
             if (trimmed.len == 0 or trimmed[0] == '#') continue;
 
             // Parse key=value
-            var parts = std.mem.split(u8, trimmed, "=");
+            var parts = std.mem.splitSequence(u8, trimmed, "=");
             const key = parts.next() orelse continue;
             const value = parts.next() orelse continue;
 
@@ -124,6 +127,8 @@ pub const Config = struct {
             self.multi_cursor_enabled = try parseBool(value);
         } else if (std.mem.eql(u8, key, "max_cursors")) {
             self.max_cursors = try std.fmt.parseInt(usize, value, 10);
+        } else if (std.mem.eql(u8, key, "auto_pair_brackets")) {
+            self.auto_pair_brackets = try parseBool(value);
         } else if (std.mem.eql(u8, key, "scroll_offset")) {
             self.scroll_offset = try std.fmt.parseInt(usize, value, 10);
         } else if (std.mem.eql(u8, key, "max_undo_history")) {
@@ -171,6 +176,9 @@ pub const Config = struct {
         try writer.writeAll("# Multi-cursor settings\n");
         try writer.print("multi_cursor_enabled={s}\n", .{if (self.multi_cursor_enabled) "true" else "false"});
         try writer.print("max_cursors={d}\n\n", .{self.max_cursors});
+
+        try writer.writeAll("# Auto-pairing settings\n");
+        try writer.print("auto_pair_brackets={s}\n\n", .{if (self.auto_pair_brackets) "true" else "false"});
 
         try writer.writeAll("# Performance settings\n");
         try writer.print("scroll_offset={d}\n", .{self.scroll_offset});
