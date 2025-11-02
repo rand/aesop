@@ -211,7 +211,8 @@ pub const EditorApp = struct {
             .press_left => {
                 try self.handleMousePress(mouse.row, mouse.col);
             },
-            .drag => {
+            .move => {
+                // Treat move as drag if we have a drag start position
                 try self.handleMouseDrag(mouse.row, mouse.col);
             },
             .release => {
