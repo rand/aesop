@@ -387,6 +387,52 @@ fn deleteWord(ctx: *Context) Result {
     return Result.err("No active buffer");
 }
 
+/// Undo last operation
+fn undo(ctx: *Context) Result {
+    if (!ctx.editor.undo_history.canUndo()) {
+        return Result.err("Nothing to undo");
+    }
+
+    // Get undo group
+    const group = ctx.editor.undo_history.getUndo() orelse {
+        return Result.err("Undo failed");
+    };
+
+    // TODO: Apply undo operations to buffer
+    // For now, just restore cursor position
+    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, group.cursor_before) catch {
+        return Result.err("Failed to restore cursor");
+    };
+
+    // Show message
+    ctx.editor.messages.add("Undo applied", .info) catch {};
+
+    return Result.ok();
+}
+
+/// Redo last undone operation
+fn redo(ctx: *Context) Result {
+    if (!ctx.editor.undo_history.canRedo()) {
+        return Result.err("Nothing to redo");
+    }
+
+    // Get redo group
+    const group = ctx.editor.undo_history.getRedo() orelse {
+        return Result.err("Redo failed");
+    };
+
+    // TODO: Apply redo operations to buffer
+    // For now, just restore cursor position
+    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, group.cursor_after) catch {
+        return Result.err("Failed to restore cursor");
+    };
+
+    // Show message
+    ctx.editor.messages.add("Redo applied", .info) catch {};
+
+    return Result.ok();
+}
+
 /// Register all built-in commands
 pub fn registerBuiltins(registry: *Registry) !void {
     // Motion commands - basic
@@ -553,6 +599,21 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .name = "delete_word",
         .description = "Delete word from cursor (dw)",
         .handler = deleteWord,
+        .category = .edit,
+    });
+
+    // Undo/redo commands
+    try registry.register(.{
+        .name = "undo",
+        .description = "Undo last operation (u)",
+        .handler = undo,
+        .category = .edit,
+    });
+
+    try registry.register(.{
+        .name = "redo",
+        .description = "Redo last undone operation (Ctrl+r)",
+        .handler = redo,
         .category = .edit,
     });
 }

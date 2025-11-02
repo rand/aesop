@@ -273,6 +273,10 @@ pub fn setupDefaults(manager: *KeymapManager) !void {
     try normal_map.bind(Binding.fromChord(.{ .char = 'd' }, .{ .char = 'd' }, "delete_line"));
     try normal_map.bind(Binding.fromChord(.{ .char = 'd' }, .{ .char = 'w' }, "delete_word"));
 
+    // Undo/redo
+    try normal_map.bind(Binding.fromSingleKey(.{ .char = 'u' }, "undo"));
+    try normal_map.bind(Binding.fromSingleKey(.{ .char = 'U' }, "redo"));
+
     // Insert mode bindings
     const insert_map = manager.getKeymap(.insert);
     try insert_map.bind(Binding.fromSingleKey(.{ .special = .escape }, "normal_mode"));
