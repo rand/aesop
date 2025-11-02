@@ -13,6 +13,7 @@ const Message = @import("message.zig");
 const Undo = @import("undo.zig");
 const Palette = @import("palette.zig");
 const Search = @import("search.zig");
+const Marks = @import("marks.zig");
 const Config = @import("config.zig");
 const Window = @import("window.zig");
 const FileFinder = @import("file_finder.zig");
@@ -35,6 +36,7 @@ pub const Editor = struct {
     undo_history: Undo.UndoHistory,
     palette: Palette.Palette,
     search: Search.Search,
+    marks: Marks.MarkRegistry,
     config: Config.Config,
     window_manager: Window.WindowManager,
     plugin_manager: PluginSystem.PluginManager,
@@ -67,6 +69,7 @@ pub const Editor = struct {
             .undo_history = Undo.UndoHistory.init(allocator),
             .palette = Palette.Palette.init(allocator),
             .search = Search.Search.init(allocator),
+            .marks = Marks.MarkRegistry.init(allocator),
             .config = Config.Config.init(allocator),
             .window_manager = try Window.WindowManager.init(allocator, initial_dims),
             .plugin_manager = PluginSystem.PluginManager.init(allocator),
@@ -91,6 +94,7 @@ pub const Editor = struct {
         self.plugin_manager.deinit();
         self.window_manager.deinit();
         self.config.deinit();
+        self.marks.deinit();
         self.search.deinit();
         self.palette.deinit();
         self.undo_history.deinit();

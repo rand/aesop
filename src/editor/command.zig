@@ -1181,6 +1181,150 @@ fn titlecaseSelection(ctx: *Context) Result {
     return Result.err("No active buffer");
 }
 
+/// Select inside parentheses
+fn selectInnerParen(ctx: *Context) Result {
+    const buffer = ctx.editor.buffer_manager.getActiveBuffer() orelse return Result.err("No active buffer");
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+    const new_sel = Actions.selectInnerPair(buffer, primary_sel, .paren, ctx.editor.allocator) catch {
+        return Result.err("Failed to select inside parentheses");
+    };
+
+    ctx.editor.selections.setSingleSelection(ctx.editor.allocator, new_sel) catch {
+        return Result.err("Failed to update selection");
+    };
+
+    return Result.ok();
+}
+
+/// Delete inside parentheses
+fn deleteInnerParen(ctx: *Context) Result {
+    if (ctx.editor.buffer_manager.active_buffer_id) |id| {
+        const buffer = ctx.editor.buffer_manager.getBufferMut(id) orelse return Result.err("No active buffer");
+        const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+        const new_sel = Actions.deleteInnerPair(buffer, primary_sel, .paren, ctx.editor.allocator) catch {
+            return Result.err("Failed to delete inside parentheses");
+        };
+        buffer.metadata.markModified();
+
+        ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch {
+            return Result.err("Failed to update cursor");
+        };
+
+        return Result.ok();
+    }
+    return Result.err("No active buffer");
+}
+
+/// Change inside parentheses
+fn changeInnerParen(ctx: *Context) Result {
+    if (ctx.editor.buffer_manager.active_buffer_id) |id| {
+        const buffer = ctx.editor.buffer_manager.getBufferMut(id) orelse return Result.err("No active buffer");
+        const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+        const new_sel = Actions.changeInnerPair(buffer, primary_sel, .paren, ctx.editor.allocator) catch {
+            return Result.err("Failed to change inside parentheses");
+        };
+        buffer.metadata.markModified();
+
+        ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch {
+            return Result.err("Failed to update cursor");
+        };
+
+        ctx.editor.mode_manager.transitionTo(.insert) catch {};
+        return Result.ok();
+    }
+    return Result.err("No active buffer");
+}
+
+/// Select inside quotes (double)
+fn selectInnerQuote(ctx: *Context) Result {
+    const buffer = ctx.editor.buffer_manager.getActiveBuffer() orelse return Result.err("No active buffer");
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+    const new_sel = Actions.selectInnerPair(buffer, primary_sel, .double_quote, ctx.editor.allocator) catch {
+        return Result.err("Failed to select inside quotes");
+    };
+
+    ctx.editor.selections.setSingleSelection(ctx.editor.allocator, new_sel) catch {
+        return Result.err("Failed to update selection");
+    };
+
+    return Result.ok();
+}
+
+/// Set mark at current cursor position
+fn setMark(ctx: *Context) Result {
+    // TODO: Get mark name from user input (for now, use 'a')
+    const mark_name: u8 = 'a';
+
+    const buffer_id = ctx.editor.buffer_manager.active_buffer_id orelse {
+        return Result.err("No active buffer");
+    };
+
+    const cursor_pos = ctx.editor.getCursorPosition();
+
+    ctx.editor.marks.setMark(mark_name, cursor_pos, buffer_id) catch {
+        return Result.err("Failed to set mark");
+    };
+
+    var buf: [32]u8 = undefined;
+    const msg = std.fmt.bufPrint(&buf, "Mark '{c}' set", .{mark_name}) catch "Mark set";
+    ctx.editor.showMessage(.info, msg);
+
+    return Result.ok();
+}
+
+/// Jump to mark
+fn jumpToMark(ctx: *Context) Result {
+    // TODO: Get mark name from user input (for now, use 'a')
+    const mark_name: u8 = 'a';
+
+    const mark = ctx.editor.marks.getMark(mark_name);
+    if (mark == null) {
+        var buf: [32]u8 = undefined;
+        const msg = std.fmt.bufPrint(&buf, "Mark '{c}' not set", .{mark_name}) catch "Mark not found";
+        return Result.err(msg);
+    }
+
+    // Switch to the buffer if needed
+    if (mark.?.buffer_id != ctx.editor.buffer_manager.active_buffer_id) {
+        ctx.editor.buffer_manager.setActiveBuffer(mark.?.buffer_id);
+    }
+
+    // Move cursor to mark position
+    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, mark.?.position) catch {
+        return Result.err("Failed to move cursor");
+    };
+
+    var buf: [32]u8 = undefined;
+    const msg = std.fmt.bufPrint(&buf, "Jumped to mark '{c}'", .{mark_name}) catch "Jumped to mark";
+    ctx.editor.showMessage(.info, msg);
+
+    return Result.ok();
+}
+
+/// List all marks
+fn listMarks(ctx: *Context) Result {
+    const marks = ctx.editor.marks.listMarks(ctx.editor.allocator) catch {
+        return Result.err("Failed to list marks");
+    };
+    defer ctx.editor.allocator.free(marks);
+
+    if (marks.len == 0) {
+        ctx.editor.showMessage(.info, "No marks set");
+        return Result.ok();
+    }
+
+    // Show first mark info (TODO: show in palette or buffer)
+    var buf: [64]u8 = undefined;
+    const msg = std.fmt.bufPrint(&buf, "{d} mark(s) set", .{marks.len}) catch "Marks exist";
+    ctx.editor.showMessage(.info, msg);
+
+    return Result.ok();
+}
+
 /// Indent current line or selection
 fn indentLine(ctx: *Context) Result {
     const buffer_id = ctx.editor.buffer_manager.active_buffer_id orelse {
@@ -2180,6 +2324,57 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .description = "Convert selection to title case (gt)",
         .handler = titlecaseSelection,
         .category = .edit,
+    });
+
+    // Pair text objects
+    try registry.register(.{
+        .name = "select_inner_paren",
+        .description = "Select inside parentheses (vi()",
+        .handler = selectInnerParen,
+        .category = .select,
+    });
+
+    try registry.register(.{
+        .name = "delete_inner_paren",
+        .description = "Delete inside parentheses (di()",
+        .handler = deleteInnerParen,
+        .category = .edit,
+    });
+
+    try registry.register(.{
+        .name = "change_inner_paren",
+        .description = "Change inside parentheses (ci()",
+        .handler = changeInnerParen,
+        .category = .edit,
+    });
+
+    try registry.register(.{
+        .name = "select_inner_quote",
+        .description = "Select inside double quotes (vi\")",
+        .handler = selectInnerQuote,
+        .category = .select,
+    });
+
+    // Mark commands
+    try registry.register(.{
+        .name = "set_mark",
+        .description = "Set mark at cursor position (m)",
+        .handler = setMark,
+        .category = .motion,
+    });
+
+    try registry.register(.{
+        .name = "jump_to_mark",
+        .description = "Jump to mark (')",
+        .handler = jumpToMark,
+        .category = .motion,
+    });
+
+    try registry.register(.{
+        .name = "list_marks",
+        .description = "List all marks (:marks)",
+        .handler = listMarks,
+        .category = .motion,
     });
 
     // Line manipulation commands

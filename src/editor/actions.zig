@@ -579,6 +579,246 @@ pub fn selectInnerWord(
     return selectWord(buffer, selection);
 }
 
+// === Pair text object functions ===
+
+/// Pair character types
+pub const PairType = enum {
+    paren,  // ()
+    bracket, // []
+    brace,   // {}
+    angle,   // <>
+    single_quote, // ''
+    double_quote, // ""
+    backtick,     // ``
+
+    pub fn open(self: PairType) u8 {
+        return switch (self) {
+            .paren => '(',
+            .bracket => '[',
+            .brace => '{',
+            .angle => '<',
+            .single_quote => '\'',
+            .double_quote => '"',
+            .backtick => '`',
+        };
+    }
+
+    pub fn close(self: PairType) u8 {
+        return switch (self) {
+            .paren => ')',
+            .bracket => ']',
+            .brace => '}',
+            .angle => '>',
+            .single_quote => '\'',
+            .double_quote => '"',
+            .backtick => '`',
+        };
+    }
+
+    pub fn isQuote(self: PairType) bool {
+        return self == .single_quote or self == .double_quote or self == .backtick;
+    }
+};
+
+/// Find the enclosing pair of the given type around position
+fn findEnclosingPair(
+    buffer: *const Buffer.Buffer,
+    pos: Cursor.Position,
+    pair_type: PairType,
+    allocator: std.mem.Allocator,
+) !?struct { start: Cursor.Position, end: Cursor.Position } {
+    const text = try buffer.rope.toString(allocator);
+    defer allocator.free(text);
+
+    if (text.len == 0) return null;
+
+    // Convert position to byte offset
+    var offset: usize = 0;
+    var line: usize = 0;
+    var col: usize = 0;
+
+    while (offset < text.len) {
+        if (line == pos.line and col == pos.col) break;
+        if (text[offset] == '\n') {
+            line += 1;
+            col = 0;
+        } else {
+            col += 1;
+        }
+        offset += 1;
+    }
+
+    const open_char = pair_type.open();
+    const close_char = pair_type.close();
+    const is_quote = pair_type.isQuote();
+
+    // For quotes, search bidirectionally for matching quotes
+    if (is_quote) {
+        // Find opening quote before cursor
+        var start_offset: ?usize = null;
+        var i = offset;
+        while (i > 0) {
+            i -= 1;
+            if (text[i] == open_char) {
+                start_offset = i;
+                break;
+            }
+        }
+
+        if (start_offset == null) return null;
+
+        // Find closing quote after opening
+        var end_offset: ?usize = null;
+        i = start_offset.? + 1;
+        while (i < text.len) : (i += 1) {
+            if (text[i] == close_char) {
+                end_offset = i;
+                break;
+            }
+        }
+
+        if (end_offset == null) return null;
+
+        // Convert offsets back to positions
+        const start_pos = try offsetToPosition(text, start_offset.?);
+        const end_pos = try offsetToPosition(text, end_offset.?);
+
+        return .{ .start = start_pos, .end = end_pos };
+    }
+
+    // For brackets, search with depth tracking
+    // Find opening bracket before cursor
+    var depth: i32 = 0;
+    var start_offset: ?usize = null;
+    var i = offset;
+
+    while (i > 0) {
+        i -= 1;
+        if (text[i] == close_char) {
+            depth += 1;
+        } else if (text[i] == open_char) {
+            if (depth == 0) {
+                start_offset = i;
+                break;
+            }
+            depth -= 1;
+        }
+    }
+
+    if (start_offset == null) return null;
+
+    // Find closing bracket after opening
+    depth = 0;
+    var end_offset: ?usize = null;
+    i = start_offset.? + 1;
+
+    while (i < text.len) : (i += 1) {
+        if (text[i] == open_char) {
+            depth += 1;
+        } else if (text[i] == close_char) {
+            if (depth == 0) {
+                end_offset = i;
+                break;
+            }
+            depth -= 1;
+        }
+    }
+
+    if (end_offset == null) return null;
+
+    // Convert offsets back to positions
+    const start_pos = try offsetToPosition(text, start_offset.?);
+    const end_pos = try offsetToPosition(text, end_offset.?);
+
+    return .{ .start = start_pos, .end = end_pos };
+}
+
+/// Convert byte offset to position
+fn offsetToPosition(text: []const u8, offset: usize) !Cursor.Position {
+    var line: usize = 0;
+    var col: usize = 0;
+    var i: usize = 0;
+
+    while (i < offset and i < text.len) : (i += 1) {
+        if (text[i] == '\n') {
+            line += 1;
+            col = 0;
+        } else {
+            col += 1;
+        }
+    }
+
+    return Cursor.Position{ .line = line, .col = col };
+}
+
+/// Select inside pair (like vi( or vi")
+pub fn selectInnerPair(
+    buffer: *const Buffer.Buffer,
+    selection: Cursor.Selection,
+    pair_type: PairType,
+    allocator: std.mem.Allocator,
+) !Cursor.Selection {
+    const pair = try findEnclosingPair(buffer, selection.head, pair_type, allocator);
+    if (pair == null) return selection;
+
+    // Select inside the pair (excluding delimiters)
+    var inner_start = pair.?.start;
+    var inner_end = pair.?.end;
+
+    // Move start forward by 1 character
+    inner_start.col += 1;
+
+    // If end is on same line, we're done; otherwise it's already at the right position
+    return Cursor.Selection.init(inner_start, inner_end);
+}
+
+/// Select around pair (like va( or va")
+pub fn selectAroundPair(
+    buffer: *const Buffer.Buffer,
+    selection: Cursor.Selection,
+    pair_type: PairType,
+    allocator: std.mem.Allocator,
+) !Cursor.Selection {
+    const pair = try findEnclosingPair(buffer, selection.head, pair_type, allocator);
+    if (pair == null) return selection;
+
+    // Select including the pair delimiters
+    // End should be after the closing delimiter
+    var end = pair.?.end;
+    end.col += 1;
+
+    return Cursor.Selection.init(pair.?.start, end);
+}
+
+/// Delete inside pair
+pub fn deleteInnerPair(
+    buffer: *Buffer.Buffer,
+    selection: Cursor.Selection,
+    pair_type: PairType,
+    allocator: std.mem.Allocator,
+) !Cursor.Selection {
+    const sel = try selectInnerPair(buffer, selection, pair_type, allocator);
+    if (sel.isCollapsed()) return selection;
+
+    const start_offset = try positionToByteOffset(buffer, sel.start());
+    const end_offset = try positionToByteOffset(buffer, sel.end());
+
+    if (start_offset >= end_offset) return selection;
+
+    try buffer.rope.delete(start_offset, end_offset);
+    return Cursor.Selection.cursor(sel.start());
+}
+
+/// Change inside pair (delete and prepare for insert)
+pub fn changeInnerPair(
+    buffer: *Buffer.Buffer,
+    selection: Cursor.Selection,
+    pair_type: PairType,
+    allocator: std.mem.Allocator,
+) !Cursor.Selection {
+    return deleteInnerPair(buffer, selection, pair_type, allocator);
+}
+
 // === Case conversion functions ===
 
 /// Convert ASCII character to uppercase
