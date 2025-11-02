@@ -218,6 +218,11 @@ pub const SelectionSet = struct {
         self.primary_index = 0;
     }
 
+    /// Add a cursor at position (convenience wrapper for add)
+    pub fn addCursor(self: *SelectionSet, allocator: std.mem.Allocator, pos: Position) !void {
+        try self.selections.append(allocator, Selection.cursor(pos));
+    }
+
     /// Count selections
     pub fn count(self: *const SelectionSet, _: std.mem.Allocator) usize {
         return self.selections.items.len;

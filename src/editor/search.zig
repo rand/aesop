@@ -192,6 +192,66 @@ pub const Search = struct {
 
         return null;
     }
+
+    /// Find all matches in text for highlighting
+    pub fn findAll(
+        self: *const Search,
+        text: []const u8,
+        allocator: std.mem.Allocator,
+    ) ![]Match {
+        if (self.query_len == 0) return &[_]Match{};
+
+        const query = self.getQuery();
+        var matches = std.ArrayList(Match).empty;
+        errdefer matches.deinit(allocator);
+
+        var line: usize = 0;
+        var col: usize = 0;
+        var offset: usize = 0;
+
+        while (offset < text.len) {
+            if (offset + query.len > text.len) break;
+
+            // Check if query matches at current position
+            if (std.mem.eql(u8, text[offset..offset + query.len], query)) {
+                // Found match - calculate end position
+                var end_line = line;
+                var end_col = col;
+                for (query) |c| {
+                    if (c == '\n') {
+                        end_line += 1;
+                        end_col = 0;
+                    } else {
+                        end_col += 1;
+                    }
+                }
+
+                const match = Match{
+                    .start = Cursor.Position{ .line = line, .col = col },
+                    .end = Cursor.Position{ .line = end_line, .col = end_col },
+                };
+
+                try matches.append(allocator, match);
+
+                // Skip past this match
+                offset += query.len;
+                col = end_col;
+                line = end_line;
+                continue;
+            }
+
+            // Move to next position
+            if (text[offset] == '\n') {
+                line += 1;
+                col = 0;
+            } else {
+                col += 1;
+            }
+            offset += 1;
+        }
+
+        return matches.toOwnedSlice(allocator);
+    }
 };
 
 // === Tests ===

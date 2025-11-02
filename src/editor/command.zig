@@ -657,6 +657,132 @@ fn findPrevious(ctx: *Context) Result {
     }
 }
 
+/// Add cursor on line above
+fn addCursorAbove(ctx: *Context) Result {
+    const primary = ctx.editor.selections.primary(ctx.editor.allocator) orelse {
+        return Result.err("No selection");
+    };
+
+    if (primary.head.line == 0) {
+        return Result.err("Already at first line");
+    }
+
+    // Create new cursor one line above, same column
+    const new_pos = Cursor.Position{
+        .line = primary.head.line - 1,
+        .col = primary.head.col,
+    };
+
+    // Add to selection set
+    ctx.editor.selections.addCursor(ctx.editor.allocator, new_pos) catch {
+        return Result.err("Failed to add cursor");
+    };
+
+    return Result.ok();
+}
+
+/// Add cursor on line below
+fn addCursorBelow(ctx: *Context) Result {
+    const buffer = ctx.editor.buffer_manager.getActiveBuffer() orelse {
+        return Result.err("No active buffer");
+    };
+
+    const primary = ctx.editor.selections.primary(ctx.editor.allocator) orelse {
+        return Result.err("No selection");
+    };
+
+    const total_lines = buffer.lineCount();
+    if (primary.head.line + 1 >= total_lines) {
+        return Result.err("Already at last line");
+    }
+
+    // Create new cursor one line below, same column
+    const new_pos = Cursor.Position{
+        .line = primary.head.line + 1,
+        .col = primary.head.col,
+    };
+
+    // Add to selection set
+    ctx.editor.selections.addCursor(ctx.editor.allocator, new_pos) catch {
+        return Result.err("Failed to add cursor");
+    };
+
+    return Result.ok();
+}
+
+/// Clear all cursors except primary
+fn clearExtraCursors(ctx: *Context) Result {
+    const primary = ctx.editor.selections.primary(ctx.editor.allocator) orelse {
+        return Result.err("No selection");
+    };
+
+    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, primary.head) catch {
+        return Result.err("Failed to clear cursors");
+    };
+
+    return Result.ok();
+}
+
+/// Start search with current selection as query
+fn startSearch(ctx: *Context) Result {
+    const primary = ctx.editor.selections.primary(ctx.editor.allocator) orelse {
+        return Result.err("No selection");
+    };
+
+    // If selection is not collapsed, use selected text as query
+    if (!primary.isCollapsed()) {
+        const buffer = ctx.editor.buffer_manager.getActiveBuffer() orelse {
+            return Result.err("No active buffer");
+        };
+
+        const text = buffer.getText() catch {
+            return Result.err("Failed to get buffer text");
+        };
+        defer ctx.editor.allocator.free(text);
+
+        const range = primary.range();
+
+        // Extract selected text (simplified - only works for single line)
+        if (range.start.line == range.end.line) {
+            // Calculate byte offset for start
+            var offset: usize = 0;
+            var line: usize = 0;
+            var col: usize = 0;
+
+            while (offset < text.len) {
+                if (line == range.start.line and col == range.start.col) {
+                    break;
+                }
+                if (text[offset] == '\n') {
+                    line += 1;
+                    col = 0;
+                } else {
+                    col += 1;
+                }
+                offset += 1;
+            }
+
+            const start_offset = offset;
+
+            // Find end offset
+            while (offset < text.len and col < range.end.col) {
+                col += 1;
+                offset += 1;
+            }
+
+            const selected_text = text[start_offset..offset];
+            ctx.editor.search.setQuery(selected_text) catch {
+                return Result.err("Query too long");
+            };
+
+            ctx.editor.messages.add("Search started", .info) catch {};
+            return Result.ok();
+        }
+    }
+
+    return Result.err("Select text to search");
+}
+
 /// Redo last undone operation
 fn redo(ctx: *Context) Result {
     if (!ctx.editor.undo_history.canRedo()) {
@@ -926,6 +1052,13 @@ pub fn registerBuiltins(registry: *Registry) !void {
 
     // Search operations
     try registry.register(.{
+        .name = "start_search",
+        .description = "Start search with selection (*)",
+        .handler = startSearch,
+        .category = .search,
+    });
+
+    try registry.register(.{
         .name = "find_next",
         .description = "Find next occurrence (n)",
         .handler = findNext,
@@ -937,6 +1070,28 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .description = "Find previous occurrence (N)",
         .handler = findPrevious,
         .category = .search,
+    });
+
+    // Multi-cursor operations
+    try registry.register(.{
+        .name = "add_cursor_above",
+        .description = "Add cursor on line above (Ctrl+Shift+Up)",
+        .handler = addCursorAbove,
+        .category = .selection,
+    });
+
+    try registry.register(.{
+        .name = "add_cursor_below",
+        .description = "Add cursor on line below (Ctrl+Shift+Down)",
+        .handler = addCursorBelow,
+        .category = .selection,
+    });
+
+    try registry.register(.{
+        .name = "clear_extra_cursors",
+        .description = "Clear all extra cursors (Escape)",
+        .handler = clearExtraCursors,
+        .category = .selection,
     });
 }
 

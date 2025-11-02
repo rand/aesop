@@ -289,6 +289,7 @@ pub fn setupDefaults(manager: *KeymapManager) !void {
     try normal_map.bind(Binding.fromChord(.{ .char = ' ' }, .{ .char = 'w' }, "save"));
 
     // Search operations
+    try normal_map.bind(Binding.fromSingleKey(.{ .char = '*' }, "start_search"));
     try normal_map.bind(Binding.fromSingleKey(.{ .char = 'n' }, "find_next"));
     try normal_map.bind(Binding.fromSingleKey(.{ .char = 'N' }, "find_previous"));
 

@@ -366,37 +366,42 @@ pub const EditorApp = struct {
         try self.renderer.render();
     }
 
-    /// Render cursor at current position
+    /// Render all cursors
     fn renderCursor(self: *EditorApp, visible_lines: usize) !void {
         const buffer = self.editor.getActiveBuffer() orelse return;
-        const cursor_pos = self.editor.getCursorPosition();
         const viewport = self.editor.getViewport(visible_lines);
         const gutter_width = gutter.calculateWidth(self.gutter_config, buffer.lineCount());
 
-        // Check if cursor is in viewport
-        if (cursor_pos.line < viewport.start_line or cursor_pos.line >= viewport.end_line) {
-            return; // Cursor is off-screen
+        // Render all cursors from all selections
+        const selections = self.editor.selections.all(self.allocator);
+        for (selections) |sel| {
+            const cursor_pos = sel.head;
+
+            // Check if cursor is in viewport
+            if (cursor_pos.line < viewport.start_line or cursor_pos.line >= viewport.end_line) {
+                continue; // Cursor is off-screen
+            }
+
+            // Calculate screen position
+            const screen_row = @as(u16, @intCast(cursor_pos.line - viewport.start_line));
+            const screen_col = gutter_width + @as(u16, @intCast(cursor_pos.col));
+
+            // Get current cell at cursor position or create empty cell
+            const cell = self.renderer.output.getCell(screen_row, screen_col) orelse Cell{
+                .char = ' ',
+                .fg = .default,
+                .bg = .default,
+                .attrs = .{},
+            };
+
+            // Set cursor with reverse video
+            self.renderer.output.setCell(screen_row, screen_col, .{
+                .char = cell.char,
+                .fg = cell.bg, // Swap colors for cursor
+                .bg = cell.fg,
+                .attrs = .{ .reverse = true },
+            });
         }
-
-        // Calculate screen position
-        const screen_row = @as(u16, @intCast(cursor_pos.line - viewport.start_line));
-        const screen_col = gutter_width + @as(u16, @intCast(cursor_pos.col));
-
-        // Get current cell at cursor position or create empty cell
-        const cell = self.renderer.output.getCell(screen_row, screen_col) orelse Cell{
-            .char = ' ',
-            .fg = .default,
-            .bg = .default,
-            .attrs = .{},
-        };
-
-        // Set cursor with reverse video
-        self.renderer.output.setCell(screen_row, screen_col, .{
-            .char = cell.char,
-            .fg = cell.bg, // Swap colors for cursor
-            .bg = cell.fg,
-            .attrs = .{ .reverse = true },
-        });
     }
 
     /// Render buffer content
