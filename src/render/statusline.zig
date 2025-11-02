@@ -81,6 +81,29 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor) !void {
         .{},
     );
 
+    // Undo/redo indicators (before position)
+    var undo_text_buf: [16]u8 = undefined;
+    const undo_text = std.fmt.bufPrint(
+        &undo_text_buf,
+        "{s}{s}",
+        .{
+            if (info.can_undo) " u" else "",
+            if (info.can_redo) " U" else "",
+        },
+    ) catch "";
+
+    if (undo_text.len > 0) {
+        const undo_col = pos_col -| @as(u16, @intCast(undo_text.len + 1));
+        rend.writeText(
+            status_row,
+            undo_col,
+            undo_text,
+            .{ .standard = .cyan },
+            .{ .standard = .blue },
+            .{},
+        );
+    }
+
     // Selection count if multiple
     if (info.selection_count > 1) {
         const sel_text = std.fmt.bufPrint(

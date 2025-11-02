@@ -5,6 +5,7 @@ const std = @import("std");
 const Editor = @import("editor/editor.zig").Editor;
 const Renderer = @import("render/renderer.zig").Renderer;
 const statusline = @import("render/statusline.zig");
+const messageline = @import("render/messageline.zig");
 const gutter = @import("render/gutter.zig");
 const input_mod = @import("terminal/input.zig");
 const Keymap = @import("editor/keymap.zig");
@@ -128,11 +129,15 @@ pub const EditorApp = struct {
 
         const size = self.renderer.getSize();
 
-        // Render buffer content (simplified for now)
-        try self.renderBuffer(size.height -| 1); // Reserve bottom line for status
+        // Check if we have a message to display
+        const has_message = self.editor.messages.current() != null;
+        const reserved_lines: usize = if (has_message) 2 else 1; // Message + status or just status
+
+        // Render buffer content
+        try self.renderBuffer(size.height -| reserved_lines);
 
         // Render gutter
-        const viewport = self.editor.getViewport(size.height);
+        const viewport = self.editor.getViewport(size.height -| reserved_lines);
         const cursor_pos = self.editor.getCursorPosition();
 
         try gutter.render(
@@ -142,6 +147,9 @@ pub const EditorApp = struct {
             viewport.end_line,
             cursor_pos.line,
         );
+
+        // Render message line (if message exists)
+        _ = try messageline.render(&self.renderer, &self.editor);
 
         // Render status line
         try statusline.render(&self.renderer, &self.editor);

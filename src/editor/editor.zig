@@ -253,6 +253,8 @@ pub const Editor = struct {
             .col = cursor_pos.col + 1,
             .total_lines = if (buffer) |b| b.lineCount() else 0,
             .selection_count = self.selections.count(self.allocator),
+            .can_undo = self.undo_history.canUndo(),
+            .can_redo = self.undo_history.canRedo(),
         };
     }
 
@@ -265,6 +267,8 @@ pub const Editor = struct {
         col: usize,
         total_lines: usize,
         selection_count: usize,
+        can_undo: bool,
+        can_redo: bool,
     };
 };
 
