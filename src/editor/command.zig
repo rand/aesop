@@ -1353,6 +1353,20 @@ fn redo(ctx: *Context) Result {
     return Result.ok();
 }
 
+// === Visual/Display Commands ===
+
+/// Toggle syntax highlighting
+fn toggleSyntaxHighlighting(ctx: *Context) Result {
+    ctx.editor.config.syntax_highlighting = !ctx.editor.config.syntax_highlighting;
+    const state = if (ctx.editor.config.syntax_highlighting) "enabled" else "disabled";
+    const msg = std.fmt.allocPrint(ctx.editor.allocator, "Syntax highlighting {s}", .{state}) catch {
+        return Result.err("Failed to format message");
+    };
+    defer ctx.editor.allocator.free(msg);
+    ctx.editor.messages.add(msg, .info) catch {};
+    return Result.ok();
+}
+
 // === Window Split Commands ===
 
 /// Split window horizontally (top/bottom)
@@ -1772,6 +1786,14 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .description = "Scroll viewport down (Ctrl+E)",
         .handler = scrollDown,
         .category = .view,
+    });
+
+    // Visual/display commands
+    try registry.register(.{
+        .name = "toggle_syntax",
+        .description = "Toggle syntax highlighting (F2)",
+        .handler = toggleSyntaxHighlighting,
+        .category = .system,
     });
 
     // Window split commands

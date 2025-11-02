@@ -296,6 +296,9 @@ pub fn setupDefaults(manager: *KeymapManager) !void {
     // File operations
     try normal_map.bind(Binding.fromChord(.{ .char = ' ' }, .{ .char = 'w' }, "save"));
 
+    // Visual/display operations
+    try normal_map.bind(Binding.fromChord(.{ .char = ' ' }, .{ .char = 's' }, "toggle_syntax"));
+
     // Search operations
     try normal_map.bind(Binding.fromSingleKey(.{ .char = '*' }, "start_search"));
     try normal_map.bind(Binding.fromSingleKey(.{ .char = 'n' }, "find_next"));
@@ -308,6 +311,11 @@ pub fn setupDefaults(manager: *KeymapManager) !void {
 
     // Navigation and viewport control
     try normal_map.bind(Binding.fromChord(.{ .char = 'z' }, .{ .char = 'z' }, "center_cursor"));
+
+    // Window splits
+    try normal_map.bind(Binding.fromChord(.{ .char = ' ' }, .{ .char = 'h' }, "split_horizontal"));
+    try normal_map.bind(Binding.fromChord(.{ .char = ' ' }, .{ .char = 'v' }, "split_vertical"));
+    try normal_map.bind(Binding.fromChord(.{ .char = ' ' }, .{ .char = 'q' }, "close_window"));
 
     // Insert mode bindings
     const insert_map = manager.getKeymap(.insert);

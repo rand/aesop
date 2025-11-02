@@ -17,6 +17,7 @@ pub const Config = struct {
     show_whitespace: bool = false,
     highlight_current_line: bool = true,
     show_indent_guides: bool = false,
+    syntax_highlighting: bool = true,
 
     // Search settings
     search_case_sensitive: bool = false,

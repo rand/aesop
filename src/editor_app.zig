@@ -26,7 +26,6 @@ pub const EditorApp = struct {
     gutter_config: gutter.GutterConfig,
     mouse_drag_start: ?Cursor.Position,
     syntax_parser: ?TreeSitter.Parser,
-    syntax_enabled: bool,
 
     /// Initialize editor application
     pub fn init(allocator: std.mem.Allocator) !EditorApp {
@@ -44,7 +43,6 @@ pub const EditorApp = struct {
             .gutter_config = .{},
             .mouse_drag_start = null,
             .syntax_parser = null,
-            .syntax_enabled = true, // Default: syntax highlighting on
         };
     }
 
@@ -78,11 +76,6 @@ pub const EditorApp = struct {
 
         // Create new parser for this language
         self.syntax_parser = try TreeSitter.Parser.init(self.allocator, language);
-    }
-
-    /// Toggle syntax highlighting
-    pub fn toggleSyntaxHighlighting(self: *EditorApp) void {
-        self.syntax_enabled = !self.syntax_enabled;
     }
 
     /// Run the editor
@@ -464,14 +457,14 @@ pub const EditorApp = struct {
         defer if (self.editor.search.active) self.allocator.free(search_matches);
 
         // Get syntax highlights (if enabled)
-        const syntax_highlights = if (self.syntax_enabled) blk: {
+        const syntax_highlights = if (self.editor.config.syntax_highlighting) blk: {
             try self.ensureParser();
             if (self.syntax_parser) |*parser| {
                 break :blk try parser.getHighlights(text, viewport.start_line, viewport.end_line);
             }
             break :blk &[_]TreeSitter.HighlightToken{};
         } else &[_]TreeSitter.HighlightToken{};
-        defer if (self.syntax_enabled and self.syntax_parser != null) self.allocator.free(syntax_highlights);
+        defer if (self.editor.config.syntax_highlighting and self.syntax_parser != null) self.allocator.free(syntax_highlights);
 
         // Simple line rendering (just display lines)
         var line_num: usize = viewport.start_line;
