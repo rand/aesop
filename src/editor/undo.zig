@@ -180,7 +180,92 @@ pub const UndoHistory = struct {
     pub fn canRedo(self: *const UndoHistory) bool {
         return self.current_index < self.groups.items.len;
     }
+
+    /// Apply an operation group to a rope (for undo - reverse operations)
+    pub fn applyUndo(group: *const OperationGroup, rope: *Rope, allocator: std.mem.Allocator) !void {
+        // Apply operations in reverse order
+        var i = group.operations.items.len;
+        while (i > 0) {
+            i -= 1;
+            const op = group.operations.items[i];
+
+            // Convert position to byte offset
+            const offset = try positionToOffset(rope, op.position, allocator);
+
+            switch (op.op_type) {
+                .insert => {
+                    // Undo insert: delete the inserted text
+                    try rope.delete(offset, offset + op.text.len);
+                },
+                .delete => {
+                    // Undo delete: re-insert the deleted text
+                    try rope.insert(offset, op.text);
+                },
+                .replace => {
+                    // Undo replace: restore old text
+                    if (op.old_text) |old| {
+                        try rope.delete(offset, offset + op.text.len);
+                        try rope.insert(offset, old);
+                    }
+                },
+            }
+        }
+    }
+
+    /// Apply an operation group to a rope (for redo - forward operations)
+    pub fn applyRedo(group: *const OperationGroup, rope: *Rope, allocator: std.mem.Allocator) !void {
+        // Apply operations in forward order
+        for (group.operations.items) |op| {
+            // Convert position to byte offset
+            const offset = try positionToOffset(rope, op.position, allocator);
+
+            switch (op.op_type) {
+                .insert => {
+                    // Redo insert: insert the text
+                    try rope.insert(offset, op.text);
+                },
+                .delete => {
+                    // Redo delete: delete the text
+                    try rope.delete(offset, offset + op.text.len);
+                },
+                .replace => {
+                    // Redo replace: apply new text
+                    if (op.old_text) |old| {
+                        try rope.delete(offset, offset + old.len);
+                        try rope.insert(offset, op.text);
+                    }
+                },
+            }
+        }
+    }
 };
+
+/// Convert Position (line, col) to byte offset in rope
+fn positionToOffset(rope: *const Rope, pos: Cursor.Position, allocator: std.mem.Allocator) !usize {
+    const text = try rope.toString(allocator);
+    defer allocator.free(text);
+
+    var offset: usize = 0;
+    var line: usize = 0;
+    var col: usize = 0;
+
+    while (offset < text.len) {
+        if (line == pos.line and col == pos.col) {
+            return offset;
+        }
+
+        if (text[offset] == '\n') {
+            line += 1;
+            col = 0;
+        } else {
+            col += 1;
+        }
+        offset += 1;
+    }
+
+    // If we reach here, position is at or beyond end of file
+    return offset;
+}
 
 // === Tests ===
 

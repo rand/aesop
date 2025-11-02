@@ -154,6 +154,7 @@ pub const Registry = struct {
 const Motions = @import("motions.zig");
 const Actions = @import("actions.zig");
 const Cursor = @import("cursor.zig");
+const Undo = @import("undo.zig");
 const Buffer = @import("../buffer/manager.zig");
 
 fn moveLeft(ctx: *Context) Result {
@@ -804,11 +805,26 @@ fn undo(ctx: *Context) Result {
         return Result.err("Undo failed");
     };
 
-    // TODO: Apply undo operations to buffer
-    // For now, just restore cursor position
+    // Get mutable active buffer
+    const buffer_id = ctx.editor.buffer_manager.active_buffer_id orelse {
+        return Result.err("No active buffer");
+    };
+    const buffer = ctx.editor.buffer_manager.getBufferMut(buffer_id) orelse {
+        return Result.err("No active buffer");
+    };
+
+    // Apply undo operations to buffer
+    Undo.UndoHistory.applyUndo(group, &buffer.rope, ctx.editor.allocator) catch {
+        return Result.err("Failed to apply undo operations");
+    };
+
+    // Restore cursor position
     ctx.editor.selections.setSingleCursor(ctx.editor.allocator, group.cursor_before) catch {
         return Result.err("Failed to restore cursor");
     };
+
+    // Mark buffer as modified
+    buffer.metadata.modified = true;
 
     // Show message
     ctx.editor.messages.add("Undo applied", .info) catch {};
@@ -2662,11 +2678,26 @@ fn redo(ctx: *Context) Result {
         return Result.err("Redo failed");
     };
 
-    // TODO: Apply redo operations to buffer
-    // For now, just restore cursor position
+    // Get mutable active buffer
+    const buffer_id = ctx.editor.buffer_manager.active_buffer_id orelse {
+        return Result.err("No active buffer");
+    };
+    const buffer = ctx.editor.buffer_manager.getBufferMut(buffer_id) orelse {
+        return Result.err("No active buffer");
+    };
+
+    // Apply redo operations to buffer
+    Undo.UndoHistory.applyRedo(group, &buffer.rope, ctx.editor.allocator) catch {
+        return Result.err("Failed to apply redo operations");
+    };
+
+    // Restore cursor position
     ctx.editor.selections.setSingleCursor(ctx.editor.allocator, group.cursor_after) catch {
         return Result.err("Failed to restore cursor");
     };
+
+    // Mark buffer as modified
+    buffer.metadata.modified = true;
 
     // Show message
     ctx.editor.messages.add("Redo applied", .info) catch {};
