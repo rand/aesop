@@ -29,7 +29,7 @@ pub const Renderer = struct {
         const term = try platform.Terminal.init();
         const size = try term.getSize();
 
-        const stdout_file = std.fs.File{ .handle = std.posix.STDOUT_FILENO };
+        const stdout_file = std.fs.File.stdout();
 
         return .{
             .terminal = term,
