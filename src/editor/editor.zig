@@ -13,6 +13,8 @@ const Message = @import("message.zig");
 const Undo = @import("undo.zig");
 const Palette = @import("palette.zig");
 const Search = @import("search.zig");
+const Config = @import("config.zig");
+const Window = @import("window.zig");
 const Renderer = @import("../render/renderer.zig").Renderer;
 
 /// Editor state - the main coordinator
@@ -30,12 +32,22 @@ pub const Editor = struct {
     undo_history: Undo.UndoHistory,
     palette: Palette.Palette,
     search: Search.Search,
+    config: Config.Config,
+    window_manager: Window.WindowManager,
 
-    // Viewport
+    // Viewport (legacy - will be replaced by window_manager)
     scroll_offset: usize, // Line offset for scrolling
 
     /// Initialize editor
     pub fn init(allocator: std.mem.Allocator) !Editor {
+        // Initialize window manager with default terminal dimensions
+        const initial_dims = Window.Dimensions{
+            .row = 0,
+            .col = 0,
+            .height = 24,
+            .width = 80,
+        };
+
         var editor = Editor{
             .allocator = allocator,
             .mode_manager = Mode.ModeManager.init(),
@@ -48,6 +60,8 @@ pub const Editor = struct {
             .undo_history = Undo.UndoHistory.init(allocator),
             .palette = Palette.Palette.init(allocator),
             .search = Search.Search.init(allocator),
+            .config = Config.Config.init(allocator),
+            .window_manager = try Window.WindowManager.init(allocator, initial_dims),
             .scroll_offset = 0,
         };
 
@@ -62,6 +76,8 @@ pub const Editor = struct {
 
     /// Clean up editor
     pub fn deinit(self: *Editor) void {
+        self.window_manager.deinit();
+        self.config.deinit();
         self.search.deinit();
         self.palette.deinit();
         self.undo_history.deinit();
