@@ -105,7 +105,7 @@ pub const EditorApp = struct {
             else
                 .absolute,
             .show_git_status = false, // TODO: Future feature
-            .show_diagnostics = false, // TODO: Future feature
+            .show_diagnostics = true, // Enable diagnostic icons in gutter
             .width = 5,
         };
 
@@ -587,16 +587,28 @@ pub const EditorApp = struct {
         // Render buffer content
         try self.renderBuffer(size.height -| reserved_lines);
 
-        // Render gutter
+        // Render gutter with diagnostics
         const viewport = self.editor.getViewport(size.height -| reserved_lines);
         const cursor_pos = self.editor.getCursorPosition();
 
-        try gutter.render(
+        // Get file URI for diagnostic lookup
+        const buffer = self.editor.getActiveBuffer();
+        const file_uri = if (buffer) |buf| blk: {
+            if (buf.metadata.filepath) |filepath| {
+                break :blk self.editor.makeFileUri(filepath) catch null;
+            }
+            break :blk null;
+        } else null;
+        defer if (file_uri) |uri| self.allocator.free(uri);
+
+        try gutter.renderWithDiagnostics(
             &self.renderer,
             self.gutter_config,
             viewport.start_line,
             viewport.end_line,
             cursor_pos.line,
+            &self.editor.diagnostic_manager,
+            file_uri,
         );
 
         // Render message line (if message exists)

@@ -4,6 +4,8 @@ const std = @import("std");
 const renderer = @import("renderer.zig");
 const Color = renderer.Color;
 const Attrs = renderer.Attrs;
+const diagnostics_render = @import("diagnostics.zig");
+const LspDiagnostics = @import("../lsp/diagnostics.zig");
 
 /// Gutter configuration
 pub const GutterConfig = struct {
@@ -26,6 +28,19 @@ pub fn render(
     start_line: usize,
     end_line: usize,
     cursor_line: usize,
+) !void {
+    try renderWithDiagnostics(rend, config, start_line, end_line, cursor_line, null, null);
+}
+
+/// Render gutter with diagnostic support
+pub fn renderWithDiagnostics(
+    rend: *renderer.Renderer,
+    config: GutterConfig,
+    start_line: usize,
+    end_line: usize,
+    cursor_line: usize,
+    diagnostic_manager: ?*const LspDiagnostics.DiagnosticManager,
+    file_uri: ?[]const u8,
 ) !void {
     if (!config.show_line_numbers) return;
 
@@ -68,6 +83,31 @@ pub fn render(
             .default,
             if (line == cursor_line) .{ .bold = true } else .{},
         );
+
+        // Render diagnostic icon if present
+        if (config.show_diagnostics) {
+            if (diagnostic_manager) |manager| {
+                if (file_uri) |uri| {
+                    const severity = diagnostics_render.getSeverestDiagnosticForLine(
+                        manager,
+                        uri,
+                        @intCast(line),
+                    );
+
+                    if (severity) |sev| {
+                        const icons = diagnostics_render.DiagnosticIcons{};
+                        // Render icon after line number (col 4 is usually safe)
+                        diagnostics_render.renderGutterIcon(
+                            rend,
+                            row,
+                            4, // Position after line number
+                            sev,
+                            icons,
+                        );
+                    }
+                }
+            }
+        }
     }
 }
 

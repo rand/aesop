@@ -325,7 +325,7 @@ pub const Editor = struct {
     }
 
     /// Create file:// URI from filepath
-    fn makeFileUri(self: *Editor, filepath: []const u8) ![]u8 {
+    pub fn makeFileUri(self: *Editor, filepath: []const u8) ![]u8 {
         // Get absolute path if relative
         const abs_path = if (std.fs.path.isAbsolute(filepath))
             try self.allocator.dupe(u8, filepath)

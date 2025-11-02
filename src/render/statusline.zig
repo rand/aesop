@@ -5,6 +5,7 @@ const std = @import("std");
 const renderer = @import("renderer.zig");
 const Color = renderer.Color;
 const Attrs = renderer.Attrs;
+const diagnostics_render = @import("diagnostics.zig");
 
 const Editor = @import("../editor/editor.zig").Editor;
 const Mode = @import("../editor/mode.zig").Mode;
@@ -91,7 +92,45 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor) !void {
         .{},
     );
 
-    // Undo/redo indicators (before position)
+    // Diagnostic counts (before position)
+    const counts = editor.diagnostic_manager.getCountsBySeverity();
+    const diag_text = diagnostics_render.formatDiagnosticCounts(
+        editor.allocator,
+        counts.errors,
+        counts.warnings,
+        counts.info,
+        counts.hints,
+    ) catch "";
+    defer if (diag_text.len > 0) editor.allocator.free(diag_text);
+
+    var next_col = pos_col;
+    if (diag_text.len > 0) {
+        const diag_col = pos_col -| @as(u16, @intCast(diag_text.len + 2));
+        rend.writeText(
+            status_row,
+            diag_col,
+            " ",
+            .{ .standard = .white },
+            .{ .standard = .blue },
+            .{},
+        );
+        rend.writeText(
+            status_row,
+            diag_col + 1,
+            diag_text,
+            if (counts.errors > 0)
+                .{ .standard = .red }
+            else if (counts.warnings > 0)
+                .{ .standard = .yellow }
+            else
+                .{ .standard = .cyan },
+            .{ .standard = .blue },
+            if (counts.errors > 0) .{ .bold = true } else .{},
+        );
+        next_col = diag_col;
+    }
+
+    // Undo/redo indicators (before diagnostics)
     var undo_text_buf: [16]u8 = undefined;
     const undo_text = std.fmt.bufPrint(
         &undo_text_buf,
@@ -103,7 +142,7 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor) !void {
     ) catch "";
 
     if (undo_text.len > 0) {
-        const undo_col = pos_col -| @as(u16, @intCast(undo_text.len + 1));
+        const undo_col = next_col -| @as(u16, @intCast(undo_text.len + 1));
         rend.writeText(
             status_row,
             undo_col,
