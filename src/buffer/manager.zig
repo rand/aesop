@@ -269,7 +269,7 @@ pub const BufferManager = struct {
 
     /// Close buffer by ID
     pub fn closeBuffer(self: *BufferManager, id: BufferId) !void {
-        const items = self.buffers.items(self.allocator);
+        const items = self.buffers.items;
         for (items, 0..) |*buffer, i| {
             if (buffer.metadata.id == id) {
                 buffer.deinit();
@@ -287,7 +287,7 @@ pub const BufferManager = struct {
 
                 // Update active buffer if needed
                 if (self.active_buffer_id == id) {
-                    const remaining = self.buffers.items(self.allocator);
+                    const remaining = self.buffers.items;
                     self.active_buffer_id = if (remaining.len > 0) remaining[0].metadata.id else null;
                 }
 
@@ -299,17 +299,17 @@ pub const BufferManager = struct {
 
     /// Get buffer count
     pub fn count(self: *const BufferManager) usize {
-        return self.buffers.len(self.allocator);
+        return self.buffers.items.len;
     }
 
     /// Get list of all buffers
     pub fn listBuffers(self: *const BufferManager) []const Buffer {
-        return self.buffers.items(self.allocator);
+        return self.buffers.items;
     }
 
     /// Check if there are unsaved changes
     pub fn hasUnsavedChanges(self: *const BufferManager) bool {
-        const items = self.buffers.items(self.allocator);
+        const items = self.buffers.items;
         for (items) |buffer| {
             if (buffer.metadata.modified) {
                 return true;

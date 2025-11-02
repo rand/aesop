@@ -301,6 +301,14 @@ pub fn setupDefaults(manager: *KeymapManager) !void {
     try normal_map.bind(Binding.fromSingleKey(.{ .char = 'n' }, "find_next"));
     try normal_map.bind(Binding.fromSingleKey(.{ .char = 'N' }, "find_previous"));
 
+    // Buffer management
+    try normal_map.bind(Binding.fromChord(.{ .char = ']' }, .{ .char = 'b' }, "next_buffer"));
+    try normal_map.bind(Binding.fromChord(.{ .char = '[' }, .{ .char = 'b' }, "previous_buffer"));
+    try normal_map.bind(Binding.fromChord(.{ .char = ' ' }, .{ .char = 'c' }, "close_buffer"));
+
+    // Navigation and viewport control
+    try normal_map.bind(Binding.fromChord(.{ .char = 'z' }, .{ .char = 'z' }, "center_cursor"));
+
     // Insert mode bindings
     const insert_map = manager.getKeymap(.insert);
     try insert_map.bind(Binding.fromSingleKey(.{ .special = .escape }, "normal_mode"));

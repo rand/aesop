@@ -1049,6 +1049,173 @@ fn dedentLine(ctx: *Context) Result {
     return Result.ok();
 }
 
+/// Switch to next buffer
+fn nextBuffer(ctx: *Context) Result {
+    const current_id = ctx.editor.buffer_manager.active_buffer_id orelse {
+        return Result.err("No active buffer");
+    };
+
+    const buffers = ctx.editor.buffer_manager.listBuffers();
+    if (buffers.len <= 1) {
+        return Result.err("No other buffers");
+    }
+
+    // Find current buffer index
+    var current_index: ?usize = null;
+    for (buffers, 0..) |buffer, i| {
+        if (buffer.metadata.id == current_id) {
+            current_index = i;
+            break;
+        }
+    }
+
+    if (current_index) |idx| {
+        const next_idx = (idx + 1) % buffers.len;
+        const next_id = buffers[next_idx].metadata.id;
+        ctx.editor.buffer_manager.switchTo(next_id) catch {
+            return Result.err("Failed to switch buffer");
+        };
+
+        // Reset selections for new buffer
+        ctx.editor.selections.setSingleCursor(ctx.editor.allocator, .{ .line = 0, .col = 0 }) catch {};
+        ctx.editor.scroll_offset = 0;
+
+        return Result.ok();
+    }
+
+    return Result.err("Failed to find current buffer");
+}
+
+/// Switch to previous buffer
+fn previousBuffer(ctx: *Context) Result {
+    const current_id = ctx.editor.buffer_manager.active_buffer_id orelse {
+        return Result.err("No active buffer");
+    };
+
+    const buffers = ctx.editor.buffer_manager.listBuffers();
+    if (buffers.len <= 1) {
+        return Result.err("No other buffers");
+    }
+
+    // Find current buffer index
+    var current_index: ?usize = null;
+    for (buffers, 0..) |buffer, i| {
+        if (buffer.metadata.id == current_id) {
+            current_index = i;
+            break;
+        }
+    }
+
+    if (current_index) |idx| {
+        const prev_idx = if (idx == 0) buffers.len - 1 else idx - 1;
+        const prev_id = buffers[prev_idx].metadata.id;
+        ctx.editor.buffer_manager.switchTo(prev_id) catch {
+            return Result.err("Failed to switch buffer");
+        };
+
+        // Reset selections for new buffer
+        ctx.editor.selections.setSingleCursor(ctx.editor.allocator, .{ .line = 0, .col = 0 }) catch {};
+        ctx.editor.scroll_offset = 0;
+
+        return Result.ok();
+    }
+
+    return Result.err("Failed to find current buffer");
+}
+
+/// Close current buffer
+fn closeCurrentBuffer(ctx: *Context) Result {
+    const current_id = ctx.editor.buffer_manager.active_buffer_id orelse {
+        return Result.err("No active buffer");
+    };
+
+    const buffers = ctx.editor.buffer_manager.listBuffers();
+
+    // Check if buffer has unsaved changes
+    for (buffers) |buffer| {
+        if (buffer.metadata.id == current_id and buffer.metadata.modified) {
+            return Result.err("Buffer has unsaved changes");
+        }
+    }
+
+    // If this is the only buffer, create an empty one first
+    if (buffers.len == 1) {
+        _ = ctx.editor.buffer_manager.createEmpty() catch {
+            return Result.err("Failed to create new buffer");
+        };
+    }
+
+    ctx.editor.buffer_manager.closeBuffer(current_id) catch {
+        return Result.err("Failed to close buffer");
+    };
+
+    // Reset selections for new buffer
+    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, .{ .line = 0, .col = 0 }) catch {};
+    ctx.editor.scroll_offset = 0;
+
+    return Result.ok();
+}
+
+/// Jump to start of buffer (alias for move_file_start)
+fn gotoStart(ctx: *Context) Result {
+    return moveFileStart(ctx);
+}
+
+/// Jump to end of buffer (alias for move_file_end)
+fn gotoEnd(ctx: *Context) Result {
+    return moveFileEnd(ctx);
+}
+
+/// Center cursor on screen
+fn centerCursor(ctx: *Context) Result {
+    const cursor_pos = ctx.editor.getCursorPosition();
+    const buffer = ctx.editor.buffer_manager.getActiveBuffer() orelse {
+        return Result.err("No active buffer");
+    };
+
+    const total_lines = buffer.lineCount();
+    const viewport_height: usize = 24; // TODO: Get from renderer
+    const visible_lines = viewport_height -| 2;
+
+    // Center cursor in viewport
+    if (cursor_pos.line >= visible_lines / 2) {
+        ctx.editor.scroll_offset = cursor_pos.line - (visible_lines / 2);
+    } else {
+        ctx.editor.scroll_offset = 0;
+    }
+
+    // Clamp to valid range
+    const max_scroll = if (total_lines > visible_lines) total_lines - visible_lines else 0;
+    ctx.editor.scroll_offset = @min(ctx.editor.scroll_offset, max_scroll);
+
+    return Result.ok();
+}
+
+/// Scroll viewport up
+fn scrollUp(ctx: *Context) Result {
+    if (ctx.editor.scroll_offset > 0) {
+        ctx.editor.scroll_offset -= 1;
+    }
+    return Result.ok();
+}
+
+/// Scroll viewport down
+fn scrollDown(ctx: *Context) Result {
+    const buffer = ctx.editor.buffer_manager.getActiveBuffer() orelse {
+        return Result.err("No active buffer");
+    };
+
+    const total_lines = buffer.lineCount();
+    const viewport_height: usize = 24;
+    const visible_lines = viewport_height -| 2;
+    const max_scroll = if (total_lines > visible_lines) total_lines - visible_lines else 0;
+
+    if (ctx.editor.scroll_offset < max_scroll) {
+        ctx.editor.scroll_offset += 1;
+    }
+    return Result.ok();
+}
+
 /// Toggle line comments (add/remove //)
 fn toggleLineComment(ctx: *Context) Result {
     const buffer_id = ctx.editor.buffer_manager.active_buffer_id orelse {
@@ -1515,6 +1682,64 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .description = "Clear all extra cursors (Escape)",
         .handler = clearExtraCursors,
         .category = .selection,
+    });
+
+    // Buffer management
+    try registry.register(.{
+        .name = "next_buffer",
+        .description = "Switch to next buffer (]b)",
+        .handler = nextBuffer,
+        .category = .buffer,
+    });
+
+    try registry.register(.{
+        .name = "previous_buffer",
+        .description = "Switch to previous buffer ([b)",
+        .handler = previousBuffer,
+        .category = .buffer,
+    });
+
+    try registry.register(.{
+        .name = "close_buffer",
+        .description = "Close current buffer (Space c)",
+        .handler = closeCurrentBuffer,
+        .category = .buffer,
+    });
+
+    // Navigation and viewport control
+    try registry.register(.{
+        .name = "goto_start",
+        .description = "Jump to start of buffer (gg)",
+        .handler = gotoStart,
+        .category = .motion,
+    });
+
+    try registry.register(.{
+        .name = "goto_end",
+        .description = "Jump to end of buffer (G)",
+        .handler = gotoEnd,
+        .category = .motion,
+    });
+
+    try registry.register(.{
+        .name = "center_cursor",
+        .description = "Center cursor on screen (zz)",
+        .handler = centerCursor,
+        .category = .view,
+    });
+
+    try registry.register(.{
+        .name = "scroll_up",
+        .description = "Scroll viewport up (Ctrl+Y)",
+        .handler = scrollUp,
+        .category = .view,
+    });
+
+    try registry.register(.{
+        .name = "scroll_down",
+        .description = "Scroll viewport down (Ctrl+E)",
+        .handler = scrollDown,
+        .category = .view,
     });
 }
 
