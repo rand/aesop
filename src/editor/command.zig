@@ -97,7 +97,17 @@ pub const Registry = struct {
     /// Execute command by name
     pub fn execute(self: *const Registry, name: []const u8, ctx: *Context) Result {
         if (self.get(name)) |cmd| {
-            return cmd.handler(ctx);
+            const result = cmd.handler(ctx);
+
+            // Record action for repeat if it succeeded and should be recorded
+            if (result.success) {
+                const Repeat = @import("repeat.zig");
+                if (Repeat.RepeatSystem.shouldRecord(name)) {
+                    ctx.editor.repeat_system.recordAction(name) catch {};
+                }
+            }
+
+            return result;
         }
         return Result.err("Command not found");
     }
@@ -1678,6 +1688,59 @@ fn extendToLineEnd(ctx: *Context) Result {
     return Result.ok();
 }
 
+/// Move to next paragraph
+fn moveToNextParagraph(ctx: *Context) Result {
+    const buffer = ctx.editor.buffer_manager.getActiveBuffer() orelse {
+        return Result.err("No active buffer");
+    };
+
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse {
+        return Result.err("No selection");
+    };
+
+    const new_sel = Motions.moveNextParagraph(primary_sel, buffer);
+
+    return applyMotion(ctx, new_sel);
+}
+
+/// Move to previous paragraph
+fn moveToPrevParagraph(ctx: *Context) Result {
+    const buffer = ctx.editor.buffer_manager.getActiveBuffer() orelse {
+        return Result.err("No active buffer");
+    };
+
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse {
+        return Result.err("No selection");
+    };
+
+    const new_sel = Motions.movePrevParagraph(primary_sel, buffer);
+
+    return applyMotion(ctx, new_sel);
+}
+
+/// Repeat last action (like vim's dot command)
+fn repeatLastAction(ctx: *Context) Result {
+    const last_action = ctx.editor.repeat_system.getLastAction();
+    if (last_action == null) {
+        return Result.err("No action to repeat");
+    }
+
+    const action = last_action.?;
+    const command = ctx.editor.command_registry.get(action.command_name);
+    if (command == null) {
+        return Result.err("Command no longer available");
+    }
+
+    // Mark that we're replaying to prevent recursive recording
+    ctx.editor.repeat_system.startReplay();
+    defer ctx.editor.repeat_system.endReplay();
+
+    // Execute the command
+    const result = command.?.handler(ctx);
+
+    return result;
+}
+
 /// Switch to next buffer
 fn nextBuffer(ctx: *Context) Result {
     const current_id = ctx.editor.buffer_manager.active_buffer_id orelse {
@@ -2686,6 +2749,29 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .description = "List all marks (:marks)",
         .handler = listMarks,
         .category = .motion,
+    });
+
+    // Paragraph navigation
+    try registry.register(.{
+        .name = "move_next_paragraph",
+        .description = "Move to next paragraph (})",
+        .handler = moveToNextParagraph,
+        .category = .motion,
+    });
+
+    try registry.register(.{
+        .name = "move_prev_paragraph",
+        .description = "Move to previous paragraph ({)",
+        .handler = moveToPrevParagraph,
+        .category = .motion,
+    });
+
+    // Repeat command
+    try registry.register(.{
+        .name = "repeat_last_action",
+        .description = "Repeat last action (dot command: .)",
+        .handler = repeatLastAction,
+        .category = .edit,
     });
 
     // Line manipulation commands

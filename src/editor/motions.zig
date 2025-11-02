@@ -415,6 +415,186 @@ pub fn jumpToMatchingBracket(selection: Cursor.Selection, buffer: *const Buffer.
     return selection;
 }
 
+/// Move to next paragraph (next blank line or end of file)
+pub fn moveNextParagraph(selection: Cursor.Selection, buffer: *const Buffer.Buffer) Cursor.Selection {
+    const allocator = std.heap.page_allocator;
+    const text = buffer.rope.toString(allocator) catch return selection;
+    defer allocator.free(text);
+
+    const pos = selection.head;
+
+    // Convert position to byte offset
+    var offset: usize = 0;
+    var line: usize = 0;
+    var col: usize = 0;
+
+    while (offset < text.len) {
+        if (line == pos.line and col == pos.col) break;
+        if (text[offset] == '\n') {
+            line += 1;
+            col = 0;
+        } else {
+            col += 1;
+        }
+        offset += 1;
+    }
+
+    // Move to next line if on current line
+    while (offset < text.len and text[offset] != '\n') {
+        offset += 1;
+    }
+    if (offset < text.len) offset += 1; // Skip newline
+
+    // Skip non-blank lines
+    var line_start = offset;
+    var found_blank = false;
+
+    while (offset < text.len) {
+        // Check if current line is blank
+        var is_blank = true;
+        var check_pos = line_start;
+
+        while (check_pos < text.len and text[check_pos] != '\n') {
+            if (text[check_pos] != ' ' and text[check_pos] != '\t') {
+                is_blank = false;
+                break;
+            }
+            check_pos += 1;
+        }
+
+        if (is_blank) {
+            found_blank = true;
+            break;
+        }
+
+        // Move to next line
+        while (offset < text.len and text[offset] != '\n') {
+            offset += 1;
+        }
+        if (offset < text.len) {
+            offset += 1;
+            line_start = offset;
+        } else {
+            break;
+        }
+    }
+
+    // Convert offset back to position
+    line = 0;
+    col = 0;
+    var i: usize = 0;
+    while (i < offset and i < text.len) : (i += 1) {
+        if (text[i] == '\n') {
+            line += 1;
+            col = 0;
+        } else {
+            col += 1;
+        }
+    }
+
+    // If we found a blank line, position at start of it
+    // Otherwise position at end of file
+    if (col > 0 and i >= text.len) {
+        // At end of last line
+    } else if (col > 0) {
+        col -= 1;
+    }
+
+    return selection.moveTo(.{ .line = line, .col = 0 });
+}
+
+/// Move to previous paragraph (previous blank line or start of file)
+pub fn movePrevParagraph(selection: Cursor.Selection, buffer: *const Buffer.Buffer) Cursor.Selection {
+    const allocator = std.heap.page_allocator;
+    const text = buffer.rope.toString(allocator) catch return selection;
+    defer allocator.free(text);
+
+    const pos = selection.head;
+
+    if (pos.line == 0) return selection.moveTo(.{ .line = 0, .col = 0 });
+
+    // Convert position to byte offset
+    var offset: usize = 0;
+    var line: usize = 0;
+    var col: usize = 0;
+
+    while (offset < text.len) {
+        if (line == pos.line and col == pos.col) break;
+        if (text[offset] == '\n') {
+            line += 1;
+            col = 0;
+        } else {
+            col += 1;
+        }
+        offset += 1;
+    }
+
+    // Move back to start of current line
+    while (offset > 0 and text[offset - 1] != '\n') {
+        offset -= 1;
+    }
+
+    // Move to previous line
+    if (offset > 0) {
+        offset -= 1; // Skip newline
+        while (offset > 0 and text[offset - 1] != '\n') {
+            offset -= 1;
+        }
+    }
+
+    // Search backwards for blank line
+    while (offset > 0) {
+        const line_start = offset;
+        var line_end = offset;
+
+        // Find end of current line
+        while (line_end < text.len and text[line_end] != '\n') {
+            line_end += 1;
+        }
+
+        // Check if line is blank
+        var is_blank = true;
+        var check_pos = line_start;
+        while (check_pos < line_end) {
+            if (text[check_pos] != ' ' and text[check_pos] != '\t') {
+                is_blank = false;
+                break;
+            }
+            check_pos += 1;
+        }
+
+        if (is_blank) {
+            // Found blank line, position here
+            break;
+        }
+
+        // Move to previous line
+        if (offset > 0) {
+            offset -= 1; // Skip newline of current line
+            while (offset > 0 and text[offset - 1] != '\n') {
+                offset -= 1;
+            }
+        } else {
+            break;
+        }
+    }
+
+    // Convert offset back to position
+    line = 0;
+    col = 0;
+    var i: usize = 0;
+    while (i < offset and i < text.len) : (i += 1) {
+        if (text[i] == '\n') {
+            line += 1;
+            col = 0;
+        } else {
+            col += 1;
+        }
+    }
+
+    return selection.moveTo(.{ .line = line, .col = 0 });
+}
+
 // === Tests ===
 
 test "motion: move left" {
