@@ -420,6 +420,13 @@ pub const EditorApp = struct {
         const text = try buffer.getText();
         defer self.allocator.free(text);
 
+        // Get search matches (for highlighting)
+        const search_matches = if (self.editor.search.active)
+            try self.editor.search.findAll(text, self.allocator)
+        else
+            &[_]@import("editor/search.zig").Search.Match{};
+        defer if (self.editor.search.active) self.allocator.free(search_matches);
+
         // Simple line rendering (just display lines)
         var line_num: usize = viewport.start_line;
         var row: u16 = 0;
@@ -446,20 +453,30 @@ pub const EditorApp = struct {
 
             const line_text = text[line_start..line_end];
 
-            // Check if this line has selection
+            // Check if this line has selection or search matches
             const line_has_selection = if (sel_range) |range|
                 (line_num >= range.start.line and line_num <= range.end.line)
             else
                 false;
 
-            if (line_has_selection and sel_range != null) {
-                // Render line character by character with selection highlighting
-                try self.renderLineWithSelection(
+            const line_has_search = blk: {
+                for (search_matches) |match| {
+                    if (line_num >= match.start.line and line_num <= match.end.line) {
+                        break :blk true;
+                    }
+                }
+                break :blk false;
+            };
+
+            if (line_has_selection or line_has_search) {
+                // Render line character by character with highlighting
+                try self.renderLineWithHighlights(
                     row,
                     gutter_width,
                     line_text,
                     line_num,
-                    sel_range.?,
+                    sel_range,
+                    search_matches,
                 );
             } else {
                 // Render line normally
@@ -482,42 +499,60 @@ pub const EditorApp = struct {
         }
     }
 
-    /// Render a line with selection highlighting
-    fn renderLineWithSelection(
+    /// Render a line with selection and search highlighting
+    fn renderLineWithHighlights(
         self: *EditorApp,
         row: u16,
         start_col: u16,
         line_text: []const u8,
         line_num: usize,
-        sel_range: anytype,
+        opt_sel_range: anytype,
+        search_matches: []const @import("editor/search.zig").Search.Match,
     ) !void {
         var col: usize = 0;
         var screen_col = start_col;
 
         while (col < line_text.len) : (col += 1) {
-            // Determine if this character is in selection
-            const is_selected = blk: {
-                // Check if on selection start line
-                if (line_num == sel_range.start.line and line_num == sel_range.end.line) {
-                    // Single line selection
-                    break :blk col >= sel_range.start.col and col < sel_range.end.col;
-                } else if (line_num == sel_range.start.line) {
-                    // Start of multi-line selection
-                    break :blk col >= sel_range.start.col;
-                } else if (line_num == sel_range.end.line) {
-                    // End of multi-line selection
-                    break :blk col < sel_range.end.col;
-                } else if (line_num > sel_range.start.line and line_num < sel_range.end.line) {
-                    // Middle of multi-line selection
+            // Check if character is in selection
+            const is_selected = if (opt_sel_range) |range| blk: {
+                if (line_num == range.start.line and line_num == range.end.line) {
+                    break :blk col >= range.start.col and col < range.end.col;
+                } else if (line_num == range.start.line) {
+                    break :blk col >= range.start.col;
+                } else if (line_num == range.end.line) {
+                    break :blk col < range.end.col;
+                } else if (line_num > range.start.line and line_num < range.end.line) {
                     break :blk true;
                 } else {
                     break :blk false;
                 }
-            };
+            } else false;
+
+            // Check if character is in search match (only if not selected)
+            const is_search_match = if (!is_selected) blk: {
+                for (search_matches) |match| {
+                    if (line_num == match.start.line and line_num == match.end.line) {
+                        if (col >= match.start.col and col < match.end.col) {
+                            break :blk true;
+                        }
+                    } else if (line_num == match.start.line) {
+                        if (col >= match.start.col) break :blk true;
+                    } else if (line_num == match.end.line) {
+                        if (col < match.end.col) break :blk true;
+                    } else if (line_num > match.start.line and line_num < match.end.line) {
+                        break :blk true;
+                    }
+                }
+                break :blk false;
+            } else false;
 
             const char_slice = line_text[col .. col + 1];
+
+            // Priority: selection > search match > normal
             const attrs = if (is_selected)
                 Attrs{ .reverse = true }
+            else if (is_search_match)
+                Attrs{ .underline = true }
             else
                 Attrs{};
 
