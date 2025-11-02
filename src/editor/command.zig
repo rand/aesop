@@ -239,6 +239,74 @@ fn insertMode(ctx: *Context) Result {
     return Result.ok();
 }
 
+fn insertAfter(ctx: *Context) Result {
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+    // Move cursor right, then enter insert mode
+    const new_sel = Motions.moveRight(primary_sel, buffer);
+    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch return Result.err("Failed to update cursor");
+    ctx.editor.enterInsertMode() catch return Result.err("Failed to enter insert mode");
+    return Result.ok();
+}
+
+fn insertLineStart(ctx: *Context) Result {
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+    // Move to line start, then enter insert mode
+    const new_sel = Motions.moveLineStart(primary_sel, buffer);
+    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch return Result.err("Failed to update cursor");
+    ctx.editor.enterInsertMode() catch return Result.err("Failed to enter insert mode");
+    return Result.ok();
+}
+
+fn insertLineEnd(ctx: *Context) Result {
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+    // Move to line end, then enter insert mode
+    const new_sel = Motions.moveLineEnd(primary_sel, buffer);
+    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch return Result.err("Failed to update cursor");
+    ctx.editor.enterInsertMode() catch return Result.err("Failed to enter insert mode");
+    return Result.ok();
+}
+
+fn openBelow(ctx: *Context) Result {
+    if (ctx.editor.buffer_manager.active_buffer_id) |id| {
+        const buffer = ctx.editor.buffer_manager.getBufferMut(id) orelse return Result.err("No active buffer");
+        const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+        // Move to end of line, insert newline, enter insert mode
+        const line_end_sel = Motions.moveLineEnd(primary_sel, buffer);
+        const new_sel = Actions.insertNewline(buffer, line_end_sel) catch return Result.err("Failed to insert newline");
+
+        buffer.metadata.markModified();
+        ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch return Result.err("Failed to update cursor");
+        ctx.editor.enterInsertMode() catch return Result.err("Failed to enter insert mode");
+        return Result.ok();
+    }
+    return Result.err("No active buffer");
+}
+
+fn openAbove(ctx: *Context) Result {
+    if (ctx.editor.buffer_manager.active_buffer_id) |id| {
+        const buffer = ctx.editor.buffer_manager.getBufferMut(id) orelse return Result.err("No active buffer");
+        const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+        // Move to start of line, insert newline before current line, enter insert mode
+        const line_start_sel = Motions.moveLineStart(primary_sel, buffer);
+        _ = Actions.insertText(buffer, line_start_sel, "\n") catch return Result.err("Failed to insert newline");
+
+        // Position stays at start of new line (where we just were)
+        buffer.metadata.markModified();
+        ctx.editor.selections.setSingleCursor(ctx.editor.allocator, line_start_sel.head) catch return Result.err("Failed to update cursor");
+        ctx.editor.enterInsertMode() catch return Result.err("Failed to enter insert mode");
+        return Result.ok();
+    }
+    return Result.err("No active buffer");
+}
+
 fn normalMode(ctx: *Context) Result {
     ctx.editor.enterNormalMode() catch return Result.err("Failed to enter normal mode");
     return Result.ok();
@@ -337,6 +405,41 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .name = "insert_mode",
         .description = "Enter insert mode",
         .handler = insertMode,
+        .category = .mode,
+    });
+
+    try registry.register(.{
+        .name = "insert_after",
+        .description = "Move cursor right and enter insert mode (a)",
+        .handler = insertAfter,
+        .category = .mode,
+    });
+
+    try registry.register(.{
+        .name = "insert_line_start",
+        .description = "Move to line start and enter insert mode (I)",
+        .handler = insertLineStart,
+        .category = .mode,
+    });
+
+    try registry.register(.{
+        .name = "insert_line_end",
+        .description = "Move to line end and enter insert mode (A)",
+        .handler = insertLineEnd,
+        .category = .mode,
+    });
+
+    try registry.register(.{
+        .name = "open_below",
+        .description = "Open new line below and enter insert mode (o)",
+        .handler = openBelow,
+        .category = .mode,
+    });
+
+    try registry.register(.{
+        .name = "open_above",
+        .description = "Open new line above and enter insert mode (O)",
+        .handler = openAbove,
         .category = .mode,
     });
 
