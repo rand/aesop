@@ -428,14 +428,23 @@ pub const Editor = struct {
         const buffer = self.buffer_manager.getActiveBuffer();
         const cursor_pos = self.getCursorPosition();
 
+        const total_lines = if (buffer) |b| b.lineCount() else 0;
+        const current_line = cursor_pos.line + 1;
+        const percent = if (total_lines > 0)
+            @min(100, (current_line * 100) / total_lines)
+        else
+            0;
+
         return .{
             .mode = self.getMode(),
             .buffer_name = if (buffer) |b| b.metadata.getName() else "[No Name]",
+            .file_path = if (buffer) |b| b.metadata.filepath else null,
             .modified = if (buffer) |b| b.metadata.modified else false,
             .readonly = if (buffer) |b| b.metadata.readonly else false,
-            .line = cursor_pos.line + 1, // 1-indexed for display
+            .line = current_line, // 1-indexed for display
             .col = cursor_pos.col + 1,
-            .total_lines = if (buffer) |b| b.lineCount() else 0,
+            .total_lines = total_lines,
+            .percent = percent,
             .selection_count = self.selections.count(self.allocator),
             .can_undo = self.undo_history.canUndo(),
             .can_redo = self.undo_history.canRedo(),
@@ -445,11 +454,13 @@ pub const Editor = struct {
     pub const StatusInfo = struct {
         mode: Mode.Mode,
         buffer_name: []const u8,
+        file_path: ?[]const u8,
         modified: bool,
         readonly: bool,
         line: usize,
         col: usize,
         total_lines: usize,
+        percent: usize,
         selection_count: usize,
         can_undo: bool,
         can_redo: bool,

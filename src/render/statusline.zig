@@ -44,12 +44,22 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor) !void {
     col = @intCast(mode_text.len + 2);
 
     // Buffer name and modified indicator
-    var buf: [256]u8 = undefined;
+    // Use full path if available, otherwise just the name
+    const display_name = if (info.file_path) |path| path else info.buffer_name;
+
+    // Truncate path if too long (leave room for other info)
+    const max_path_len = if (size.width > 80) size.width / 2 else 30;
+    const truncated_name = if (display_name.len > max_path_len)
+        display_name[display_name.len - max_path_len ..]
+    else
+        display_name;
+
+    var buf: [512]u8 = undefined;
     const buffer_info = std.fmt.bufPrint(
         &buf,
         " {s}{s}{s}",
         .{
-            info.buffer_name,
+            truncated_name,
             if (info.modified) " [+]" else "",
             if (info.readonly) " [RO]" else "",
         },
@@ -64,11 +74,11 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor) !void {
         .{},
     );
 
-    // Right section: Cursor position and line count
+    // Right section: Cursor position, percentage, and line count
     const pos_text = std.fmt.bufPrint(
         &buf,
-        " {d}:{d} {d}/{d} ",
-        .{ info.line, info.col, info.line, info.total_lines },
+        " {d}:{d} {d}% {d}/{d} ",
+        .{ info.line, info.col, info.percent, info.line, info.total_lines },
     ) catch "";
 
     const pos_col = size.width -| @as(u16, @intCast(pos_text.len));
