@@ -819,6 +819,130 @@ pub fn changeInnerPair(
     return deleteInnerPair(buffer, selection, pair_type, allocator);
 }
 
+// === Transpose/swap operations ===
+
+/// Transpose two characters (swap char at cursor with char before it)
+pub fn transposeChars(
+    buffer: *Buffer.Buffer,
+    selection: Cursor.Selection,
+    allocator: std.mem.Allocator,
+) !Cursor.Selection {
+    const pos = selection.head;
+
+    // Get buffer text
+    const text = try buffer.rope.toString(allocator);
+    defer allocator.free(text);
+
+    if (text.len < 2) return selection;
+
+    // Convert position to byte offset
+    var offset: usize = 0;
+    var line: usize = 0;
+    var col: usize = 0;
+
+    while (offset < text.len) {
+        if (line == pos.line and col == pos.col) break;
+        if (text[offset] == '\n') {
+            line += 1;
+            col = 0;
+        } else {
+            col += 1;
+        }
+        offset += 1;
+    }
+
+    // Need at least one character before current position
+    if (offset == 0) return selection;
+
+    // Find previous non-newline character
+    var prev_offset = offset;
+    if (prev_offset > 0) prev_offset -= 1;
+
+    while (prev_offset > 0 and text[prev_offset] == '\n') {
+        prev_offset -= 1;
+    }
+
+    // Find current character (skip if at newline)
+    var curr_offset = offset;
+    if (curr_offset < text.len and text[curr_offset] == '\n') {
+        if (curr_offset > 0) curr_offset -= 1;
+    }
+
+    if (prev_offset >= curr_offset or curr_offset >= text.len) return selection;
+
+    // Swap the characters
+    const prev_char = text[prev_offset];
+    const curr_char = text[curr_offset];
+
+    // Delete both characters
+    try buffer.rope.delete(prev_offset, prev_offset + 1);
+    try buffer.rope.delete(curr_offset - 1, curr_offset); // -1 because we deleted one
+
+    // Insert them swapped
+    var swap_buf: [2]u8 = undefined;
+    swap_buf[0] = curr_char;
+    swap_buf[1] = prev_char;
+
+    try buffer.rope.insert(prev_offset, swap_buf[0..1]);
+    try buffer.rope.insert(prev_offset + 1, swap_buf[1..2]);
+
+    return selection;
+}
+
+/// Transpose lines (swap current line with line above)
+pub fn transposeLines(
+    buffer: *Buffer.Buffer,
+    selection: Cursor.Selection,
+    allocator: std.mem.Allocator,
+) !Cursor.Selection {
+    const pos = selection.head;
+
+    if (pos.line == 0) return selection;
+
+    // Get both lines
+    const text = try buffer.rope.toString(allocator);
+    defer allocator.free(text);
+
+    // Find start of previous line
+    var offset: usize = 0;
+    var line: usize = 0;
+
+    while (offset < text.len and line < pos.line - 1) {
+        if (text[offset] == '\n') line += 1;
+        offset += 1;
+    }
+
+    const prev_line_start = offset;
+
+    // Find start of current line
+    while (offset < text.len and line < pos.line) {
+        if (text[offset] == '\n') line += 1;
+        offset += 1;
+    }
+
+    const curr_line_start = offset;
+
+    // Find end of current line
+    var curr_line_end = curr_line_start;
+    while (curr_line_end < text.len and text[curr_line_end] != '\n') {
+        curr_line_end += 1;
+    }
+
+    // Extract both lines
+    const prev_line = text[prev_line_start..curr_line_start];
+    const curr_line = text[curr_line_start..curr_line_end];
+
+    // Delete both lines
+    try buffer.rope.delete(prev_line_start, curr_line_end);
+
+    // Insert swapped
+    try buffer.rope.insert(prev_line_start, curr_line);
+    try buffer.rope.insert(prev_line_start + curr_line.len, prev_line);
+
+    // Move cursor down one line
+    return selection.moveTo(.{ .line = pos.line, .col = pos.col });
+}
+
 // === Case conversion functions ===
 
 /// Convert ASCII character to uppercase

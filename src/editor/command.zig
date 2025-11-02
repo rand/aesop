@@ -1721,6 +1721,258 @@ fn moveToPrevParagraph(ctx: *Context) Result {
     return applyMotion(ctx, new_sel);
 }
 
+/// Transpose characters at cursor
+fn transposeCharacters(ctx: *Context) Result {
+    if (ctx.editor.buffer_manager.active_buffer_id) |id| {
+        const buffer = ctx.editor.buffer_manager.getBufferMut(id) orelse {
+            return Result.err("No active buffer");
+        };
+
+        const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse {
+            return Result.err("No selection");
+        };
+
+        _ = Actions.transposeChars(buffer, primary_sel, ctx.editor.allocator) catch {
+            return Result.err("Failed to transpose characters");
+        };
+
+        buffer.metadata.markModified();
+        return Result.ok();
+    }
+    return Result.err("No active buffer");
+}
+
+/// Transpose lines (swap current with previous)
+fn transposeLines(ctx: *Context) Result {
+    if (ctx.editor.buffer_manager.active_buffer_id) |id| {
+        const buffer = ctx.editor.buffer_manager.getBufferMut(id) orelse {
+            return Result.err("No active buffer");
+        };
+
+        const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse {
+            return Result.err("No selection");
+        };
+
+        _ = Actions.transposeLines(buffer, primary_sel, ctx.editor.allocator) catch {
+            return Result.err("Failed to transpose lines");
+        };
+
+        buffer.metadata.markModified();
+        return Result.ok();
+    }
+    return Result.err("No active buffer");
+}
+
+/// Sort selected lines alphabetically
+fn sortLines(ctx: *Context) Result {
+    if (ctx.editor.buffer_manager.active_buffer_id) |id| {
+        const buffer = ctx.editor.buffer_manager.getBufferMut(id) orelse {
+            return Result.err("No active buffer");
+        };
+
+        const primary = ctx.editor.selections.primary(ctx.editor.allocator) orelse {
+            return Result.err("No selection");
+        };
+
+        const range = primary.range();
+        const allocator = ctx.editor.allocator;
+
+        // Get buffer text
+        const text = buffer.getText() catch {
+            return Result.err("Failed to get buffer text");
+        };
+        defer allocator.free(text);
+
+        // Extract lines in range
+        var lines = std.ArrayList([]const u8).empty;
+        defer {
+            for (lines.items) |line| {
+                allocator.free(line);
+            }
+            lines.deinit(allocator);
+        }
+
+        var current_line: usize = 0;
+        var offset: usize = 0;
+        var line_start: usize = 0;
+
+        // Find start of first line in selection
+        while (offset < text.len and current_line < range.start.line) {
+            if (text[offset] == '\n') {
+                current_line += 1;
+                line_start = offset + 1;
+            }
+            offset += 1;
+        }
+
+        line_start = offset;
+        const selection_start = line_start;
+
+        // Collect lines in range
+        while (offset < text.len and current_line <= range.end.line) {
+            if (text[offset] == '\n' or offset == text.len - 1) {
+                const line_end = if (text[offset] == '\n') offset else offset + 1;
+                const line_text = text[line_start..line_end];
+                const line_copy = allocator.dupe(u8, line_text) catch {
+                    return Result.err("Failed to copy line");
+                };
+                lines.append(allocator, line_copy) catch {
+                    return Result.err("Failed to add line");
+                };
+
+                if (text[offset] == '\n') {
+                    current_line += 1;
+                    line_start = offset + 1;
+                }
+            }
+            offset += 1;
+        }
+
+        const selection_end = offset;
+
+        if (lines.items.len == 0) return Result.ok();
+
+        // Sort lines
+        std.mem.sort([]const u8, lines.items, {}, struct {
+            fn lessThan(_: void, a: []const u8, b: []const u8) bool {
+                return std.mem.lessThan(u8, a, b);
+            }
+        }.lessThan);
+
+        // Build sorted text
+        var sorted = std.ArrayList(u8).empty;
+        defer sorted.deinit(allocator);
+
+        for (lines.items, 0..) |line, i| {
+            sorted.appendSlice(allocator, line) catch {
+                return Result.err("Failed to build sorted text");
+            };
+            if (i < lines.items.len - 1) {
+                sorted.append(allocator, '\n') catch {
+                    return Result.err("Failed to build sorted text");
+                };
+            }
+        }
+
+        // Replace selection with sorted text
+        try buffer.rope.delete(selection_start, selection_end);
+        try buffer.rope.insert(selection_start, sorted.items);
+
+        buffer.metadata.markModified();
+        ctx.editor.messages.add("Lines sorted", .info) catch {};
+
+        return Result.ok();
+    }
+    return Result.err("No active buffer");
+}
+
+/// Remove duplicate lines from selection
+fn uniqueLines(ctx: *Context) Result {
+    if (ctx.editor.buffer_manager.active_buffer_id) |id| {
+        const buffer = ctx.editor.buffer_manager.getBufferMut(id) orelse {
+            return Result.err("No active buffer");
+        };
+
+        const primary = ctx.editor.selections.primary(ctx.editor.allocator) orelse {
+            return Result.err("No selection");
+        };
+
+        const range = primary.range();
+        const allocator = ctx.editor.allocator;
+
+        // Get buffer text
+        const text = buffer.getText() catch {
+            return Result.err("Failed to get buffer text");
+        };
+        defer allocator.free(text);
+
+        // Extract and deduplicate lines
+        var seen = std.StringHashMap(void).init(allocator);
+        defer seen.deinit();
+
+        var unique = std.ArrayList([]const u8).empty;
+        defer {
+            for (unique.items) |line| {
+                allocator.free(line);
+            }
+            unique.deinit(allocator);
+        }
+
+        var current_line: usize = 0;
+        var offset: usize = 0;
+        var line_start: usize = 0;
+
+        // Find start of selection
+        while (offset < text.len and current_line < range.start.line) {
+            if (text[offset] == '\n') {
+                current_line += 1;
+                line_start = offset + 1;
+            }
+            offset += 1;
+        }
+
+        line_start = offset;
+        const selection_start = line_start;
+
+        // Collect unique lines
+        while (offset < text.len and current_line <= range.end.line) {
+            if (text[offset] == '\n' or offset == text.len - 1) {
+                const line_end = if (text[offset] == '\n') offset else offset + 1;
+                const line_text = text[line_start..line_end];
+
+                // Check if we've seen this line
+                if (seen.get(line_text) == null) {
+                    const line_copy = allocator.dupe(u8, line_text) catch {
+                        return Result.err("Failed to copy line");
+                    };
+                    unique.append(allocator, line_copy) catch {
+                        return Result.err("Failed to add line");
+                    };
+                    seen.put(line_text, {}) catch {};
+                }
+
+                if (text[offset] == '\n') {
+                    current_line += 1;
+                    line_start = offset + 1;
+                }
+            }
+            offset += 1;
+        }
+
+        const selection_end = offset;
+
+        if (unique.items.len == 0) return Result.ok();
+
+        // Build unique text
+        var result_text = std.ArrayList(u8).empty;
+        defer result_text.deinit(allocator);
+
+        for (unique.items, 0..) |line, i| {
+            result_text.appendSlice(allocator, line) catch {
+                return Result.err("Failed to build unique text");
+            };
+            if (i < unique.items.len - 1) {
+                result_text.append(allocator, '\n') catch {
+                    return Result.err("Failed to build unique text");
+                };
+            }
+        }
+
+        // Replace selection
+        try buffer.rope.delete(selection_start, selection_end);
+        try buffer.rope.insert(selection_start, result_text.items);
+
+        buffer.metadata.markModified();
+
+        var msg_buf: [64]u8 = undefined;
+        const msg = std.fmt.bufPrint(&msg_buf, "Removed duplicates", .{}) catch "Duplicates removed";
+        ctx.editor.messages.add(msg, .info) catch {};
+
+        return Result.ok();
+    }
+    return Result.err("No active buffer");
+}
+
 /// Repeat last action (like vim's dot command)
 fn repeatLastAction(ctx: *Context) Result {
     const last_action = ctx.editor.repeat_system.getLastAction();
@@ -2774,6 +3026,36 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .name = "repeat_last_action",
         .description = "Repeat last action (dot command: .)",
         .handler = repeatLastAction,
+        .category = .edit,
+    });
+
+    // Transpose commands
+    try registry.register(.{
+        .name = "transpose_chars",
+        .description = "Transpose characters (Ctrl+T)",
+        .handler = transposeCharacters,
+        .category = .edit,
+    });
+
+    try registry.register(.{
+        .name = "transpose_lines",
+        .description = "Transpose current line with previous",
+        .handler = transposeLines,
+        .category = .edit,
+    });
+
+    // Line filtering commands
+    try registry.register(.{
+        .name = "sort_lines",
+        .description = "Sort selected lines alphabetically",
+        .handler = sortLines,
+        .category = .edit,
+    });
+
+    try registry.register(.{
+        .name = "unique_lines",
+        .description = "Remove duplicate lines from selection",
+        .handler = uniqueLines,
         .category = .edit,
     });
 
