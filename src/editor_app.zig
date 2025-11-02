@@ -13,6 +13,7 @@ const messageline = @import("render/messageline.zig");
 const keyhints = @import("render/keyhints.zig");
 const paletteline = @import("render/paletteline.zig");
 const filefinderline = @import("render/filefinderline.zig");
+const bufferswitcher = @import("render/bufferswitcher.zig");
 const gutter = @import("render/gutter.zig");
 const input_mod = @import("terminal/input.zig");
 const Keymap = @import("editor/keymap.zig");
@@ -141,6 +142,12 @@ pub const EditorApp = struct {
         // Handle file finder input separately
         if (self.editor.file_finder.visible) {
             try self.handleFileFinderInput(event);
+            return;
+        }
+
+        // Handle buffer switcher input separately
+        if (self.editor.buffer_switcher_visible) {
+            try self.handleBufferSwitcherInput(event);
             return;
         }
 
@@ -317,6 +324,59 @@ pub const EditorApp = struct {
         };
     }
 
+    /// Handle buffer switcher input
+    fn handleBufferSwitcherInput(self: *EditorApp, event: input_mod.Event) !void {
+        switch (event) {
+            .key => |k| {
+                switch (k.key) {
+                    .escape => {
+                        // Close buffer switcher
+                        self.editor.buffer_switcher_visible = false;
+                        self.editor.buffer_switcher_selected = 0;
+                    },
+                    .enter => {
+                        // Switch to selected buffer
+                        try self.executeBufferSwitcherSelection();
+                    },
+                    .up => {
+                        // Move selection up
+                        if (self.editor.buffer_switcher_selected > 0) {
+                            self.editor.buffer_switcher_selected -= 1;
+                        }
+                    },
+                    .down => {
+                        // Move selection down
+                        const buffer_count = self.editor.buffer_manager.count();
+                        if (self.editor.buffer_switcher_selected + 1 < buffer_count) {
+                            self.editor.buffer_switcher_selected += 1;
+                        }
+                    },
+                    else => {},
+                }
+            },
+
+            else => {},
+        }
+    }
+
+    /// Execute the currently selected buffer switcher selection (switch buffer)
+    fn executeBufferSwitcherSelection(self: *EditorApp) !void {
+        const buffers = try bufferswitcher.getBufferList(&self.editor, self.allocator);
+        defer self.allocator.free(buffers);
+
+        if (buffers.len == 0) return;
+
+        const selected_idx = @min(self.editor.buffer_switcher_selected, buffers.len - 1);
+        const buffer_id = buffers[selected_idx].id;
+
+        // Hide buffer switcher
+        self.editor.buffer_switcher_visible = false;
+        self.editor.buffer_switcher_selected = 0;
+
+        // Switch to the selected buffer
+        try self.editor.buffer_manager.switchTo(buffer_id);
+    }
+
     /// Handle mouse events
     fn handleMouse(self: *EditorApp, mouse: anytype) !void {
         switch (mouse.kind) {
@@ -488,8 +548,11 @@ pub const EditorApp = struct {
         // Render key hints (overlays on status line)
         try keyhints.render(&self.renderer, &self.editor);
 
-        // Render cursor (if not in command palette or file finder)
-        if (!self.editor.palette.visible and !self.editor.file_finder.visible) {
+        // Render cursor (if not in overlay mode)
+        if (!self.editor.palette.visible and
+            !self.editor.file_finder.visible and
+            !self.editor.buffer_switcher_visible)
+        {
             try self.renderCursor(size.height - reserved_lines);
         }
 
@@ -498,6 +561,15 @@ pub const EditorApp = struct {
 
         // Render file finder (overlay on top of everything)
         try filefinderline.render(&self.renderer, &self.editor, self.allocator);
+
+        // Render buffer switcher (overlay on top of everything)
+        try bufferswitcher.render(
+            &self.renderer,
+            &self.editor,
+            self.allocator,
+            self.editor.buffer_switcher_visible,
+            self.editor.buffer_switcher_selected,
+        );
 
         // Perform render
         try self.renderer.render();

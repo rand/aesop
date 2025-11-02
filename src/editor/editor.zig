@@ -16,6 +16,7 @@ const Search = @import("search.zig");
 const Config = @import("config.zig");
 const Window = @import("window.zig");
 const FileFinder = @import("file_finder.zig");
+const AutoPair = @import("autopair.zig");
 const PluginSystem = @import("../plugin/system.zig");
 const Renderer = @import("../render/renderer.zig").Renderer;
 
@@ -38,6 +39,8 @@ pub const Editor = struct {
     window_manager: Window.WindowManager,
     plugin_manager: PluginSystem.PluginManager,
     file_finder: FileFinder.FileFinder,
+    buffer_switcher_visible: bool,
+    buffer_switcher_selected: usize,
 
     // Viewport (legacy - will be replaced by window_manager)
     scroll_offset: usize, // Line offset for scrolling
@@ -68,6 +71,8 @@ pub const Editor = struct {
             .window_manager = try Window.WindowManager.init(allocator, initial_dims),
             .plugin_manager = PluginSystem.PluginManager.init(allocator),
             .file_finder = FileFinder.FileFinder.init(allocator),
+            .buffer_switcher_visible = false,
+            .buffer_switcher_selected = 0,
             .scroll_offset = 0,
         };
 
@@ -273,9 +278,21 @@ pub const Editor = struct {
             // Get all selections
             const all_selections = self.selections.all(self.allocator);
 
+            // Check for auto-pairing
+            const autopair_config = AutoPair.AutoPairConfig{ .enabled = self.config.auto_pair_brackets };
+            const should_pair = if (key == .char)
+                AutoPair.shouldAutoPair(autopair_config, key.char)
+            else
+                false;
+
             // Determine text to insert
             const text_to_insert: ?[]const u8 = switch (key) {
                 .char => |codepoint| blk: {
+                    // Check for auto-pairing
+                    if (should_pair) {
+                        break :blk try AutoPair.getPairedText(autopair_config, codepoint, self.allocator);
+                    }
+
                     // Convert character to UTF-8 bytes
                     var buf: [4]u8 = undefined;
                     const len = try std.unicode.utf8Encode(codepoint, &buf);
@@ -306,7 +323,7 @@ pub const Editor = struct {
                 i -= 1;
                 const sel = all_selections[i];
 
-                const new_sel = blk: {
+                var new_sel = blk: {
                     if (text_to_insert) |txt| {
                         break :blk try Actions.insertText(buffer, sel, txt);
                     } else if (key == .special) {
@@ -317,6 +334,15 @@ pub const Editor = struct {
                     }
                     break :blk sel;
                 };
+
+                // Adjust cursor position for auto-pairing (move back one char to be between pair)
+                if (should_pair and text_to_insert != null) {
+                    // Move cursor back one column to position between opening and closing char
+                    if (new_sel.head.col > 0) {
+                        new_sel.head.col -= 1;
+                        new_sel.anchor.col = new_sel.head.col;
+                    }
+                }
 
                 // Prepend to maintain order
                 try new_selections.insert(self.allocator, 0, new_sel);

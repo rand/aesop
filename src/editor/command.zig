@@ -601,6 +601,18 @@ fn toggleFileFinder(ctx: *Context) Result {
     return Result.ok();
 }
 
+/// Toggle buffer switcher
+fn toggleBufferSwitcher(ctx: *Context) Result {
+    if (ctx.editor.buffer_switcher_visible) {
+        ctx.editor.buffer_switcher_visible = false;
+        ctx.editor.buffer_switcher_selected = 0;
+    } else {
+        ctx.editor.buffer_switcher_visible = true;
+        ctx.editor.buffer_switcher_selected = 0;
+    }
+    return Result.ok();
+}
+
 /// Find next occurrence of search query
 fn findNext(ctx: *Context) Result {
     if (!ctx.editor.search.active) {
@@ -1730,8 +1742,16 @@ pub fn registerBuiltins(registry: *Registry) !void {
     // File finder
     try registry.register(.{
         .name = "toggle_file_finder",
-        .description = "Toggle file finder (Ctrl P)",
+        .description = "Toggle file finder (Space F)",
         .handler = toggleFileFinder,
+        .category = .system,
+    });
+
+    // Buffer switcher
+    try registry.register(.{
+        .name = "toggle_buffer_switcher",
+        .description = "Toggle buffer switcher (Space B)",
+        .handler = toggleBufferSwitcher,
         .category = .system,
     });
 
