@@ -1353,6 +1353,38 @@ fn redo(ctx: *Context) Result {
     return Result.ok();
 }
 
+// === Window Split Commands ===
+
+/// Split window horizontally (top/bottom)
+fn splitHorizontal(ctx: *Context) Result {
+    ctx.editor.window_manager.splitActive(.horizontal, 0.5) catch {
+        return Result.err("Failed to split window");
+    };
+    ctx.editor.messages.add("Window split horizontally", .info) catch {};
+    return Result.ok();
+}
+
+/// Split window vertically (left/right)
+fn splitVertical(ctx: *Context) Result {
+    ctx.editor.window_manager.splitActive(.vertical, 0.5) catch {
+        return Result.err("Failed to split window");
+    };
+    ctx.editor.messages.add("Window split vertically", .info) catch {};
+    return Result.ok();
+}
+
+/// Close active window
+fn closeWindow(ctx: *Context) Result {
+    ctx.editor.window_manager.closeActive() catch |err| {
+        return switch (err) {
+            error.CannotCloseOnlyWindow => Result.err("Cannot close only window"),
+            else => Result.err("Failed to close window"),
+        };
+    };
+    ctx.editor.messages.add("Window closed", .info) catch {};
+    return Result.ok();
+}
+
 /// Register all built-in commands
 pub fn registerBuiltins(registry: *Registry) !void {
     // Motion commands - basic
@@ -1739,6 +1771,28 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .name = "scroll_down",
         .description = "Scroll viewport down (Ctrl+E)",
         .handler = scrollDown,
+        .category = .view,
+    });
+
+    // Window split commands
+    try registry.register(.{
+        .name = "split_horizontal",
+        .description = "Split window horizontally (Ctrl+w s)",
+        .handler = splitHorizontal,
+        .category = .view,
+    });
+
+    try registry.register(.{
+        .name = "split_vertical",
+        .description = "Split window vertically (Ctrl+w v)",
+        .handler = splitVertical,
+        .category = .view,
+    });
+
+    try registry.register(.{
+        .name = "close_window",
+        .description = "Close active window (Ctrl+w q)",
+        .handler = closeWindow,
         .category = .view,
     });
 }

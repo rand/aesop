@@ -135,7 +135,6 @@ pub const Parser = struct {
         start_line: usize,
         end_line: usize,
     ) ![]HighlightToken {
-        _ = self;
         _ = start_line;
         _ = end_line;
 

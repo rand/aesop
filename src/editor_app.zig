@@ -15,6 +15,7 @@ const paletteline = @import("render/paletteline.zig");
 const gutter = @import("render/gutter.zig");
 const input_mod = @import("terminal/input.zig");
 const Keymap = @import("editor/keymap.zig");
+const TreeSitter = @import("editor/treesitter.zig");
 
 /// Editor application
 pub const EditorApp = struct {
@@ -24,6 +25,8 @@ pub const EditorApp = struct {
     running: bool,
     gutter_config: gutter.GutterConfig,
     mouse_drag_start: ?Cursor.Position,
+    syntax_parser: ?TreeSitter.Parser,
+    syntax_enabled: bool,
 
     /// Initialize editor application
     pub fn init(allocator: std.mem.Allocator) !EditorApp {
@@ -40,13 +43,46 @@ pub const EditorApp = struct {
             .running = false,
             .gutter_config = .{},
             .mouse_drag_start = null,
+            .syntax_parser = null,
+            .syntax_enabled = true, // Default: syntax highlighting on
         };
     }
 
     /// Clean up
     pub fn deinit(self: *EditorApp) void {
+        if (self.syntax_parser) |*parser| {
+            parser.deinit();
+        }
         self.editor.deinit();
         self.renderer.deinit();
+    }
+
+    /// Get or create parser for current buffer
+    fn ensureParser(self: *EditorApp) !void {
+        // Get active buffer
+        const buffer = self.editor.getActiveBuffer() orelse return;
+
+        // Determine language from buffer name
+        const buffer_name = buffer.metadata.getName();
+        const language = TreeSitter.Language.fromFilename(buffer_name);
+
+        // If we have a parser and it's for the right language, keep it
+        if (self.syntax_parser) |existing| {
+            if (existing.language == language) {
+                return;
+            }
+            // Wrong language - cleanup and recreate
+            var parser = self.syntax_parser.?;
+            parser.deinit();
+        }
+
+        // Create new parser for this language
+        self.syntax_parser = try TreeSitter.Parser.init(self.allocator, language);
+    }
+
+    /// Toggle syntax highlighting
+    pub fn toggleSyntaxHighlighting(self: *EditorApp) void {
+        self.syntax_enabled = !self.syntax_enabled;
     }
 
     /// Run the editor
@@ -427,6 +463,16 @@ pub const EditorApp = struct {
             &[_]@import("editor/search.zig").Search.Match{};
         defer if (self.editor.search.active) self.allocator.free(search_matches);
 
+        // Get syntax highlights (if enabled)
+        const syntax_highlights = if (self.syntax_enabled) blk: {
+            try self.ensureParser();
+            if (self.syntax_parser) |*parser| {
+                break :blk try parser.getHighlights(text, viewport.start_line, viewport.end_line);
+            }
+            break :blk &[_]TreeSitter.HighlightToken{};
+        } else &[_]TreeSitter.HighlightToken{};
+        defer if (self.syntax_enabled and self.syntax_parser != null) self.allocator.free(syntax_highlights);
+
         // Simple line rendering (just display lines)
         var line_num: usize = viewport.start_line;
         var row: u16 = 0;
@@ -468,7 +514,16 @@ pub const EditorApp = struct {
                 break :blk false;
             };
 
-            if (line_has_selection or line_has_search) {
+            const line_has_syntax = blk: {
+                for (syntax_highlights) |token| {
+                    if (token.line == line_num) {
+                        break :blk true;
+                    }
+                }
+                break :blk false;
+            };
+
+            if (line_has_selection or line_has_search or line_has_syntax) {
                 // Render line character by character with highlighting
                 try self.renderLineWithHighlights(
                     row,
@@ -477,6 +532,7 @@ pub const EditorApp = struct {
                     line_num,
                     sel_range,
                     search_matches,
+                    syntax_highlights,
                 );
             } else {
                 // Render line normally
@@ -499,7 +555,7 @@ pub const EditorApp = struct {
         }
     }
 
-    /// Render a line with selection and search highlighting
+    /// Render a line with selection, search, and syntax highlighting
     fn renderLineWithHighlights(
         self: *EditorApp,
         row: u16,
@@ -508,6 +564,7 @@ pub const EditorApp = struct {
         line_num: usize,
         opt_sel_range: anytype,
         search_matches: []const @import("editor/search.zig").Search.Match,
+        syntax_highlights: []const TreeSitter.HighlightToken,
     ) !void {
         var col: usize = 0;
         var screen_col = start_col;
@@ -546,24 +603,68 @@ pub const EditorApp = struct {
                 break :blk false;
             } else false;
 
+            // Check for syntax highlighting (only if not selected or search matched)
+            // Note: syntax tokens are on the current line, so we just need to match column
+            const syntax_group: ?TreeSitter.HighlightGroup = if (!is_selected and !is_search_match) blk: {
+                for (syntax_highlights) |token| {
+                    // Tokens are byte-based, but we're doing simple char matching for now
+                    // This works for ASCII; for full UTF-8 would need byte offset tracking
+                    if (token.line == line_num) {
+                        // Simplified: assume 1 byte per char (works for most code)
+                        if (col >= token.start_byte and col < token.end_byte) {
+                            break :blk token.group;
+                        }
+                    }
+                }
+                break :blk null;
+            } else null;
+
             const char_slice = line_text[col .. col + 1];
 
-            // Priority: selection > search match > normal
-            const attrs = if (is_selected)
-                Attrs{ .reverse = true }
-            else if (is_search_match)
-                Attrs{ .underline = true }
-            else
-                Attrs{};
-
-            self.renderer.writeText(
-                row,
-                screen_col,
-                char_slice,
-                .default,
-                .default,
-                attrs,
-            );
+            // Priority: selection > search match > syntax > normal
+            if (is_selected) {
+                // Selection: reverse video
+                self.renderer.writeText(
+                    row,
+                    screen_col,
+                    char_slice,
+                    .default,
+                    .default,
+                    Attrs{ .reverse = true },
+                );
+            } else if (is_search_match) {
+                // Search match: underline
+                self.renderer.writeText(
+                    row,
+                    screen_col,
+                    char_slice,
+                    .default,
+                    .default,
+                    Attrs{ .underline = true },
+                );
+            } else if (syntax_group) |group| {
+                // Syntax highlighting: use color from highlight group
+                // TODO: Map highlight groups to proper renderer colors
+                _ = group; // Unused for now - will be used when we add color support
+                self.renderer.writeText(
+                    row,
+                    screen_col,
+                    char_slice,
+                    .default,
+                    .default,
+                    Attrs{},
+                );
+            } else {
+                // Normal text
+                self.renderer.writeText(
+                    row,
+                    screen_col,
+                    char_slice,
+                    .default,
+                    .default,
+                    Attrs{},
+                );
+            }
 
             screen_col += 1;
         }
