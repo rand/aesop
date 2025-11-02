@@ -12,6 +12,7 @@ const statusline = @import("render/statusline.zig");
 const messageline = @import("render/messageline.zig");
 const keyhints = @import("render/keyhints.zig");
 const paletteline = @import("render/paletteline.zig");
+const filefinderline = @import("render/filefinderline.zig");
 const gutter = @import("render/gutter.zig");
 const input_mod = @import("terminal/input.zig");
 const Keymap = @import("editor/keymap.zig");
@@ -125,6 +126,12 @@ pub const EditorApp = struct {
             return;
         }
 
+        // Handle file finder input separately
+        if (self.editor.file_finder.visible) {
+            try self.handleFileFinderInput(event);
+            return;
+        }
+
         switch (event) {
             .char => |c| {
                 // Convert to keymap key
@@ -222,6 +229,9 @@ pub const EditorApp = struct {
         // Hide palette
         self.editor.palette.hide();
 
+        // Record command execution for history
+        self.editor.palette.recordExecution(command_name) catch {};
+
         // Execute command
         var ctx = @import("editor/command.zig").Context{ .editor = &self.editor };
         const result = self.editor.command_registry.execute(command_name, &ctx);
@@ -232,6 +242,67 @@ pub const EditorApp = struct {
                 self.editor.messages.add(msg, .error_msg) catch {};
             },
         }
+    }
+
+    /// Handle file finder input
+    fn handleFileFinderInput(self: *EditorApp, event: input_mod.Event) !void {
+        switch (event) {
+            .char => |c| {
+                // Add character to query
+                try self.editor.file_finder.addChar(c.codepoint);
+            },
+
+            .key => |k| {
+                switch (k.key) {
+                    .escape => {
+                        // Close file finder
+                        self.editor.file_finder.hide();
+                    },
+                    .backspace => {
+                        // Remove last character
+                        self.editor.file_finder.backspace();
+                    },
+                    .enter => {
+                        // Open selected file
+                        try self.executeFileFinderSelection();
+                    },
+                    .up => {
+                        // Move selection up
+                        self.editor.file_finder.selectPrevious();
+                    },
+                    .down => {
+                        // Move selection down
+                        const matches = try self.editor.file_finder.filterFiles(self.allocator);
+                        defer self.allocator.free(matches);
+                        self.editor.file_finder.selectNext(matches.len);
+                    },
+                    else => {},
+                }
+            },
+
+            else => {},
+        }
+    }
+
+    /// Execute the currently selected file finder selection (open file)
+    fn executeFileFinderSelection(self: *EditorApp) !void {
+        const matches = try self.editor.file_finder.filterFiles(self.allocator);
+        defer self.allocator.free(matches);
+
+        if (matches.len == 0) return;
+
+        const selected_idx = @min(self.editor.file_finder.selected_index, matches.len - 1);
+        const file_path = matches[selected_idx].path;
+
+        // Hide file finder
+        self.editor.file_finder.hide();
+
+        // Open the selected file
+        self.editor.openFile(file_path) catch |err| {
+            const msg = try std.fmt.allocPrint(self.allocator, "Failed to open file: {s}", .{@errorName(err)});
+            defer self.allocator.free(msg);
+            self.editor.messages.add(msg, .error_msg) catch {};
+        };
     }
 
     /// Handle mouse events
@@ -405,13 +476,16 @@ pub const EditorApp = struct {
         // Render key hints (overlays on status line)
         try keyhints.render(&self.renderer, &self.editor);
 
-        // Render cursor (if not in command palette)
-        if (!self.editor.palette.visible) {
+        // Render cursor (if not in command palette or file finder)
+        if (!self.editor.palette.visible and !self.editor.file_finder.visible) {
             try self.renderCursor(size.height - reserved_lines);
         }
 
         // Render command palette (overlay on top of everything)
         try paletteline.render(&self.renderer, &self.editor, self.allocator);
+
+        // Render file finder (overlay on top of everything)
+        try filefinderline.render(&self.renderer, &self.editor, self.allocator);
 
         // Perform render
         try self.renderer.render();

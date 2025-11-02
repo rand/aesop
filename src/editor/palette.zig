@@ -104,12 +104,13 @@ pub const Palette = struct {
         const name_copy = try self.allocator.dupe(u8, command_name);
         errdefer self.allocator.free(name_copy);
 
-        try self.history.insert(0, name_copy);
+        try self.history.insert(self.allocator, 0, name_copy);
 
         // Trim history if too long
         while (self.history.items.len > self.max_history) {
-            const removed = self.history.pop();
+            const removed = self.history.items[self.history.items.len - 1];
             self.allocator.free(removed);
+            _ = self.history.pop();
         }
     }
 
