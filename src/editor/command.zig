@@ -8,6 +8,8 @@ const EditorModule = @import("editor.zig");
 pub const Editor = EditorModule.Editor;
 const PendingCommand = EditorModule.PendingCommand;
 
+const LspHandlers = @import("../lsp/handlers.zig");
+
 /// Command context - passed to command handlers
 pub const Context = struct {
     editor: *Editor,
@@ -2995,10 +2997,16 @@ fn playMacro(ctx: *Context) Result {
 
 // === LSP Commands ===
 
+/// Completion callback handler (called when LSP returns results)
+fn lspCompletionCallback(result_json: []const u8) !void {
+    // TODO: Parse LSP completion response and populate completion list
+    // This is a placeholder - needs access to editor context
+    std.debug.print("[LSP] Completion response received: {s}\n", .{result_json});
+}
+
 /// Trigger code completion at cursor position
 fn lspTriggerCompletion(ctx: *Context) Result {
     const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
-    _ = buffer;
 
     // Get cursor position
     const cursor = (ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No cursor")).head;
@@ -3006,8 +3014,39 @@ fn lspTriggerCompletion(ctx: *Context) Result {
     // Show completion list at cursor position
     ctx.editor.completion_list.show(cursor.line, cursor.col);
 
-    // TODO: Trigger LSP completion request when LSP client is initialized
-    // For now, just show the UI (items will be populated by LSP)
+    // If LSP client is available and initialized, trigger completion request
+    if (ctx.editor.lsp_client) |*client| {
+        if (client.isReady()) {
+            // Get file URI
+            const filepath = buffer.metadata.filepath orelse return Result.err("Buffer has no filepath");
+
+            // TODO: Convert filepath to file:// URI
+            var uri_buf: [1024]u8 = undefined;
+            const uri = std.fmt.bufPrint(&uri_buf, "file://{s}", .{filepath}) catch return Result.err("URI too long");
+
+            // Trigger completion request
+            // Note: This is async - results will come via callback
+            const request_id = LspHandlers.completion(
+                client,
+                uri,
+                @intCast(cursor.line),
+                @intCast(cursor.col),
+                lspCompletionCallback,
+            ) catch {
+                ctx.editor.messages.add("Failed to request completion", .error_msg) catch {};
+                return Result.ok();
+            };
+
+            _ = request_id;
+            ctx.editor.messages.add("Completion requested...", .info) catch {};
+        } else {
+            // LSP not ready, show empty list
+            ctx.editor.messages.add("LSP not initialized", .warning) catch {};
+        }
+    } else {
+        // No LSP client, just show UI for manual testing
+        ctx.editor.messages.add("LSP not available", .warning) catch {};
+    }
 
     return Result.ok();
 }
@@ -3032,14 +3071,36 @@ fn lspCompletionNext(ctx: *Context) Result {
 
 /// Accept selected completion item
 fn lspAcceptCompletion(ctx: *Context) Result {
-    if (ctx.editor.completion_list.getSelectedItem()) |item| {
-        // TODO: Insert completion text at cursor
-        // For now, just hide the list
-        _ = item;
-        ctx.editor.completion_list.hide();
-        return Result.ok();
-    }
-    return Result.err("No completion selected");
+    const item = ctx.editor.completion_list.getSelectedItem() orelse return Result.err("No completion selected");
+
+    // Get the text to insert (prefer insert_text, fall back to label)
+    const text_to_insert = item.insert_text orelse item.label;
+
+    // Get current buffer and cursor
+    const buffer_id = ctx.editor.buffer_manager.active_buffer_id orelse return Result.err("No active buffer");
+    const buffer = ctx.editor.buffer_manager.getBufferMut(buffer_id) orelse return Result.err("No active buffer");
+    const cursor = (ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No cursor")).head;
+
+    // Convert cursor position to byte offset
+    // TODO: This is simplified - should handle multi-byte characters properly
+    const byte_offset = cursor.line * 80 + cursor.col; // Rough estimate
+
+    // Insert completion text
+    buffer.insert(byte_offset, text_to_insert) catch {
+        return Result.err("Failed to insert completion");
+    };
+
+    // Move cursor forward by inserted text length
+    const new_col = cursor.col + text_to_insert.len;
+    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, .{
+        .line = cursor.line,
+        .col = new_col,
+    }) catch {};
+
+    // Hide completion list
+    ctx.editor.completion_list.hide();
+
+    return Result.ok();
 }
 
 /// Go to definition of symbol under cursor
