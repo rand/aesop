@@ -317,6 +317,10 @@ pub fn setupDefaults(manager: *KeymapManager) !void {
     try normal_map.bind(Binding.fromChord(.{ .char = ' ' }, .{ .char = 'v' }, "split_vertical"));
     try normal_map.bind(Binding.fromChord(.{ .char = ' ' }, .{ .char = 'q' }, "close_window"));
 
+    // Window navigation
+    try normal_map.bind(Binding.fromChord(.{ .char = ' ' }, .{ .char = 'n' }, "next_window"));
+    try normal_map.bind(Binding.fromChord(.{ .char = ' ' }, .{ .char = 'N' }, "previous_window"));
+
     // Insert mode bindings
     const insert_map = manager.getKeymap(.insert);
     try insert_map.bind(Binding.fromSingleKey(.{ .special = .escape }, "normal_mode"));

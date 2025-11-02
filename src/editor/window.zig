@@ -220,13 +220,54 @@ pub const WindowManager = struct {
         return error.NotImplemented;
     }
 
-    /// Navigate to window in direction
-    pub fn navigateDirection(self: *WindowManager, direction: SplitDirection, forward: bool) !void {
-        _ = self;
-        _ = direction;
-        _ = forward;
-        // TODO: Implement directional navigation
-        return error.NotImplemented;
+    /// Navigate to next window (circular)
+    pub fn navigateNext(self: *WindowManager) !void {
+        var windows = try self.getVisibleWindows(self.allocator);
+        defer windows.deinit(self.allocator);
+
+        if (windows.items.len <= 1) {
+            return error.NoOtherWindow;
+        }
+
+        // Find current window index
+        var current_idx: ?usize = null;
+        for (windows.items, 0..) |window, i| {
+            if (window.id == self.active_window_id) {
+                current_idx = i;
+                break;
+            }
+        }
+
+        if (current_idx) |idx| {
+            // Move to next window (circular)
+            const next_idx = (idx + 1) % windows.items.len;
+            self.active_window_id = windows.items[next_idx].id;
+        }
+    }
+
+    /// Navigate to previous window (circular)
+    pub fn navigatePrevious(self: *WindowManager) !void {
+        var windows = try self.getVisibleWindows(self.allocator);
+        defer windows.deinit(self.allocator);
+
+        if (windows.items.len <= 1) {
+            return error.NoOtherWindow;
+        }
+
+        // Find current window index
+        var current_idx: ?usize = null;
+        for (windows.items, 0..) |window, i| {
+            if (window.id == self.active_window_id) {
+                current_idx = i;
+                break;
+            }
+        }
+
+        if (current_idx) |idx| {
+            // Move to previous window (circular)
+            const prev_idx = if (idx == 0) windows.items.len - 1 else idx - 1;
+            self.active_window_id = windows.items[prev_idx].id;
+        }
     }
 
     /// Resize active split

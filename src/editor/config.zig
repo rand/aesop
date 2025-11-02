@@ -51,19 +51,136 @@ pub const Config = struct {
         _ = self;
     }
 
-    /// Load configuration from file
+    /// Load configuration from file (simple key=value format)
     pub fn loadFromFile(allocator: std.mem.Allocator, path: []const u8) !Config {
-        _ = path;
-        // TODO: Implement file loading (TOML or JSON)
-        // For now, return defaults
-        return Config.init(allocator);
+        var config = Config.init(allocator);
+
+        // Try to open file, if it doesn't exist, return defaults
+        const file = std.fs.cwd().openFile(path, .{}) catch |err| {
+            if (err == error.FileNotFound) {
+                return config; // Return defaults if file doesn't exist
+            }
+            return err;
+        };
+        defer file.close();
+
+        // Read file contents
+        const max_size = 1024 * 16; // 16KB max config file
+        const contents = try file.readToEndAlloc(allocator, max_size);
+        defer allocator.free(contents);
+
+        // Parse line by line
+        var lines = std.mem.split(u8, contents, "\n");
+        while (lines.next()) |line| {
+            // Skip empty lines and comments
+            const trimmed = std.mem.trim(u8, line, " \t\r");
+            if (trimmed.len == 0 or trimmed[0] == '#') continue;
+
+            // Parse key=value
+            var parts = std.mem.split(u8, trimmed, "=");
+            const key = parts.next() orelse continue;
+            const value = parts.next() orelse continue;
+
+            const key_trimmed = std.mem.trim(u8, key, " \t");
+            const value_trimmed = std.mem.trim(u8, value, " \t");
+
+            // Set config values based on key
+            try config.parseKeyValue(key_trimmed, value_trimmed);
+        }
+
+        // Validate after loading
+        try config.validate();
+
+        return config;
     }
 
-    /// Save configuration to file
+    /// Parse a single key=value pair
+    fn parseKeyValue(self: *Config, key: []const u8, value: []const u8) !void {
+        if (std.mem.eql(u8, key, "tab_width")) {
+            self.tab_width = try std.fmt.parseInt(u8, value, 10);
+        } else if (std.mem.eql(u8, key, "expand_tabs")) {
+            self.expand_tabs = try parseBool(value);
+        } else if (std.mem.eql(u8, key, "line_numbers")) {
+            self.line_numbers = try parseBool(value);
+        } else if (std.mem.eql(u8, key, "relative_line_numbers")) {
+            self.relative_line_numbers = try parseBool(value);
+        } else if (std.mem.eql(u8, key, "auto_indent")) {
+            self.auto_indent = try parseBool(value);
+        } else if (std.mem.eql(u8, key, "wrap_lines")) {
+            self.wrap_lines = try parseBool(value);
+        } else if (std.mem.eql(u8, key, "show_whitespace")) {
+            self.show_whitespace = try parseBool(value);
+        } else if (std.mem.eql(u8, key, "highlight_current_line")) {
+            self.highlight_current_line = try parseBool(value);
+        } else if (std.mem.eql(u8, key, "show_indent_guides")) {
+            self.show_indent_guides = try parseBool(value);
+        } else if (std.mem.eql(u8, key, "syntax_highlighting")) {
+            self.syntax_highlighting = try parseBool(value);
+        } else if (std.mem.eql(u8, key, "search_case_sensitive")) {
+            self.search_case_sensitive = try parseBool(value);
+        } else if (std.mem.eql(u8, key, "search_wrap_around")) {
+            self.search_wrap_around = try parseBool(value);
+        } else if (std.mem.eql(u8, key, "multi_cursor_enabled")) {
+            self.multi_cursor_enabled = try parseBool(value);
+        } else if (std.mem.eql(u8, key, "max_cursors")) {
+            self.max_cursors = try std.fmt.parseInt(usize, value, 10);
+        } else if (std.mem.eql(u8, key, "scroll_offset")) {
+            self.scroll_offset = try std.fmt.parseInt(usize, value, 10);
+        } else if (std.mem.eql(u8, key, "max_undo_history")) {
+            self.max_undo_history = try std.fmt.parseInt(usize, value, 10);
+        } else if (std.mem.eql(u8, key, "auto_save")) {
+            self.auto_save = try parseBool(value);
+        } else if (std.mem.eql(u8, key, "auto_save_delay_ms")) {
+            self.auto_save_delay_ms = try std.fmt.parseInt(u64, value, 10);
+        } else if (std.mem.eql(u8, key, "trim_trailing_whitespace")) {
+            self.trim_trailing_whitespace = try parseBool(value);
+        } else if (std.mem.eql(u8, key, "ensure_newline_at_eof")) {
+            self.ensure_newline_at_eof = try parseBool(value);
+        }
+        // Unknown keys are silently ignored
+    }
+
+    /// Save configuration to file (simple key=value format)
     pub fn saveToFile(self: *const Config, path: []const u8) !void {
-        _ = self;
-        _ = path;
-        // TODO: Implement file saving
+        const file = try std.fs.cwd().createFile(path, .{});
+        defer file.close();
+
+        var writer = file.writer();
+
+        try writer.writeAll("# Aesop Editor Configuration\n");
+        try writer.writeAll("# Edit this file to customize your editor settings\n\n");
+
+        try writer.writeAll("# Editor behavior\n");
+        try writer.print("tab_width={d}\n", .{self.tab_width});
+        try writer.print("expand_tabs={s}\n", .{if (self.expand_tabs) "true" else "false"});
+        try writer.print("line_numbers={s}\n", .{if (self.line_numbers) "true" else "false"});
+        try writer.print("relative_line_numbers={s}\n", .{if (self.relative_line_numbers) "true" else "false"});
+        try writer.print("auto_indent={s}\n", .{if (self.auto_indent) "true" else "false"});
+        try writer.print("wrap_lines={s}\n\n", .{if (self.wrap_lines) "true" else "false"});
+
+        try writer.writeAll("# Visual settings\n");
+        try writer.print("show_whitespace={s}\n", .{if (self.show_whitespace) "true" else "false"});
+        try writer.print("highlight_current_line={s}\n", .{if (self.highlight_current_line) "true" else "false"});
+        try writer.print("show_indent_guides={s}\n", .{if (self.show_indent_guides) "true" else "false"});
+        try writer.print("syntax_highlighting={s}\n\n", .{if (self.syntax_highlighting) "true" else "false"});
+
+        try writer.writeAll("# Search settings\n");
+        try writer.print("search_case_sensitive={s}\n", .{if (self.search_case_sensitive) "true" else "false"});
+        try writer.print("search_wrap_around={s}\n\n", .{if (self.search_wrap_around) "true" else "false"});
+
+        try writer.writeAll("# Multi-cursor settings\n");
+        try writer.print("multi_cursor_enabled={s}\n", .{if (self.multi_cursor_enabled) "true" else "false"});
+        try writer.print("max_cursors={d}\n\n", .{self.max_cursors});
+
+        try writer.writeAll("# Performance settings\n");
+        try writer.print("scroll_offset={d}\n", .{self.scroll_offset});
+        try writer.print("max_undo_history={d}\n\n", .{self.max_undo_history});
+
+        try writer.writeAll("# File handling\n");
+        try writer.print("auto_save={s}\n", .{if (self.auto_save) "true" else "false"});
+        try writer.print("auto_save_delay_ms={d}\n", .{self.auto_save_delay_ms});
+        try writer.print("trim_trailing_whitespace={s}\n", .{if (self.trim_trailing_whitespace) "true" else "false"});
+        try writer.print("ensure_newline_at_eof={s}\n", .{if (self.ensure_newline_at_eof) "true" else "false"});
     }
 
     /// Validate configuration values
@@ -102,6 +219,16 @@ pub const Config = struct {
         return distance_from_top < self.scroll_offset or distance_from_bottom < self.scroll_offset;
     }
 };
+
+/// Parse boolean from string
+fn parseBool(value: []const u8) !bool {
+    if (std.mem.eql(u8, value, "true") or std.mem.eql(u8, value, "1") or std.mem.eql(u8, value, "yes")) {
+        return true;
+    } else if (std.mem.eql(u8, value, "false") or std.mem.eql(u8, value, "0") or std.mem.eql(u8, value, "no")) {
+        return false;
+    }
+    return error.InvalidBoolean;
+}
 
 /// Configuration builder for fluent API
 pub const ConfigBuilder = struct {
@@ -221,4 +348,24 @@ test "config: get tab string" {
     const tab = try config.getTabString(allocator);
     defer allocator.free(tab);
     try std.testing.expectEqualStrings("\t", tab);
+}
+
+test "config: parse bool" {
+    try std.testing.expectEqual(true, try parseBool("true"));
+    try std.testing.expectEqual(true, try parseBool("1"));
+    try std.testing.expectEqual(true, try parseBool("yes"));
+    try std.testing.expectEqual(false, try parseBool("false"));
+    try std.testing.expectEqual(false, try parseBool("0"));
+    try std.testing.expectEqual(false, try parseBool("no"));
+    try std.testing.expectError(error.InvalidBoolean, parseBool("maybe"));
+}
+
+test "config: load from missing file" {
+    const allocator = std.testing.allocator;
+    const config = try Config.loadFromFile(allocator, "/nonexistent/path.conf");
+    defer config.deinit();
+
+    // Should return defaults
+    try std.testing.expectEqual(@as(u8, 4), config.tab_width);
+    try std.testing.expectEqual(true, config.expand_tabs);
 }

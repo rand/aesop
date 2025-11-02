@@ -1399,6 +1399,30 @@ fn closeWindow(ctx: *Context) Result {
     return Result.ok();
 }
 
+/// Navigate to next window
+fn nextWindow(ctx: *Context) Result {
+    ctx.editor.window_manager.navigateNext() catch |err| {
+        return switch (err) {
+            error.NoOtherWindow => Result.err("No other window"),
+            else => Result.err("Failed to navigate"),
+        };
+    };
+    ctx.editor.messages.add("Switched to next window", .info) catch {};
+    return Result.ok();
+}
+
+/// Navigate to previous window
+fn previousWindow(ctx: *Context) Result {
+    ctx.editor.window_manager.navigatePrevious() catch |err| {
+        return switch (err) {
+            error.NoOtherWindow => Result.err("No other window"),
+            else => Result.err("Failed to navigate"),
+        };
+    };
+    ctx.editor.messages.add("Switched to previous window", .info) catch {};
+    return Result.ok();
+}
+
 /// Register all built-in commands
 pub fn registerBuiltins(registry: *Registry) !void {
     // Motion commands - basic
@@ -1815,6 +1839,20 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .name = "close_window",
         .description = "Close active window (Ctrl+w q)",
         .handler = closeWindow,
+        .category = .view,
+    });
+
+    try registry.register(.{
+        .name = "next_window",
+        .description = "Navigate to next window (Space w)",
+        .handler = nextWindow,
+        .category = .view,
+    });
+
+    try registry.register(.{
+        .name = "previous_window",
+        .description = "Navigate to previous window (Space W)",
+        .handler = previousWindow,
         .category = .view,
     });
 }
