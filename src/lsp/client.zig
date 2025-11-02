@@ -25,7 +25,8 @@ pub const Client = struct {
     pub const PendingRequest = struct {
         method: []const u8,
         timestamp: i64,
-        callback: *const fn (result: []const u8) anyerror!void,
+        callback: *const fn (ctx: ?*anyopaque, result: []const u8) anyerror!void,
+        callback_ctx: ?*anyopaque, // User context passed to callback
     };
 
     /// Initialize LSP client with server process
@@ -117,7 +118,8 @@ pub const Client = struct {
         self: *Client,
         method: []const u8,
         params: anytype,
-        callback: *const fn (result: []const u8) anyerror!void,
+        callback: *const fn (ctx: ?*anyopaque, result: []const u8) anyerror!void,
+        callback_ctx: ?*anyopaque,
     ) !u32 {
         var process = &(self.process orelse return error.ProcessNotRunning);
 
@@ -138,6 +140,7 @@ pub const Client = struct {
             .method = method_copy,
             .timestamp = std.time.milliTimestamp(),
             .callback = callback,
+            .callback_ctx = callback_ctx,
         });
 
         // Send to server via process
@@ -187,8 +190,8 @@ pub const Client = struct {
         // Get result JSON string
         const result_json = rpc_response.result orelse return error.MissingResult;
 
-        // Invoke callback
-        try pending.callback(result_json);
+        // Invoke callback with context
+        try pending.callback(pending.callback_ctx, result_json);
 
         // Remove from pending
         if (self.pending_requests.fetchRemove(id)) |entry| {

@@ -3,6 +3,7 @@
 
 const std = @import("std");
 const Buffer = @import("../buffer/manager.zig").Buffer;
+const Highlight = @import("highlight.zig");
 
 /// Syntax node type - represents a parsed syntax element
 pub const SyntaxNode = struct {
@@ -164,145 +165,82 @@ pub const Parser = struct {
 };
 
 /// Basic regex-free keyword highlighting (temporary until tree-sitter is integrated)
+/// Uses the enhanced tokenizer from highlight.zig
 fn basicHighlight(allocator: std.mem.Allocator, text: []const u8, language: Language) ![]HighlightToken {
     var tokens = std.ArrayList(HighlightToken).empty;
     errdefer tokens.deinit(allocator);
 
-    const keywords = getKeywords(language);
+    // Convert Language to Highlight.Language
+    const highlight_lang = switch (language) {
+        .zig => Highlight.Language.zig,
+        else => Highlight.Language.unknown,
+    };
 
-    var line: usize = 0;
-    var byte_offset: usize = 0;
-    var token_start: ?usize = null;
-    var in_string = false;
-    var in_comment = false;
+    // Process text line by line
+    var line_num: usize = 0;
+    var line_start: usize = 0;
+    var i: usize = 0;
 
-    while (byte_offset < text.len) : (byte_offset += 1) {
-        const c = text[byte_offset];
+    while (i <= text.len) {
+        // Find line boundaries
+        const is_newline = (i < text.len and text[i] == '\n');
+        const is_end = (i == text.len);
 
-        // Track line numbers
-        if (c == '\n') {
-            line += 1;
-            in_comment = false; // Single-line comment ends
-            continue;
-        }
+        if (is_newline or is_end) {
+            const line_text = text[line_start..i];
 
-        // String detection (basic)
-        if (c == '"' and !in_comment) {
-            if (!in_string) {
-                token_start = byte_offset;
-                in_string = true;
-            } else {
-                if (token_start) |start| {
-                    try tokens.append(allocator, HighlightToken{
-                        .start_byte = start,
-                        .end_byte = byte_offset + 1,
-                        .line = line,
-                        .group = .string,
-                    });
+            // Tokenize this line
+            const line_tokens = Highlight.tokenizeLine(allocator, line_text, highlight_lang) catch |err| {
+                // On error, skip this line
+                std.debug.print("Warning: Failed to tokenize line {d}: {}\n", .{ line_num, err });
+                if (is_newline) {
+                    line_start = i + 1;
+                    line_num += 1;
                 }
-                in_string = false;
-                token_start = null;
+                i += 1;
+                continue;
+            };
+            defer allocator.free(line_tokens);
+
+            // Convert line tokens to HighlightTokens
+            for (line_tokens) |token| {
+                const group = tokenTypeToHighlightGroup(token.type);
+
+                try tokens.append(allocator, HighlightToken{
+                    .start_byte = line_start + token.start,
+                    .end_byte = line_start + token.end,
+                    .line = line_num,
+                    .group = group,
+                });
             }
-            continue;
-        }
 
-        // Comment detection (basic: //)
-        if (!in_string and byte_offset + 1 < text.len and
-            text[byte_offset] == '/' and text[byte_offset + 1] == '/')
-        {
-            in_comment = true;
-            token_start = byte_offset;
-            continue;
-        }
-
-        if (in_comment) continue;
-        if (in_string) continue;
-
-        // Keyword matching (simplified)
-        if (isAlphanumeric(c) or c == '_') {
-            if (token_start == null) {
-                token_start = byte_offset;
-            }
-        } else {
-            if (token_start) |start| {
-                const word = text[start..byte_offset];
-                if (isKeyword(word, keywords)) {
-                    try tokens.append(allocator, HighlightToken{
-                        .start_byte = start,
-                        .end_byte = byte_offset,
-                        .line = line,
-                        .group = .keyword,
-                    });
-                }
-                token_start = null;
+            if (is_newline) {
+                line_start = i + 1;
+                line_num += 1;
             }
         }
-    }
 
-    // Handle comment at end of file
-    if (in_comment) {
-        if (token_start) |start| {
-            try tokens.append(allocator, HighlightToken{
-                .start_byte = start,
-                .end_byte = byte_offset,
-                .line = line,
-                .group = .comment,
-            });
-        }
+        i += 1;
     }
 
     return tokens.toOwnedSlice(allocator);
 }
 
-fn isAlphanumeric(c: u8) bool {
-    return (c >= 'a' and c <= 'z') or
-        (c >= 'A' and c <= 'Z') or
-        (c >= '0' and c <= '9');
-}
-
-fn isKeyword(word: []const u8, keywords: []const []const u8) bool {
-    for (keywords) |kw| {
-        if (std.mem.eql(u8, word, kw)) {
-            return true;
-        }
-    }
-    return false;
-}
-
-fn getKeywords(language: Language) []const []const u8 {
-    return switch (language) {
-        .zig => &[_][]const u8{
-            "const",    "var",    "fn",      "pub",   "struct",   "enum",   "union",
-            "if",       "else",   "while",   "for",   "switch",   "return", "break",
-            "continue", "defer",  "try",     "catch", "comptime", "inline", "export",
-            "extern",   "packed", "anytype", "void",  "bool",     "u8",     "i8",
-            "u16",      "i16",    "u32",     "i32",   "u64",      "i64",    "f32",
-            "f64",      "usize",  "isize",   "true",  "false",    "null",
-        },
-        .c => &[_][]const u8{
-            "int",      "char",  "float",  "double", "void",    "struct", "enum",
-            "if",       "else",  "while",  "for",    "switch",  "return", "break",
-            "continue", "const", "static", "extern", "typedef", "sizeof",
-        },
-        .rust => &[_][]const u8{
-            "fn",       "let",  "mut",   "const", "struct", "enum",  "impl",   "trait",
-            "if",       "else", "while", "for",   "loop",   "match", "return", "break",
-            "continue", "pub",  "use",   "mod",   "crate",  "self",  "super",
-        },
-        .go => &[_][]const u8{
-            "func",     "var",   "const", "type",    "struct", "interface",
-            "if",       "else",  "for",   "switch",  "return", "break",
-            "continue", "go",    "defer", "package", "import", "chan",
-            "map",      "range",
-        },
-        .python => &[_][]const u8{
-            "def",   "class",    "if",     "elif",  "else",  "while", "for",    "return",
-            "break", "continue", "import", "from",  "as",    "try",   "except", "finally",
-            "with",  "lambda",   "yield",  "async", "await",
-        },
-        else => &[_][]const u8{},
+/// Map Highlight.TokenType to TreeSitter.HighlightGroup
+fn tokenTypeToHighlightGroup(token_type: Highlight.TokenType) HighlightGroup {
+    return switch (token_type) {
+        .keyword => .keyword,
+        .type_name => .type_name,
+        .function_name => .function_name,
+        .string => .string,
+        .number => .number,
+        .comment => .comment,
+        .operator => .operator,
+        .punctuation => .punctuation,
+        .normal => .variable, // Default to variable color for normal text
     };
 }
+
 
 // === Tests ===
 

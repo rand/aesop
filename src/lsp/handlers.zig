@@ -144,7 +144,8 @@ pub fn completion(
     uri: []const u8,
     line: u32,
     character: u32,
-    callback: *const fn (result: []const u8) anyerror!void,
+    callback: *const fn (ctx: ?*anyopaque, result: []const u8) anyerror!void,
+    callback_ctx: ?*anyopaque,
 ) !u32 {
 
     if (!client.isReady()) {
@@ -159,7 +160,7 @@ pub fn completion(
         },
     };
 
-    return try client.sendRequest("textDocument/completion", params, callback);
+    return try client.sendRequest("textDocument/completion", params, callback, callback_ctx);
 }
 
 /// Request hover information at a given position
@@ -168,7 +169,8 @@ pub fn hover(
     uri: []const u8,
     line: u32,
     character: u32,
-    callback: *const fn (result: []const u8) anyerror!void,
+    callback: *const fn (ctx: ?*anyopaque, result: []const u8) anyerror!void,
+    callback_ctx: ?*anyopaque,
 ) !u32 {
 
     if (!client.isReady()) {
@@ -183,7 +185,7 @@ pub fn hover(
         },
     };
 
-    return try client.sendRequest("textDocument/hover", params, callback);
+    return try client.sendRequest("textDocument/hover", params, callback, callback_ctx);
 }
 
 /// Request go-to-definition at a given position
@@ -192,7 +194,8 @@ pub fn definition(
     uri: []const u8,
     line: u32,
     character: u32,
-    callback: *const fn (result: []const u8) anyerror!void,
+    callback: *const fn (ctx: ?*anyopaque, result: []const u8) anyerror!void,
+    callback_ctx: ?*anyopaque,
 ) !u32 {
 
     if (!client.isReady()) {
@@ -207,7 +210,7 @@ pub fn definition(
         },
     };
 
-    return try client.sendRequest("textDocument/definition", params, callback);
+    return try client.sendRequest("textDocument/definition", params, callback, callback_ctx);
 }
 
 /// Request references at a given position
@@ -217,7 +220,8 @@ pub fn references(
     line: u32,
     character: u32,
     include_declaration: bool,
-    callback: *const fn (result: []const u8) anyerror!void,
+    callback: *const fn (ctx: ?*anyopaque, result: []const u8) anyerror!void,
+    callback_ctx: ?*anyopaque,
 ) !u32 {
 
     if (!client.isReady()) {
@@ -235,7 +239,7 @@ pub fn references(
         },
     };
 
-    return try client.sendRequest("textDocument/references", params, callback);
+    return try client.sendRequest("textDocument/references", params, callback, callback_ctx);
 }
 
 /// Request document formatting
@@ -244,7 +248,8 @@ pub fn formatting(
     uri: []const u8,
     tab_size: u32,
     insert_spaces: bool,
-    callback: *const fn (result: []const u8) anyerror!void,
+    callback: *const fn (ctx: ?*anyopaque, result: []const u8) anyerror!void,
+    callback_ctx: ?*anyopaque,
 ) !u32 {
 
     if (!client.isReady()) {
@@ -259,7 +264,7 @@ pub fn formatting(
         },
     };
 
-    return try client.sendRequest("textDocument/formatting", params, callback);
+    return try client.sendRequest("textDocument/formatting", params, callback, callback_ctx);
 }
 
 /// Content change for didChange notification

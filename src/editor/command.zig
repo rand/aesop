@@ -2998,10 +2998,36 @@ fn playMacro(ctx: *Context) Result {
 // === LSP Commands ===
 
 /// Completion callback handler (called when LSP returns results)
-fn lspCompletionCallback(result_json: []const u8) !void {
-    // TODO: Parse LSP completion response and populate completion list
-    // This is a placeholder - needs access to editor context
-    std.debug.print("[LSP] Completion response received: {s}\n", .{result_json});
+fn lspCompletionCallback(ctx: ?*anyopaque, result_json: []const u8) !void {
+    const ResponseParser = @import("../lsp/response_parser.zig");
+
+    // Extract editor from context
+    const editor: *Editor = @ptrCast(@alignCast(ctx orelse return error.NullContext));
+
+    // Parse completion response
+    const items = ResponseParser.parseCompletionResponse(editor.allocator, result_json) catch |err| {
+        std.debug.print("[LSP] Failed to parse completion response: {}\n", .{err});
+        editor.messages.add("Failed to parse completion results", .error_msg) catch {};
+        return;
+    };
+
+    // Clear old items and add new ones
+    editor.completion_list.clear();
+
+    for (items) |item| {
+        editor.completion_list.addItem(item) catch |err| {
+            std.debug.print("[LSP] Failed to add completion item: {}\n", .{err});
+            // Free the item we couldn't add
+            var mutable_item = item;
+            mutable_item.deinit(editor.allocator);
+            continue;
+        };
+    }
+
+    // Free the items array (but not the items themselves - they're now owned by completion_list)
+    editor.allocator.free(items);
+
+    std.debug.print("[LSP] Added {} completion items\n", .{editor.completion_list.items.items.len});
 }
 
 /// Trigger code completion at cursor position
@@ -3032,6 +3058,7 @@ fn lspTriggerCompletion(ctx: *Context) Result {
                 @intCast(cursor.line),
                 @intCast(cursor.col),
                 lspCompletionCallback,
+                ctx.editor, // Pass editor as context
             ) catch {
                 ctx.editor.messages.add("Failed to request completion", .error_msg) catch {};
                 return Result.ok();
