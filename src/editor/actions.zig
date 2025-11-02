@@ -463,3 +463,118 @@ pub fn moveLineDown(
     const new_pos = Cursor.Position{ .line = line_num + 1, .col = selection.head.col };
     return selection.moveTo(new_pos);
 }
+
+// === Word Operations ===
+
+/// Check if a character is a word character
+fn isWordChar(ch: u8) bool {
+    return (ch >= 'a' and ch <= 'z') or
+        (ch >= 'A' and ch <= 'Z') or
+        (ch >= '0' and ch <= '9') or
+        ch == '_';
+}
+
+/// Find word boundaries at the given position
+fn getWordBounds(buffer: *const Buffer.Buffer, pos: Cursor.Position) !struct { start: Cursor.Position, end: Cursor.Position } {
+    const allocator = std.heap.page_allocator;
+    const total_bytes = buffer.rope.len();
+
+    if (total_bytes == 0) {
+        return .{ .start = pos, .end = pos };
+    }
+
+    // Get the full text (simplified - should use rope operations)
+    const text = try buffer.rope.toString(allocator);
+    defer allocator.free(text);
+
+    // Find line boundaries
+    var line_start: usize = 0;
+    var line_num: usize = 0;
+    for (text, 0..) |ch, i| {
+        if (line_num == pos.line) {
+            line_start = i;
+            break;
+        }
+        if (ch == '\n') {
+            line_num += 1;
+        }
+    }
+
+    // Get line text
+    const line_end_idx = std.mem.indexOfScalarPos(u8, text, line_start, '\n') orelse text.len;
+    const line_text = text[line_start..line_end_idx];
+
+    if (pos.col >= line_text.len) {
+        return .{ .start = pos, .end = pos };
+    }
+
+    // If on whitespace, no word
+    if (!isWordChar(line_text[pos.col])) {
+        return .{ .start = pos, .end = pos };
+    }
+
+    // Find word start
+    var word_start_col = pos.col;
+    while (word_start_col > 0 and isWordChar(line_text[word_start_col - 1])) {
+        word_start_col -= 1;
+    }
+
+    // Find word end
+    var word_end_col = pos.col;
+    while (word_end_col < line_text.len and isWordChar(line_text[word_end_col])) {
+        word_end_col += 1;
+    }
+
+    return .{
+        .start = .{ .line = pos.line, .col = word_start_col },
+        .end = .{ .line = pos.line, .col = word_end_col },
+    };
+}
+
+/// Select the word under cursor
+pub fn selectWord(
+    buffer: *const Buffer.Buffer,
+    selection: Cursor.Selection,
+) !Cursor.Selection {
+    const bounds = try getWordBounds(buffer, selection.head);
+    return Cursor.Selection.init(bounds.start, bounds.end);
+}
+
+/// Delete the word under cursor
+pub fn deleteWord(
+    buffer: *Buffer.Buffer,
+    selection: Cursor.Selection,
+) !Cursor.Selection {
+    const bounds = try getWordBounds(buffer, selection.head);
+
+    // If no word at cursor, do nothing
+    if (bounds.start.eql(bounds.end)) {
+        return selection;
+    }
+
+    // Convert positions to byte offsets
+    const start_offset = try positionToByteOffset(buffer, bounds.start);
+    const end_offset = try positionToByteOffset(buffer, bounds.end);
+
+    // Delete the word
+    try buffer.rope.delete(start_offset, end_offset);
+
+    // Return selection at word start
+    return Cursor.Selection.cursor(bounds.start);
+}
+
+/// Change word (delete and return selection for insert mode)
+pub fn changeWord(
+    buffer: *Buffer.Buffer,
+    selection: Cursor.Selection,
+) !Cursor.Selection {
+    return deleteWord(buffer, selection);
+}
+
+/// Select inside word (same as selectWord for now)
+pub fn selectInnerWord(
+    buffer: *const Buffer.Buffer,
+    selection: Cursor.Selection,
+) !Cursor.Selection {
+    return selectWord(buffer, selection);
+}

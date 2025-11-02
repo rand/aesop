@@ -979,6 +979,69 @@ fn deleteToEndOfLine(ctx: *Context) Result {
     return Result.ok();
 }
 
+/// Select the word under cursor (text object)
+fn selectCurrentWord(ctx: *Context) Result {
+    const buffer = ctx.editor.buffer_manager.getActiveBuffer() orelse {
+        return Result.err("No active buffer");
+    };
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse {
+        return Result.err("No selection");
+    };
+
+    const word_sel = Actions.selectWord(buffer, primary_sel) catch {
+        return Result.err("Failed to select word");
+    };
+
+    ctx.editor.selections.setSingleSelection(ctx.editor.allocator, word_sel) catch {
+        return Result.err("Failed to update selection");
+    };
+
+    return Result.ok();
+}
+
+/// Delete word under cursor (text object)
+fn deleteCurrentWord(ctx: *Context) Result {
+    if (ctx.editor.buffer_manager.active_buffer_id) |id| {
+        const buffer = ctx.editor.buffer_manager.getBufferMut(id) orelse return Result.err("No active buffer");
+        const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+        const new_sel = Actions.deleteWord(buffer, primary_sel) catch {
+            return Result.err("Failed to delete word");
+        };
+        buffer.metadata.markModified();
+
+        ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch {
+            return Result.err("Failed to update cursor");
+        };
+
+        return Result.ok();
+    }
+    return Result.err("No active buffer");
+}
+
+/// Change word under cursor (delete and enter insert mode)
+fn changeCurrentWord(ctx: *Context) Result {
+    if (ctx.editor.buffer_manager.active_buffer_id) |id| {
+        const buffer = ctx.editor.buffer_manager.getBufferMut(id) orelse return Result.err("No active buffer");
+        const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+        const new_sel = Actions.changeWord(buffer, primary_sel) catch {
+            return Result.err("Failed to change word");
+        };
+        buffer.metadata.markModified();
+
+        ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch {
+            return Result.err("Failed to update cursor");
+        };
+
+        // Switch to insert mode
+        ctx.editor.mode_manager.transitionTo(.insert) catch {};
+
+        return Result.ok();
+    }
+    return Result.err("No active buffer");
+}
+
 /// Indent current line or selection
 fn indentLine(ctx: *Context) Result {
     const buffer_id = ctx.editor.buffer_manager.active_buffer_id orelse {
@@ -1673,6 +1736,28 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .name = "delete_word",
         .description = "Delete word from cursor (dw)",
         .handler = deleteWord,
+        .category = .edit,
+    });
+
+    // Word text object commands
+    try registry.register(.{
+        .name = "select_word",
+        .description = "Select word under cursor (iw)",
+        .handler = selectCurrentWord,
+        .category = .selection,
+    });
+
+    try registry.register(.{
+        .name = "delete_word_object",
+        .description = "Delete word under cursor (diw)",
+        .handler = deleteCurrentWord,
+        .category = .edit,
+    });
+
+    try registry.register(.{
+        .name = "change_word",
+        .description = "Change word under cursor (ciw)",
+        .handler = changeCurrentWord,
         .category = .edit,
     });
 
