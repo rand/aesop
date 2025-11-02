@@ -122,7 +122,61 @@ pub const EditorApp = struct {
                 _ = r;
             },
 
+            .mouse => |m| {
+                try self.handleMouse(m);
+            },
+
             else => {},
+        }
+    }
+
+    /// Handle mouse events
+    fn handleMouse(self: *EditorApp, mouse: anytype) !void {
+        switch (mouse.kind) {
+            .press_left => {
+                try self.handleMouseClick(mouse.row, mouse.col);
+            },
+            else => {},
+        }
+    }
+
+    /// Handle mouse click - position cursor
+    fn handleMouseClick(self: *EditorApp, screen_row: u16, screen_col: u16) !void {
+        const size = self.renderer.getSize();
+        const buffer = self.editor.getActiveBuffer() orelse return;
+
+        // Check if we have a message displayed
+        const has_message = self.editor.messages.current() != null;
+        const reserved_lines: usize = if (has_message) 2 else 1;
+
+        // Ignore clicks on status/message lines
+        if (screen_row >= size.height - reserved_lines) return;
+
+        const viewport = self.editor.getViewport(size.height - reserved_lines);
+        const gutter_width = gutter.calculateWidth(self.gutter_config, buffer.lineCount());
+
+        // Ignore clicks in gutter
+        if (screen_col < gutter_width) return;
+
+        // Convert screen position to buffer position
+        const buffer_line = viewport.start_line + screen_row;
+        const buffer_col = screen_col - gutter_width;
+
+        // Clamp to valid buffer position
+        const total_lines = buffer.lineCount();
+        if (buffer_line >= total_lines) return;
+
+        // Create position and update cursor
+        const pos = Cursor.Position{
+            .line = buffer_line,
+            .col = buffer_col,
+        };
+
+        try self.editor.selections.setSingleCursor(self.allocator, pos);
+
+        // If in visual mode, return to normal mode
+        if (self.editor.getMode() == .select) {
+            try self.editor.enterNormalMode();
         }
     }
 

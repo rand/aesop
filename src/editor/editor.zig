@@ -11,6 +11,7 @@ const Motions = @import("motions.zig");
 const Actions = @import("actions.zig");
 const Message = @import("message.zig");
 const Undo = @import("undo.zig");
+const Palette = @import("palette.zig");
 const Renderer = @import("../render/renderer.zig").Renderer;
 
 /// Editor state - the main coordinator
@@ -26,6 +27,7 @@ pub const Editor = struct {
     clipboard: Actions.Clipboard,
     messages: Message.MessageQueue,
     undo_history: Undo.UndoHistory,
+    palette: Palette.Palette,
 
     // Viewport
     scroll_offset: usize, // Line offset for scrolling
@@ -42,6 +44,7 @@ pub const Editor = struct {
             .clipboard = Actions.Clipboard.init(allocator),
             .messages = Message.MessageQueue.init(allocator),
             .undo_history = Undo.UndoHistory.init(allocator),
+            .palette = Palette.Palette.init(allocator),
             .scroll_offset = 0,
         };
 
@@ -56,6 +59,7 @@ pub const Editor = struct {
 
     /// Clean up editor
     pub fn deinit(self: *Editor) void {
+        self.palette.deinit();
         self.undo_history.deinit();
         self.messages.deinit();
         self.clipboard.deinit();

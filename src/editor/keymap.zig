@@ -282,6 +282,9 @@ pub fn setupDefaults(manager: *KeymapManager) !void {
     try normal_map.bind(Binding.fromSingleKey(.{ .char = 'p' }, "paste_after"));
     try normal_map.bind(Binding.fromSingleKey(.{ .char = 'P' }, "paste_before"));
 
+    // Command palette
+    try normal_map.bind(Binding.fromChord(.{ .char = ' ' }, .{ .char = 'p' }, "toggle_palette"));
+
     // Insert mode bindings
     const insert_map = manager.getKeymap(.insert);
     try insert_map.bind(Binding.fromSingleKey(.{ .special = .escape }, "normal_mode"));

@@ -555,6 +555,16 @@ fn undo(ctx: *Context) Result {
     return Result.ok();
 }
 
+/// Toggle command palette
+fn togglePalette(ctx: *Context) Result {
+    if (ctx.editor.palette.visible) {
+        ctx.editor.palette.hide();
+    } else {
+        ctx.editor.palette.show();
+    }
+    return Result.ok();
+}
+
 /// Redo last undone operation
 fn redo(ctx: *Context) Result {
     if (!ctx.editor.undo_history.canRedo()) {
@@ -797,6 +807,14 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .description = "Yank visual selection (y in visual)",
         .handler = yankSelection,
         .category = .edit,
+    });
+
+    // Command palette
+    try registry.register(.{
+        .name = "toggle_palette",
+        .description = "Toggle command palette (Space P)",
+        .handler = togglePalette,
+        .category = .system,
     });
 }
 
