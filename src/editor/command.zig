@@ -1271,7 +1271,7 @@ fn setMark(ctx: *Context) Result {
 
     var buf: [32]u8 = undefined;
     const msg = std.fmt.bufPrint(&buf, "Mark '{c}' set", .{mark_name}) catch "Mark set";
-    ctx.editor.showMessage(.info, msg);
+    ctx.editor.messages.add(msg, .info) catch {};
 
     return Result.ok();
 }
@@ -1290,7 +1290,7 @@ fn jumpToMark(ctx: *Context) Result {
 
     // Switch to the buffer if needed
     if (mark.?.buffer_id != ctx.editor.buffer_manager.active_buffer_id) {
-        ctx.editor.buffer_manager.setActiveBuffer(mark.?.buffer_id);
+        ctx.editor.buffer_manager.active_buffer_id = mark.?.buffer_id;
     }
 
     // Move cursor to mark position
@@ -1300,7 +1300,7 @@ fn jumpToMark(ctx: *Context) Result {
 
     var buf: [32]u8 = undefined;
     const msg = std.fmt.bufPrint(&buf, "Jumped to mark '{c}'", .{mark_name}) catch "Jumped to mark";
-    ctx.editor.showMessage(.info, msg);
+    ctx.editor.messages.add(msg, .info) catch {};
 
     return Result.ok();
 }
@@ -1313,14 +1313,14 @@ fn listMarks(ctx: *Context) Result {
     defer ctx.editor.allocator.free(marks);
 
     if (marks.len == 0) {
-        ctx.editor.showMessage(.info, "No marks set");
+        ctx.editor.messages.add("No marks set", .info) catch {};
         return Result.ok();
     }
 
     // Show first mark info (TODO: show in palette or buffer)
     var buf: [64]u8 = undefined;
     const msg = std.fmt.bufPrint(&buf, "{d} mark(s) set", .{marks.len}) catch "Marks exist";
-    ctx.editor.showMessage(.info, msg);
+    ctx.editor.messages.add(msg, .info) catch {};
 
     return Result.ok();
 }
@@ -2331,7 +2331,7 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .name = "select_inner_paren",
         .description = "Select inside parentheses (vi()",
         .handler = selectInnerParen,
-        .category = .select,
+        .category = .selection,
     });
 
     try registry.register(.{
@@ -2352,7 +2352,7 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .name = "select_inner_quote",
         .description = "Select inside double quotes (vi\")",
         .handler = selectInnerQuote,
-        .category = .select,
+        .category = .selection,
     });
 
     // Mark commands

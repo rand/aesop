@@ -763,7 +763,7 @@ pub fn selectInnerPair(
 
     // Select inside the pair (excluding delimiters)
     var inner_start = pair.?.start;
-    var inner_end = pair.?.end;
+    const inner_end = pair.?.end;
 
     // Move start forward by 1 character
     inner_start.col += 1;

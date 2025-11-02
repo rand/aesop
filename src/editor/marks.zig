@@ -8,7 +8,7 @@ const Cursor = @import("cursor.zig");
 pub const Mark = struct {
     name: u8, // Single character mark name (a-z, A-Z)
     position: Cursor.Position,
-    buffer_id: usize, // Which buffer this mark belongs to
+    buffer_id: u32, // Which buffer this mark belongs to (BufferId type)
 };
 
 /// Mark registry
@@ -32,7 +32,7 @@ pub const MarkRegistry = struct {
         self: *MarkRegistry,
         name: u8,
         position: Cursor.Position,
-        buffer_id: usize,
+        buffer_id: u32,
     ) !void {
         // Validate mark name (a-z, A-Z)
         if (!isValidMarkName(name)) {
@@ -65,16 +65,16 @@ pub const MarkRegistry = struct {
 
     /// Get all marks (for listing)
     pub fn listMarks(self: *const MarkRegistry, allocator: std.mem.Allocator) ![]Mark {
-        var list = std.ArrayList(Mark).init(allocator);
-        errdefer list.deinit();
+        var list = std.ArrayList(Mark).empty;
+        errdefer list.deinit(allocator);
 
         var iter = self.marks.valueIterator();
         while (iter.next()) |mark| {
-            try list.append(mark.*);
+            try list.append(allocator, mark.*);
         }
 
         // Sort by name
-        const marks = try list.toOwnedSlice();
+        const marks = try list.toOwnedSlice(allocator);
         std.mem.sort(Mark, marks, {}, markLessThan);
         return marks;
     }
