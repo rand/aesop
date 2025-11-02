@@ -13,6 +13,8 @@ pub const Client = struct {
     pending_requests: std.AutoHashMap(u32, PendingRequest),
     process: ?Process,
     read_buffer: [65536]u8, // 64KB buffer for reading messages
+    notification_handler: ?NotificationHandler, // Handler for server notifications
+    notification_ctx: ?*anyopaque, // Context for notification handler
 
     pub const State = enum {
         uninitialized,
@@ -29,6 +31,9 @@ pub const Client = struct {
         callback_ctx: ?*anyopaque, // User context passed to callback
     };
 
+    /// Notification handler callback type
+    pub const NotificationHandler = *const fn (ctx: ?*anyopaque, method: []const u8, params: []const u8) anyerror!void;
+
     /// Initialize LSP client with server process
     pub fn init(allocator: std.mem.Allocator, process: ?Process) Client {
         return .{
@@ -38,7 +43,15 @@ pub const Client = struct {
             .pending_requests = std.AutoHashMap(u32, PendingRequest).init(allocator),
             .process = process,
             .read_buffer = undefined,
+            .notification_handler = null,
+            .notification_ctx = null,
         };
+    }
+
+    /// Set notification handler
+    pub fn setNotificationHandler(self: *Client, handler: NotificationHandler, ctx: ?*anyopaque) void {
+        self.notification_handler = handler;
+        self.notification_ctx = ctx;
     }
 
     /// Clean up client
@@ -166,8 +179,25 @@ pub const Client = struct {
         try process.writeMessage(notification_json);
     }
 
+    /// Handle incoming message from server (response or notification)
+    pub fn handleMessage(self: *Client, json: []const u8) !void {
+        // Try to parse as JSON to detect if it's a notification or response
+        // Notifications have "method" but no "id" (or id is null)
+        // Responses have "id" and either "result" or "error"
+
+        // Simple heuristic: check if JSON contains "method" field
+        // If yes, it's a notification; otherwise it's a response
+        const is_notification = std.mem.indexOf(u8, json, "\"method\"") != null;
+
+        if (is_notification) {
+            try self.handleNotification(json);
+        } else {
+            try self.handleResponse(json);
+        }
+    }
+
     /// Handle incoming response from server
-    pub fn handleResponse(self: *Client, json: []const u8) !void {
+    fn handleResponse(self: *Client, json: []const u8) !void {
         // Parse JSON-RPC response using zigjr
         var rpc_response = try zigjr.parseRpcResponse(self.allocator, json);
         defer rpc_response.deinit();
@@ -176,6 +206,7 @@ pub const Client = struct {
         const id: u32 = switch (rpc_response.id) {
             .num => |n| @intCast(n),
             .str => return error.InvalidResponseId,
+            .none => return error.ResponseWithoutId, // This shouldn't happen for responses
         };
 
         // Find pending request
@@ -199,6 +230,40 @@ pub const Client = struct {
         }
     }
 
+    /// Handle incoming notification from server
+    fn handleNotification(self: *Client, json: []const u8) !void {
+        if (self.notification_handler == null) {
+            // No handler registered, ignore notification
+            return;
+        }
+
+        // Parse notification to extract method and params
+        const parsed = try std.json.parseFromSlice(std.json.Value, self.allocator, json, .{});
+        defer parsed.deinit();
+
+        const root = parsed.value;
+        if (root != .object) return error.InvalidNotification;
+
+        // Extract method
+        const method_value = root.object.get("method") orelse return error.MissingMethod;
+        if (method_value != .string) return error.InvalidMethod;
+        const method = method_value.string;
+
+        // Extract params (optional)
+        var params_json: []const u8 = "null";
+        if (root.object.get("params")) |_| {
+            // Re-serialize params to JSON string
+            // For now, just pass the original JSON
+            // TODO: Better approach would be to extract just the params portion
+            params_json = json;
+        }
+
+        // Invoke notification handler
+        if (self.notification_handler) |handler| {
+            try handler(self.notification_ctx, method, params_json);
+        }
+    }
+
     /// Poll for messages from server (non-blocking)
     pub fn poll(self: *Client) !void {
         var process = &(self.process orelse return);
@@ -211,8 +276,8 @@ pub const Client = struct {
             return err;
         };
 
-        // Handle the message
-        try self.handleResponse(json);
+        // Handle the message (could be response or notification)
+        try self.handleMessage(json);
     }
 };
 

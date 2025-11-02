@@ -112,6 +112,163 @@ pub fn parseCompletionResponse(allocator: std.mem.Allocator, json_text: []const 
     return result.toOwnedSlice(allocator);
 }
 
+/// Diagnostic severity levels (LSP spec)
+pub const DiagnosticSeverity = enum(u8) {
+    @"error" = 1,
+    warning = 2,
+    information = 3,
+    hint = 4,
+
+    pub fn fromInt(value: i64) DiagnosticSeverity {
+        return switch (value) {
+            1 => .@"error",
+            2 => .warning,
+            3 => .information,
+            4 => .hint,
+            else => .hint,
+        };
+    }
+};
+
+/// Position in a document (LSP spec)
+pub const Position = struct {
+    line: u32,
+    character: u32,
+};
+
+/// Range in a document (LSP spec)
+pub const Range = struct {
+    start: Position,
+    end: Position,
+};
+
+/// Diagnostic item from LSP
+pub const Diagnostic = struct {
+    range: Range,
+    severity: DiagnosticSeverity,
+    code: ?[]const u8, // Allocated, must free
+    source: ?[]const u8, // Allocated, must free
+    message: []const u8, // Allocated, must free
+
+    pub fn deinit(self: *Diagnostic, allocator: std.mem.Allocator) void {
+        if (self.code) |code| allocator.free(code);
+        if (self.source) |source| allocator.free(source);
+        allocator.free(self.message);
+    }
+};
+
+/// Parse publishDiagnostics notification and extract diagnostics
+pub fn parseDiagnosticsNotification(allocator: std.mem.Allocator, json_text: []const u8) !struct {
+    uri: []const u8, // Allocated
+    diagnostics: []Diagnostic, // Allocated
+} {
+    const parsed = try std.json.parseFromSlice(std.json.Value, allocator, json_text, .{});
+    defer parsed.deinit();
+
+    const root = parsed.value;
+    if (root != .object) return error.InvalidDiagnosticNotification;
+
+    // Extract URI
+    const uri_value = root.object.get("uri") orelse return error.MissingUri;
+    if (uri_value != .string) return error.InvalidUri;
+    const uri = try allocator.dupe(u8, uri_value.string);
+    errdefer allocator.free(uri);
+
+    // Extract diagnostics array
+    const diagnostics_value = root.object.get("diagnostics") orelse return error.MissingDiagnostics;
+    if (diagnostics_value != .array) return error.DiagnosticsNotArray;
+
+    var diagnostics = std.ArrayList(Diagnostic).empty;
+    errdefer {
+        for (diagnostics.items) |*diag| {
+            diag.deinit(allocator);
+        }
+        diagnostics.deinit(allocator);
+    }
+
+    for (diagnostics_value.array.items) |diag_value| {
+        if (diag_value != .object) continue;
+        const diag_obj = diag_value.object;
+
+        // Parse range (required)
+        const range_value = diag_obj.get("range") orelse continue;
+        if (range_value != .object) continue;
+        const range_obj = range_value.object;
+
+        const start_value = range_obj.get("start") orelse continue;
+        const end_value = range_obj.get("end") orelse continue;
+        if (start_value != .object or end_value != .object) continue;
+
+        const start_line = if (start_value.object.get("line")) |v| blk: {
+            if (v == .integer) break :blk @as(u32, @intCast(v.integer)) else continue;
+        } else continue;
+        const start_char = if (start_value.object.get("character")) |v| blk: {
+            if (v == .integer) break :blk @as(u32, @intCast(v.integer)) else continue;
+        } else continue;
+
+        const end_line = if (end_value.object.get("line")) |v| blk: {
+            if (v == .integer) break :blk @as(u32, @intCast(v.integer)) else continue;
+        } else continue;
+        const end_char = if (end_value.object.get("character")) |v| blk: {
+            if (v == .integer) break :blk @as(u32, @intCast(v.integer)) else continue;
+        } else continue;
+
+        const range = Range{
+            .start = .{ .line = start_line, .character = start_char },
+            .end = .{ .line = end_line, .character = end_char },
+        };
+
+        // Parse severity (optional, default to hint)
+        var severity: DiagnosticSeverity = .hint;
+        if (diag_obj.get("severity")) |sev_value| {
+            if (sev_value == .integer) {
+                severity = DiagnosticSeverity.fromInt(sev_value.integer);
+            }
+        }
+
+        // Parse message (required)
+        const message_value = diag_obj.get("message") orelse continue;
+        if (message_value != .string) continue;
+        const message = try allocator.dupe(u8, message_value.string);
+
+        // Parse code (optional)
+        var code: ?[]const u8 = null;
+        if (diag_obj.get("code")) |code_value| {
+            if (code_value == .string) {
+                code = try allocator.dupe(u8, code_value.string);
+            } else if (code_value == .integer) {
+                // Some servers send integer codes
+                var buf: [32]u8 = undefined;
+                const code_str = try std.fmt.bufPrint(&buf, "{d}", .{code_value.integer});
+                code = try allocator.dupe(u8, code_str);
+            }
+        }
+
+        // Parse source (optional)
+        var source: ?[]const u8 = null;
+        if (diag_obj.get("source")) |source_value| {
+            if (source_value == .string) {
+                source = try allocator.dupe(u8, source_value.string);
+            }
+        }
+
+        const diagnostic = Diagnostic{
+            .range = range,
+            .severity = severity,
+            .code = code,
+            .source = source,
+            .message = message,
+        };
+
+        try diagnostics.append(allocator, diagnostic);
+    }
+
+    return .{
+        .uri = uri,
+        .diagnostics = try diagnostics.toOwnedSlice(allocator),
+    };
+}
+
 /// Parse hover response and extract markdown content
 pub fn parseHoverResponse(allocator: std.mem.Allocator, json_text: []const u8) ![]const u8 {
     const parsed = try std.json.parseFromSlice(std.json.Value, allocator, json_text, .{});
@@ -236,4 +393,140 @@ test "parse hover response: markdown format" {
     defer allocator.free(text);
 
     try std.testing.expect(std.mem.indexOf(u8, text, "Function") != null);
+}
+
+test "parse diagnostics notification: error and warning" {
+    const allocator = std.testing.allocator;
+
+    const json =
+        \\{
+        \\  "uri": "file:///test.zig",
+        \\  "diagnostics": [
+        \\    {
+        \\      "range": {
+        \\        "start": {"line": 5, "character": 10},
+        \\        "end": {"line": 5, "character": 15}
+        \\      },
+        \\      "severity": 1,
+        \\      "code": "E001",
+        \\      "source": "zls",
+        \\      "message": "undefined variable 'foo'"
+        \\    },
+        \\    {
+        \\      "range": {
+        \\        "start": {"line": 10, "character": 0},
+        \\        "end": {"line": 10, "character": 5}
+        \\      },
+        \\      "severity": 2,
+        \\      "message": "unused variable 'bar'"
+        \\    }
+        \\  ]
+        \\}
+    ;
+
+    const result = try parseDiagnosticsNotification(allocator, json);
+    defer {
+        allocator.free(result.uri);
+        for (result.diagnostics) |*diag| {
+            diag.deinit(allocator);
+        }
+        allocator.free(result.diagnostics);
+    }
+
+    try std.testing.expectEqualStrings("file:///test.zig", result.uri);
+    try std.testing.expectEqual(@as(usize, 2), result.diagnostics.len);
+
+    // Check first diagnostic (error)
+    try std.testing.expectEqual(DiagnosticSeverity.@"error", result.diagnostics[0].severity);
+    try std.testing.expectEqual(@as(u32, 5), result.diagnostics[0].range.start.line);
+    try std.testing.expectEqualStrings("undefined variable 'foo'", result.diagnostics[0].message);
+    try std.testing.expectEqualStrings("E001", result.diagnostics[0].code.?);
+    try std.testing.expectEqualStrings("zls", result.diagnostics[0].source.?);
+
+    // Check second diagnostic (warning)
+    try std.testing.expectEqual(DiagnosticSeverity.warning, result.diagnostics[1].severity);
+    try std.testing.expectEqual(@as(u32, 10), result.diagnostics[1].range.start.line);
+    try std.testing.expectEqualStrings("unused variable 'bar'", result.diagnostics[1].message);
+}
+
+test "parse diagnostics notification: empty diagnostics" {
+    const allocator = std.testing.allocator;
+
+    const json =
+        \\{
+        \\  "uri": "file:///test.zig",
+        \\  "diagnostics": []
+        \\}
+    ;
+
+    const result = try parseDiagnosticsNotification(allocator, json);
+    defer {
+        allocator.free(result.uri);
+        allocator.free(result.diagnostics);
+    }
+
+    try std.testing.expectEqual(@as(usize, 0), result.diagnostics.len);
+}
+
+test "parse completion response: edge case - missing optional fields" {
+    const allocator = std.testing.allocator;
+
+    const json =
+        \\{
+        \\  "items": [
+        \\    {
+        \\      "label": "minimal"
+        \\    }
+        \\  ]
+        \\}
+    ;
+
+    const items = try parseCompletionResponse(allocator, json);
+    defer {
+        for (items) |*item| {
+            item.deinit(allocator);
+        }
+        allocator.free(items);
+    }
+
+    try std.testing.expectEqual(@as(usize, 1), items.len);
+    try std.testing.expectEqualStrings("minimal", items[0].label);
+    try std.testing.expectEqual(CompletionKind.text, items[0].kind); // Default
+    try std.testing.expectEqual(@as(?[]const u8, null), items[0].detail);
+}
+
+test "parse hover response: string format" {
+    const allocator = std.testing.allocator;
+
+    const json =
+        \\{
+        \\  "contents": "Simple string hover"
+        \\}
+    ;
+
+    const text = try parseHoverResponse(allocator, json);
+    defer allocator.free(text);
+
+    try std.testing.expectEqualStrings("Simple string hover", text);
+}
+
+test "parse hover response: array format" {
+    const allocator = std.testing.allocator;
+
+    const json =
+        \\{
+        \\  "contents": [
+        \\    "Line 1",
+        \\    "Line 2",
+        \\    {"value": "Line 3"}
+        \\  ]
+        \\}
+    ;
+
+    const text = try parseHoverResponse(allocator, json);
+    defer allocator.free(text);
+
+    try std.testing.expect(std.mem.indexOf(u8, text, "Line 1") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text, "Line 2") != null);
+    try std.testing.expect(std.mem.indexOf(u8, text, "Line 3") != null);
 }
