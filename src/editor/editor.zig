@@ -24,6 +24,8 @@ const FileFinder = @import("file_finder.zig");
 const AutoPair = @import("autopair.zig");
 const PluginSystem = @import("../plugin/system.zig");
 const Renderer = @import("../render/renderer.zig").Renderer;
+const LspClient = @import("../lsp/client.zig").Client;
+const LspHandlers = @import("../lsp/handlers.zig");
 
 /// Pending command awaiting user input
 ///
@@ -84,6 +86,7 @@ pub const Editor = struct {
     file_finder: FileFinder.FileFinder,
     buffer_switcher_visible: bool,
     buffer_switcher_selected: usize,
+    lsp_client: ?LspClient, // Optional LSP client (null if not initialized)
 
     // Viewport (legacy - will be replaced by window_manager)
     scroll_offset: usize, // Line offset for scrolling
@@ -131,6 +134,7 @@ pub const Editor = struct {
             .file_finder = FileFinder.FileFinder.init(allocator),
             .buffer_switcher_visible = false,
             .buffer_switcher_selected = 0,
+            .lsp_client = null, // LSP client initialized on-demand
             .scroll_offset = 0,
         };
 
@@ -145,6 +149,9 @@ pub const Editor = struct {
 
     /// Clean up editor
     pub fn deinit(self: *Editor) void {
+        if (self.lsp_client) |*client| {
+            client.deinit();
+        }
         self.file_finder.deinit();
         self.plugin_manager.deinit();
         self.window_manager.deinit();
@@ -192,16 +199,38 @@ pub const Editor = struct {
 
         // Dispatch buffer open event to plugins
         self.plugin_manager.dispatchBufferOpen(buffer_id) catch {};
+
+        // Notify LSP if available
+        if (self.lsp_client) |*client| {
+            if (client.isReady()) {
+                const buffer = self.buffer_manager.getActiveBuffer() orelse return;
+                const uri = try self.makeFileUri(filepath);
+                defer self.allocator.free(uri);
+                const text = try buffer.getText();
+                defer self.allocator.free(text);
+                LspHandlers.didOpen(client, uri, "zig", 0, text) catch {};
+            }
+        }
     }
 
     /// Save active buffer
     pub fn save(self: *Editor) !void {
         if (self.buffer_manager.active_buffer_id) |id| {
             const buffer = self.buffer_manager.getBufferMut(id) orelse return error.NoActiveBuffer;
+            const filepath = buffer.metadata.filepath orelse return error.NoFilepath;
             try buffer.save();
 
             // Dispatch buffer save event to plugins
             self.plugin_manager.dispatchBufferSave(id) catch {};
+
+            // Notify LSP if available
+            if (self.lsp_client) |*client| {
+                if (client.isReady()) {
+                    const uri = try self.makeFileUri(filepath);
+                    defer self.allocator.free(uri);
+                    LspHandlers.didSave(client, uri, null) catch {};
+                }
+            }
         } else {
             return error.NoActiveBuffer;
         }
@@ -215,6 +244,47 @@ pub const Editor = struct {
         } else {
             return error.NoActiveBuffer;
         }
+    }
+
+    /// Close active buffer
+    pub fn closeBuffer(self: *Editor) !void {
+        if (self.buffer_manager.active_buffer_id) |id| {
+            const buffer = self.buffer_manager.getBuffer(id) orelse return error.NoActiveBuffer;
+            const filepath = buffer.metadata.filepath;
+
+            // Notify LSP before closing
+            if (filepath) |path| {
+                if (self.lsp_client) |*client| {
+                    if (client.isReady()) {
+                        const uri = try self.makeFileUri(path);
+                        defer self.allocator.free(uri);
+                        LspHandlers.didClose(client, uri) catch {};
+                    }
+                }
+            }
+
+            // Dispatch close event to plugins
+            self.plugin_manager.dispatchBufferClose(id) catch {};
+
+            // Close buffer in manager
+            try self.buffer_manager.closeBuffer(id);
+        } else {
+            return error.NoActiveBuffer;
+        }
+    }
+
+    /// Create file:// URI from filepath
+    fn makeFileUri(self: *Editor, filepath: []const u8) ![]u8 {
+        // Get absolute path if relative
+        const abs_path = if (std.fs.path.isAbsolute(filepath))
+            try self.allocator.dupe(u8, filepath)
+        else
+            try std.fs.cwd().realpathAlloc(self.allocator, filepath);
+        defer if (!std.fs.path.isAbsolute(filepath)) self.allocator.free(abs_path);
+
+        // Create file:// URI
+        const uri = try std.fmt.allocPrint(self.allocator, "file://{s}", .{abs_path});
+        return uri;
     }
 
     /// Process key input

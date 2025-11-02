@@ -2,6 +2,8 @@
 //! Handles Language Server Protocol communication via JSON-RPC 2.0
 
 const std = @import("std");
+const zigjr = @import("zigjr");
+const Process = @import("process.zig").Process;
 
 /// LSP client state
 pub const Client = struct {
@@ -9,6 +11,8 @@ pub const Client = struct {
     state: State,
     request_id: u32,
     pending_requests: std.AutoHashMap(u32, PendingRequest),
+    process: ?Process,
+    read_buffer: [65536]u8, // 64KB buffer for reading messages
 
     pub const State = enum {
         uninitialized,
@@ -21,15 +25,18 @@ pub const Client = struct {
     pub const PendingRequest = struct {
         method: []const u8,
         timestamp: i64,
+        callback: *const fn (result: []const u8) anyerror!void,
     };
 
-    /// Initialize LSP client
-    pub fn init(allocator: std.mem.Allocator) Client {
+    /// Initialize LSP client with server process
+    pub fn init(allocator: std.mem.Allocator, process: ?Process) Client {
         return .{
             .allocator = allocator,
             .state = .uninitialized,
             .request_id = 0,
             .pending_requests = std.AutoHashMap(u32, PendingRequest).init(allocator),
+            .process = process,
+            .read_buffer = undefined,
         };
     }
 
@@ -103,6 +110,106 @@ pub const Client = struct {
     /// Check if client is ready for requests
     pub fn isReady(self: *const Client) bool {
         return self.state == .initialized;
+    }
+
+    /// Send JSON-RPC request (returns immediately, callback invoked on response)
+    pub fn sendRequest(
+        self: *Client,
+        method: []const u8,
+        params: anytype,
+        callback: *const fn (result: []const u8) anyerror!void,
+    ) !u32 {
+        var process = &(self.process orelse return error.ProcessNotRunning);
+
+        const id = self.nextRequestId();
+
+        // Serialize request using zigjr
+        const request_json = try zigjr.composer.makeRequestJson(
+            self.allocator,
+            method,
+            params,
+            zigjr.RpcId{ .num = @intCast(id) },
+        );
+        defer self.allocator.free(request_json);
+
+        // Track request for response matching
+        const method_copy = try self.allocator.dupe(u8, method);
+        try self.pending_requests.put(id, .{
+            .method = method_copy,
+            .timestamp = std.time.milliTimestamp(),
+            .callback = callback,
+        });
+
+        // Send to server via process
+        try process.writeMessage(request_json);
+
+        return id;
+    }
+
+    /// Send JSON-RPC notification (no response expected)
+    pub fn sendNotification(self: *Client, method: []const u8, params: anytype) !void {
+        var process = &(self.process orelse return error.ProcessNotRunning);
+
+        // Serialize notification using zigjr (notifications have no ID)
+        const notification_json = try zigjr.composer.makeRequestJson(
+            self.allocator,
+            method,
+            params,
+            zigjr.RpcId{ .none = {} },
+        );
+        defer self.allocator.free(notification_json);
+
+        // Send to server via process
+        try process.writeMessage(notification_json);
+    }
+
+    /// Handle incoming response from server
+    pub fn handleResponse(self: *Client, json: []const u8) !void {
+        // Parse JSON-RPC response using zigjr
+        var rpc_response = try zigjr.parseRpcResponse(self.allocator, json);
+        defer rpc_response.deinit();
+
+        // Extract ID
+        const id: u32 = switch (rpc_response.id) {
+            .num => |n| @intCast(n),
+            .str => return error.InvalidResponseId,
+        };
+
+        // Find pending request
+        const pending = self.pending_requests.get(id) orelse return error.UnknownRequestId;
+
+        // Invoke callback with result (or error)
+        if (rpc_response.isError()) {
+            // TODO: Extract error message and pass to callback
+            return error.ServerError;
+        }
+
+        // Get result JSON string
+        const result_json = rpc_response.result orelse return error.MissingResult;
+
+        // Invoke callback
+        try pending.callback(result_json);
+
+        // Remove from pending
+        if (self.pending_requests.fetchRemove(id)) |entry| {
+            self.allocator.free(entry.value.method);
+        }
+    }
+
+    /// Poll for messages from server (non-blocking)
+    pub fn poll(self: *Client) !void {
+        var process = &(self.process orelse return);
+
+        if (!process.isRunning()) return;
+
+        // Try to read a message (non-blocking via timeout)
+        const json = process.readMessage(&self.read_buffer) catch |err| {
+            if (err == error.WouldBlock) return; // No message available
+            return err;
+        };
+
+        // Handle the message
+        try self.handleResponse(json);
     }
 };
 
