@@ -1855,8 +1855,12 @@ fn sortLines(ctx: *Context) Result {
         }
 
         // Replace selection with sorted text
-        try buffer.rope.delete(selection_start, selection_end);
-        try buffer.rope.insert(selection_start, sorted.items);
+        buffer.rope.delete(selection_start, selection_end) catch {
+            return Result.err("Failed to delete selection");
+        };
+        buffer.rope.insert(selection_start, sorted.items) catch {
+            return Result.err("Failed to insert sorted text");
+        };
 
         buffer.metadata.markModified();
         ctx.editor.messages.add("Lines sorted", .info) catch {};
@@ -1959,8 +1963,12 @@ fn uniqueLines(ctx: *Context) Result {
         }
 
         // Replace selection
-        try buffer.rope.delete(selection_start, selection_end);
-        try buffer.rope.insert(selection_start, result_text.items);
+        buffer.rope.delete(selection_start, selection_end) catch {
+            return Result.err("Failed to delete selection");
+        };
+        buffer.rope.insert(selection_start, result_text.items) catch {
+            return Result.err("Failed to insert unique text");
+        };
 
         buffer.metadata.markModified();
 
