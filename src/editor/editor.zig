@@ -9,6 +9,8 @@ const Command = @import("command.zig");
 const Keymap = @import("keymap.zig");
 const Motions = @import("motions.zig");
 const Actions = @import("actions.zig");
+const Message = @import("message.zig");
+const Undo = @import("undo.zig");
 const Renderer = @import("../render/renderer.zig").Renderer;
 
 /// Editor state - the main coordinator
@@ -22,6 +24,8 @@ pub const Editor = struct {
     command_registry: Command.Registry,
     keymap_manager: Keymap.KeymapManager,
     clipboard: Actions.Clipboard,
+    messages: Message.MessageQueue,
+    undo_history: Undo.UndoHistory,
 
     // Viewport
     scroll_offset: usize, // Line offset for scrolling
@@ -36,6 +40,8 @@ pub const Editor = struct {
             .command_registry = Command.Registry.init(allocator),
             .keymap_manager = Keymap.KeymapManager.init(allocator),
             .clipboard = Actions.Clipboard.init(allocator),
+            .messages = Message.MessageQueue.init(allocator),
+            .undo_history = Undo.UndoHistory.init(allocator),
             .scroll_offset = 0,
         };
 
@@ -50,6 +56,8 @@ pub const Editor = struct {
 
     /// Clean up editor
     pub fn deinit(self: *Editor) void {
+        self.undo_history.deinit();
+        self.messages.deinit();
         self.clipboard.deinit();
         self.selections.deinit(self.allocator);
         self.buffer_manager.deinit();
@@ -114,8 +122,8 @@ pub const Editor = struct {
             switch (result) {
                 .success => {},
                 .error_msg => |msg| {
-                    // TODO: Show error in status line
-                    _ = msg;
+                    // Show error in message queue
+                    self.messages.add(msg, .error_msg) catch {};
                 },
             }
         } else if (mode.acceptsTextInput()) {
