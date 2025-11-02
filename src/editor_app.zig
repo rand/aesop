@@ -30,12 +30,12 @@ fn getConfigPath(allocator: std.mem.Allocator) !?[]const u8 {
         defer allocator.free(xdg_config_home);
         const path = try std.fs.path.join(allocator, &[_][]const u8{ xdg_config_home, "aesop", "config.conf" });
         // Check if file exists
-        std.fs.accessAbsolute(path, .{}) catch {
+        if (std.fs.accessAbsolute(path, .{})) |_| {
+            return path;
+        } else |_| {
             allocator.free(path);
             // Fall through to next option
-        } else {
-            return path;
-        };
+        }
     } else |_| {}
 
     // Try ~/.config/aesop/config.conf
@@ -43,12 +43,12 @@ fn getConfigPath(allocator: std.mem.Allocator) !?[]const u8 {
         defer allocator.free(home);
         const path = try std.fs.path.join(allocator, &[_][]const u8{ home, ".config", "aesop", "config.conf" });
         // Check if file exists
-        std.fs.accessAbsolute(path, .{}) catch {
+        if (std.fs.accessAbsolute(path, .{})) |_| {
+            return path;
+        } else |_| {
             allocator.free(path);
             // Fall through to current directory
-        } else {
-            return path;
-        };
+        }
     } else |_| {}
 
     // Try ./aesop.conf in current directory
