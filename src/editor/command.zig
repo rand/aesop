@@ -100,11 +100,14 @@ pub const Registry = struct {
             const result = cmd.handler(ctx);
 
             // Record action for repeat if it succeeded and should be recorded
-            if (result.success) {
-                const Repeat = @import("repeat.zig");
-                if (Repeat.RepeatSystem.shouldRecord(name)) {
-                    ctx.editor.repeat_system.recordAction(name) catch {};
-                }
+            switch (result) {
+                .success => {
+                    const Repeat = @import("repeat.zig");
+                    if (Repeat.RepeatSystem.shouldRecord(name)) {
+                        ctx.editor.repeat_system.recordAction(name) catch {};
+                    }
+                },
+                .error_msg => {},
             }
 
             return result;
