@@ -226,7 +226,7 @@ pub fn changeSelection(
 // === Helper functions ===
 
 /// Convert Position (line, col) to byte offset in rope
-fn positionToByteOffset(buffer: *const Buffer.Buffer, pos: Cursor.Position) !usize {
+pub fn positionToByteOffset(buffer: *const Buffer.Buffer, pos: Cursor.Position) !usize {
     const allocator = std.heap.page_allocator;
 
     var current_line: usize = 0;

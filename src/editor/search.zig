@@ -8,11 +8,14 @@ const Cursor = @import("cursor.zig");
 pub const Search = struct {
     query: [128]u8 = undefined,
     query_len: usize = 0,
+    replace_text: [128]u8 = undefined,
+    replace_len: usize = 0,
     active: bool = false,
     incremental: bool = false, // If true, search updates as you type
     current_match: ?Match = null,
     match_count: usize = 0,
     match_index: usize = 0,
+    replacements_made: usize = 0,
     allocator: std.mem.Allocator,
 
     pub const Match = struct {
@@ -43,14 +46,28 @@ pub const Search = struct {
         return self.query[0..self.query_len];
     }
 
+    /// Set replace text
+    pub fn setReplaceText(self: *Search, text: []const u8) !void {
+        if (text.len > self.replace_text.len) return error.ReplaceTooLong;
+        @memcpy(self.replace_text[0..text.len], text);
+        self.replace_len = text.len;
+    }
+
+    /// Get replace text
+    pub fn getReplaceText(self: *const Search) []const u8 {
+        return self.replace_text[0..self.replace_len];
+    }
+
     /// Clear search
     pub fn clear(self: *Search) void {
         self.query_len = 0;
+        self.replace_len = 0;
         self.active = false;
         self.incremental = false;
         self.current_match = null;
         self.match_count = 0;
         self.match_index = 0;
+        self.replacements_made = 0;
     }
 
     /// Start incremental search

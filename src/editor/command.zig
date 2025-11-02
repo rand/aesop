@@ -1257,6 +1257,78 @@ fn gotoEnd(ctx: *Context) Result {
     return moveFileEnd(ctx);
 }
 
+/// Jump to specific line number
+fn gotoLine(ctx: *Context) Result {
+    // This would typically get the line number from a prompt/input
+    // For now, this is a placeholder that would need UI integration
+    // A real implementation would:
+    // 1. Prompt user for line number
+    // 2. Parse the input
+    // 3. Jump to that line
+
+    // Placeholder: Jump to line 1 as demonstration
+    const buffer = ctx.editor.buffer_manager.getActiveBuffer() orelse {
+        return Result.err("No active buffer");
+    };
+
+    const total_lines = buffer.lineCount();
+
+    // TODO: Get line number from user input
+    // For now this is just the function structure
+    _ = total_lines;
+
+    ctx.editor.messages.add("Goto line command (line number input needed)", .info) catch {};
+    return Result.ok();
+}
+
+/// Jump to specific line number (with parameter)
+fn gotoLineNumber(ctx: *Context, line_number: usize) Result {
+    const buffer = ctx.editor.buffer_manager.getActiveBuffer() orelse {
+        return Result.err("No active buffer");
+    };
+
+    const total_lines = buffer.lineCount();
+
+    // Validate line number (1-indexed for user, 0-indexed internally)
+    if (line_number == 0) {
+        return Result.err("Line number must be >= 1");
+    }
+
+    if (line_number > total_lines) {
+        // Jump to last line instead of erroring
+        const target_line = if (total_lines > 0) total_lines - 1 else 0;
+        ctx.editor.selections.setSingleCursor(ctx.editor.allocator, .{
+            .line = target_line,
+            .col = 0,
+        }) catch {
+            return Result.err("Failed to move cursor");
+        };
+
+        var msg_buf: [64]u8 = undefined;
+        const msg = std.fmt.bufPrint(&msg_buf, "Line {d} out of range, jumped to end", .{line_number}) catch "Jumped to end";
+        ctx.editor.messages.add(msg, .warning) catch {};
+        return Result.ok();
+    }
+
+    // Jump to line (convert from 1-indexed to 0-indexed)
+    const target_line = line_number - 1;
+    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, .{
+        .line = target_line,
+        .col = 0,
+    }) catch {
+        return Result.err("Failed to move cursor");
+    };
+
+    // Update scroll to show the line
+    ctx.editor.scroll_offset = if (target_line > 5) target_line - 5 else 0;
+
+    var msg_buf: [64]u8 = undefined;
+    const msg = std.fmt.bufPrint(&msg_buf, "Line {d}/{d}", .{line_number, total_lines}) catch "Jumped to line";
+    ctx.editor.messages.add(msg, .success) catch {};
+
+    return Result.ok();
+}
+
 /// Center cursor on screen
 fn centerCursor(ctx: *Context) Result {
     const cursor_pos = ctx.editor.getCursorPosition();
@@ -1568,6 +1640,126 @@ fn cancelSearch(ctx: *Context) Result {
     ctx.editor.search.clear();
     ctx.editor.messages.clear();
     return Result.ok();
+}
+
+/// Replace next occurrence of search query
+fn replaceNext(ctx: *Context) Result {
+    if (ctx.editor.search.query_len == 0) {
+        return Result.err("No search query");
+    }
+
+    if (ctx.editor.buffer_manager.active_buffer_id) |id| {
+        const buffer = ctx.editor.buffer_manager.getBufferMut(id) orelse return Result.err("No active buffer");
+
+        // Get buffer text
+        const text = buffer.getText() catch {
+            return Result.err("Failed to get buffer text");
+        };
+        defer ctx.editor.allocator.free(text);
+
+        // Get current cursor position
+        const cursor_pos = ctx.editor.getCursorPosition();
+
+        // Find next match
+        const match = ctx.editor.search.findNext(text, cursor_pos);
+        if (match == null) {
+            return Result.err("No more matches");
+        }
+
+        const m = match.?;
+
+        // Convert positions to byte offsets
+        const start_offset = Actions.positionToByteOffset(buffer, m.start) catch {
+            return Result.err("Invalid match position");
+        };
+        const end_offset = Actions.positionToByteOffset(buffer, m.end) catch {
+            return Result.err("Invalid match position");
+        };
+
+        // Delete the match
+        buffer.rope.delete(start_offset, end_offset) catch {
+            return Result.err("Failed to delete match");
+        };
+
+        // Insert replacement text
+        const replace_text = ctx.editor.search.getReplaceText();
+        buffer.rope.insert(start_offset, replace_text) catch {
+            return Result.err("Failed to insert replacement");
+        };
+
+        buffer.metadata.markModified();
+        ctx.editor.search.replacements_made += 1;
+
+        // Move cursor to end of replacement
+        ctx.editor.selections.setSingleCursor(ctx.editor.allocator, .{
+            .line = m.start.line,
+            .col = m.start.col + replace_text.len,
+        }) catch {};
+
+        return Result.ok();
+    }
+
+    return Result.err("No active buffer");
+}
+
+/// Replace all occurrences of search query
+fn replaceAll(ctx: *Context) Result {
+    if (ctx.editor.search.query_len == 0) {
+        return Result.err("No search query");
+    }
+
+    if (ctx.editor.buffer_manager.active_buffer_id) |id| {
+        const buffer = ctx.editor.buffer_manager.getBufferMut(id) orelse return Result.err("No active buffer");
+
+        // Get buffer text
+        const text = buffer.getText() catch {
+            return Result.err("Failed to get buffer text");
+        };
+        defer ctx.editor.allocator.free(text);
+
+        // Find all matches
+        const matches = ctx.editor.search.findAllMatches(text, ctx.editor.allocator) catch {
+            return Result.err("Failed to find matches");
+        };
+        defer ctx.editor.allocator.free(matches);
+
+        if (matches.len == 0) {
+            return Result.err("No matches found");
+        }
+
+        ctx.editor.search.replacements_made = 0;
+
+        // Replace in reverse order to maintain position validity
+        var i: usize = matches.len;
+        while (i > 0) {
+            i -= 1;
+            const m = matches[i];
+
+            // Convert positions to byte offsets
+            const start_offset = Actions.positionToByteOffset(buffer, m.start) catch continue;
+            const end_offset = Actions.positionToByteOffset(buffer, m.end) catch continue;
+
+            // Delete the match
+            buffer.rope.delete(start_offset, end_offset) catch continue;
+
+            // Insert replacement text
+            const replace_text = ctx.editor.search.getReplaceText();
+            buffer.rope.insert(start_offset, replace_text) catch continue;
+
+            ctx.editor.search.replacements_made += 1;
+        }
+
+        buffer.metadata.markModified();
+
+        // Show result message
+        var msg_buf: [64]u8 = undefined;
+        const msg = std.fmt.bufPrint(&msg_buf, "Replaced {d} occurrence(s)", .{ctx.editor.search.replacements_made}) catch "Replacements complete";
+        ctx.editor.messages.add(msg, .success) catch {};
+
+        return Result.ok();
+    }
+
+    return Result.err("No active buffer");
 }
 
 /// Register all built-in commands
@@ -1931,6 +2123,20 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .category = .search,
     });
 
+    try registry.register(.{
+        .name = "replace_next",
+        .description = "Replace next occurrence",
+        .handler = replaceNext,
+        .category = .search,
+    });
+
+    try registry.register(.{
+        .name = "replace_all",
+        .description = "Replace all occurrences",
+        .handler = replaceAll,
+        .category = .search,
+    });
+
     // Multi-cursor operations
     try registry.register(.{
         .name = "add_cursor_above",
@@ -1987,6 +2193,13 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .name = "goto_end",
         .description = "Jump to end of buffer (G)",
         .handler = gotoEnd,
+        .category = .motion,
+    });
+
+    try registry.register(.{
+        .name = "goto_line",
+        .description = "Jump to specific line number (:goto or Ctrl+G)",
+        .handler = gotoLine,
         .category = .motion,
     });
 
