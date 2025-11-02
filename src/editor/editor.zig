@@ -25,6 +25,37 @@ const AutoPair = @import("autopair.zig");
 const PluginSystem = @import("../plugin/system.zig");
 const Renderer = @import("../render/renderer.zig").Renderer;
 
+/// Pending command awaiting user input
+///
+/// Uses continuation-passing style for command resumption. When a command
+/// requires user input (e.g., character for find motion, register for marks),
+/// it sets this state and activates the prompt. The event loop routes subsequent
+/// input to the appropriate completion handler.
+///
+/// Design rationale: This unified state machine is cleaner than separate boolean
+/// flags for each command type, provides type-safe continuation, and encodes
+/// command parameters directly in the enum payload.
+pub const PendingCommand = union(enum) {
+    none,
+    /// Find or till character motion (f/F/t/T commands)
+    find_char: struct { forward: bool, till: bool },
+    /// Set mark at current position (m command)
+    set_mark,
+    /// Jump to mark (` or ' command)
+    goto_mark,
+    /// Start macro recording (q command)
+    record_macro,
+    /// Play macro from register (@ command)
+    play_macro,
+    /// Replace character at cursor (r command)
+    replace_char,
+
+    /// Check if a command is awaiting input
+    pub fn isWaiting(self: PendingCommand) bool {
+        return self != .none;
+    }
+};
+
 /// Editor state - the main coordinator
 pub const Editor = struct {
     allocator: std.mem.Allocator,
@@ -46,6 +77,7 @@ pub const Editor = struct {
     registers: Registers.RegisterManager,
     find_till_state: Motions.FindTillState,
     macro_recorder: Macros.MacroRecorder,
+    pending_command: PendingCommand,
     config: Config.Config,
     window_manager: Window.WindowManager,
     plugin_manager: PluginSystem.PluginManager,
@@ -84,6 +116,7 @@ pub const Editor = struct {
             .registers = Registers.RegisterManager.init(allocator),
             .find_till_state = Motions.FindTillState{},
             .macro_recorder = Macros.MacroRecorder.init(allocator),
+            .pending_command = .none,
             .config = Config.Config.init(allocator),
             .window_manager = try Window.WindowManager.init(allocator, initial_dims),
             .plugin_manager = PluginSystem.PluginManager.init(allocator),
@@ -180,13 +213,19 @@ pub const Editor = struct {
     pub fn processKey(self: *Editor, key: Keymap.Key) !void {
         const mode = self.getMode();
 
-        // Special handling for incremental search
+        // Priority 1: Incremental search mode
         if (self.search.incremental) {
             try self.handleSearchInput(key);
             return;
         }
 
-        // Try to match key to command
+        // Priority 2: Pending command awaiting input
+        if (self.pending_command.isWaiting()) {
+            try self.handlePendingCommandInput(key);
+            return;
+        }
+
+        // Priority 3: Try to match key to command
         if (try self.keymap_manager.processKey(mode, key)) |command_name| {
             // Execute command with editor context
             var ctx = Command.Context{ .editor = self };
@@ -261,6 +300,76 @@ pub const Editor = struct {
                 }
             },
         }
+    }
+
+    /// Handle input when a command is awaiting user response
+    ///
+    /// Called after a command requests user input via the prompt system.
+    /// Input is routed based on pending_command type to the appropriate
+    /// completion handler.
+    ///
+    /// Supports:
+    /// - Character input for find/till motions, marks, macros, replace
+    /// - Escape key cancels pending command
+    ///
+    /// After completion or cancellation, pending state is cleared and prompt hidden.
+    fn handlePendingCommandInput(self: *Editor, key: Keymap.Key) !void {
+        // Handle escape - cancel pending command
+        if (key == .special and key.special == .escape) {
+            self.pending_command = .none;
+            self.prompt.hide();
+            self.messages.clear();
+            return;
+        }
+
+        // Extract character from key input
+        const char_byte = switch (key) {
+            .char => |c| @as(u8, @intCast(c)),
+            .special => return, // Ignore other special keys
+        };
+
+        // Dispatch to appropriate completion handler based on pending command type
+        switch (self.pending_command) {
+            .none => unreachable, // Should not be called if no pending command
+
+            .find_char => |params| {
+                self.pending_command = .none;
+                self.prompt.hide();
+                try self.completeFindChar(char_byte, params.forward, params.till);
+            },
+
+            .set_mark => {
+                self.pending_command = .none;
+                self.prompt.hide();
+                try self.completeSetMark(char_byte);
+            },
+
+            .goto_mark => {
+                self.pending_command = .none;
+                self.prompt.hide();
+                try self.completeGotoMark(char_byte);
+            },
+
+            .record_macro => {
+                self.pending_command = .none;
+                self.prompt.hide();
+                try self.completeRecordMacro(char_byte);
+            },
+
+            .play_macro => {
+                self.pending_command = .none;
+                self.prompt.hide();
+                try self.completePlayMacro(char_byte);
+            },
+
+            .replace_char => {
+                self.pending_command = .none;
+                self.prompt.hide();
+                try self.completeReplaceChar(char_byte);
+            },
+        }
+
+        self.ensureCursorVisible();
     }
 
     /// Ensure cursor is visible in viewport (auto-scroll)
@@ -473,6 +582,208 @@ pub const Editor = struct {
         };
     }
 
+    // === Pending Command Completion Handlers ===
+
+    /// Complete find/till character motion with user-provided character
+    ///
+    /// Executes the find or till motion using the provided character.
+    /// Parameters (forward, till) were captured during command initiation and
+    /// passed through the PendingCommand payload, allowing a single completion
+    /// handler to serve all four variants (f/F/t/T).
+    ///
+    /// Updates find_till_state to enable repeat commands (;/,) without prompting again.
+    /// In visual mode, extends selection rather than moving cursor alone.
+    fn completeFindChar(self: *Editor, ch: u8, forward: bool, till: bool) !void {
+        const buffer = self.getActiveBuffer() orelse return error.NoActiveBuffer;
+        const primary_sel = self.selections.primary(self.allocator) orelse return error.NoSelection;
+
+        // Execute the appropriate motion
+        const new_sel = if (forward) blk: {
+            if (till) {
+                break :blk Motions.tillCharForward(primary_sel, buffer, ch);
+            } else {
+                break :blk Motions.findCharForward(primary_sel, buffer, ch);
+            }
+        } else blk: {
+            if (till) {
+                break :blk Motions.tillCharBackward(primary_sel, buffer, ch);
+            } else {
+                break :blk Motions.findCharBackward(primary_sel, buffer, ch);
+            }
+        };
+
+        // Check if motion succeeded
+        if (new_sel.head.eql(primary_sel.head)) {
+            self.messages.add("Character not found", .error_msg) catch {};
+            return;
+        }
+
+        // Update find/till state for repeat commands
+        if (forward) {
+            self.find_till_state = if (till)
+                Motions.FindTillState.tillForward(ch)
+            else
+                Motions.FindTillState.findForward(ch);
+        } else {
+            self.find_till_state = if (till)
+                Motions.FindTillState.tillBackward(ch)
+            else
+                Motions.FindTillState.findBackward(ch);
+        }
+
+        // Apply motion based on current mode
+        if (self.getMode() == .select) {
+            try self.selections.setSingleSelection(self.allocator, new_sel);
+        } else {
+            try self.selections.setSingleCursor(self.allocator, new_sel.head);
+        }
+    }
+
+    /// Complete set mark command with user-provided register
+    ///
+    /// Sets a mark at the current cursor position in the specified register.
+    /// Marks store both position and buffer_id, enabling cross-file jumps.
+    /// Invalid register names (outside a-z, A-Z) show error message but don't crash.
+    fn completeSetMark(self: *Editor, register: u8) !void {
+        const cursor_pos = self.getCursorPosition();
+        const buffer_id = self.buffer_manager.active_buffer_id orelse return error.NoActiveBuffer;
+
+        self.marks.setMark(register, cursor_pos, buffer_id) catch |err| {
+            const msg = switch (err) {
+                error.InvalidMarkName => "Invalid mark name (use a-z, A-Z)",
+                else => "Failed to set mark",
+            };
+            self.messages.add(msg, .error_msg) catch {};
+            return;
+        };
+
+        const msg = try std.fmt.allocPrint(self.allocator, "Mark '{c}' set", .{register});
+        defer self.allocator.free(msg);
+        self.messages.add(msg, .info) catch {};
+    }
+
+    /// Complete goto mark command with user-provided register
+    ///
+    /// Jumps to the mark stored in the specified register.
+    /// Automatically switches buffers if mark is in a different buffer,
+    /// enabling seamless cross-file navigation (vim-like behavior).
+    /// Unset marks show error message rather than causing crashes.
+    fn completeGotoMark(self: *Editor, register: u8) !void {
+        const mark = self.marks.getMark(register) orelse {
+            const msg = try std.fmt.allocPrint(self.allocator, "Mark '{c}' not set", .{register});
+            defer self.allocator.free(msg);
+            self.messages.add(msg, .error_msg) catch {};
+            return;
+        };
+
+        // Switch to the buffer if needed
+        if (mark.buffer_id != self.buffer_manager.active_buffer_id) {
+            self.buffer_manager.active_buffer_id = mark.buffer_id;
+        }
+
+        // Move cursor to mark position
+        try self.selections.setSingleCursor(self.allocator, mark.position);
+
+        const msg = try std.fmt.allocPrint(self.allocator, "Jumped to mark '{c}'", .{register});
+        defer self.allocator.free(msg);
+        self.messages.add(msg, .info) catch {};
+    }
+
+    /// Complete record macro command with user-provided register
+    ///
+    /// Starts recording a macro to the specified register.
+    fn completeRecordMacro(self: *Editor, register: u8) !void {
+        self.macro_recorder.startRecording(register) catch |err| {
+            const msg = switch (err) {
+                error.InvalidRegister => "Invalid register (use a-z)",
+                error.AlreadyRecording => "Already recording a macro",
+            };
+            self.messages.add(msg, .error_msg) catch {};
+            return;
+        };
+
+        const msg = try std.fmt.allocPrint(self.allocator, "Recording macro to '{c}'", .{register});
+        defer self.allocator.free(msg);
+        self.messages.add(msg, .info) catch {};
+    }
+
+    /// Complete play macro command with user-provided register
+    ///
+    /// Plays back the macro stored in the specified register.
+    /// Deserializes command names from register text (one per line),
+    /// then executes each command sequentially. Empty or missing registers
+    /// show error messages. Command failures are reported but don't halt execution
+    /// of remaining commands (vim-like graceful degradation).
+    fn completePlayMacro(self: *Editor, register: u8) !void {
+        const reg_id = Registers.RegisterId{ .named = register };
+        const content = self.registers.get(reg_id) orelse {
+            const msg = try std.fmt.allocPrint(self.allocator, "Register '{c}' is empty", .{register});
+            defer self.allocator.free(msg);
+            self.messages.add(msg, .error_msg) catch {};
+            return;
+        };
+
+        // Deserialize and execute macro commands
+        self.macro_recorder.deserializeCommands(content.text) catch {
+            self.messages.add("Failed to load macro", .error_msg) catch {};
+            return;
+        };
+
+        const commands = self.macro_recorder.getCommands();
+        if (commands.len == 0) {
+            self.messages.add("Empty macro", .error_msg) catch {};
+            return;
+        }
+
+        // Execute each command in the macro
+        for (commands) |cmd| {
+            var ctx = Command.Context{ .editor = self };
+            const result = self.command_registry.execute(cmd.name, &ctx);
+
+            switch (result) {
+                .success => {},
+                .error_msg => |msg| {
+                    // Show error but continue execution
+                    self.messages.add(msg, .error_msg) catch {};
+                },
+            }
+        }
+
+        const msg = try std.fmt.allocPrint(self.allocator, "Played macro from '{c}'", .{register});
+        defer self.allocator.free(msg);
+        self.messages.add(msg, .info) catch {};
+    }
+
+    /// Complete replace character command with user-provided character
+    ///
+    /// Replaces the character at the cursor with the specified character.
+    /// Uses delete+insert pattern because actions.zig provides no dedicated
+    /// replaceCharAt function. This achieves the same result while reusing
+    /// existing, well-tested primitives.
+    ///
+    /// Cursor position is preserved (vim 'r' command doesn't move cursor).
+    fn completeReplaceChar(self: *Editor, ch: u8) !void {
+        const buffer_id = self.buffer_manager.active_buffer_id orelse return error.NoActiveBuffer;
+        const buffer = self.buffer_manager.getBufferMut(buffer_id) orelse return error.NoActiveBuffer;
+        const primary_sel = self.selections.primary(self.allocator) orelse return error.NoSelection;
+
+        // Delete character at cursor
+        _ = Actions.deleteChar(buffer, primary_sel) catch {
+            self.messages.add("Failed to delete character", .error_msg) catch {};
+            return;
+        };
+
+        // Insert new character at same position
+        const char_str = &[_]u8{ch};
+        _ = Actions.insertText(buffer, primary_sel, char_str) catch {
+            self.messages.add("Failed to insert character", .error_msg) catch {};
+            return;
+        };
+
+        // In vim, 'r' command doesn't move the cursor
+        // No cursor movement needed
+    }
+
     pub const StatusInfo = struct {
         mode: Mode.Mode,
         buffer_name: []const u8,
@@ -528,4 +839,304 @@ test "editor: get status info" {
     const info = editor.getStatusInfo();
     try std.testing.expectEqual(Mode.Mode.normal, info.mode);
     try std.testing.expectEqual(@as(usize, 1), info.selection_count);
+}
+
+// === Prompt System Tests ===
+
+test "PendingCommand: isWaiting returns false for none" {
+    const pc = PendingCommand.none;
+    try std.testing.expect(!pc.isWaiting());
+}
+
+test "PendingCommand: isWaiting returns true for find_char" {
+    const pc = PendingCommand{ .find_char = .{ .forward = true, .till = false } };
+    try std.testing.expect(pc.isWaiting());
+}
+
+test "PendingCommand: isWaiting returns true for all variants" {
+    const variants = [_]PendingCommand{
+        .set_mark,
+        .goto_mark,
+        .record_macro,
+        .play_macro,
+        .replace_char,
+    };
+
+    for (variants) |pc| {
+        try std.testing.expect(pc.isWaiting());
+    }
+}
+
+test "completeFindChar: forward find success" {
+    const allocator = std.testing.allocator;
+    var editor = try Editor.init(allocator);
+    defer editor.deinit();
+
+    // Setup buffer with known content
+    try editor.newBuffer();
+    const buffer_id = editor.buffer_manager.active_buffer_id.?;
+    const buffer = editor.buffer_manager.getBufferMut(buffer_id).?;
+    try buffer.rope.setText("abcxyz");
+
+    // Start at position 0
+    try editor.selections.setSingleCursor(allocator, .{ .line = 0, .col = 0 });
+
+    // Execute find char 'x' forward
+    try editor.completeFindChar('x', true, false);
+
+    // Verify cursor moved to 'x' at column 3
+    const pos = editor.getCursorPosition();
+    try std.testing.expectEqual(@as(usize, 0), pos.line);
+    try std.testing.expectEqual(@as(usize, 3), pos.col);
+
+    // Verify find_till_state was updated
+    try std.testing.expect(editor.find_till_state.char != null);
+    try std.testing.expectEqual(@as(u8, 'x'), editor.find_till_state.char.?);
+}
+
+test "completeFindChar: backward find success" {
+    const allocator = std.testing.allocator;
+    var editor = try Editor.init(allocator);
+    defer editor.deinit();
+
+    // Setup buffer
+    try editor.newBuffer();
+    const buffer_id = editor.buffer_manager.active_buffer_id.?;
+    const buffer = editor.buffer_manager.getBufferMut(buffer_id).?;
+    try buffer.rope.setText("abcxyz");
+
+    // Start at end
+    try editor.selections.setSingleCursor(allocator, .{ .line = 0, .col = 5 });
+
+    // Execute find char 'x' backward
+    try editor.completeFindChar('x', false, false);
+
+    // Verify cursor moved to 'x'
+    const pos = editor.getCursorPosition();
+    try std.testing.expectEqual(@as(usize, 3), pos.col);
+}
+
+test "completeFindChar: character not found" {
+    const allocator = std.testing.allocator;
+    var editor = try Editor.init(allocator);
+    defer editor.deinit();
+
+    try editor.newBuffer();
+    const buffer_id = editor.buffer_manager.active_buffer_id.?;
+    const buffer = editor.buffer_manager.getBufferMut(buffer_id).?;
+    try buffer.rope.setText("abcdef");
+
+    // Start at position 0
+    try editor.selections.setSingleCursor(allocator, .{ .line = 0, .col = 0 });
+
+    // Execute find char 'x' (doesn't exist)
+    try editor.completeFindChar('x', true, false);
+
+    // Verify cursor didn't move
+    const pos = editor.getCursorPosition();
+    try std.testing.expectEqual(@as(usize, 0), pos.col);
+}
+
+test "completeFindChar: till forward stops before char" {
+    const allocator = std.testing.allocator;
+    var editor = try Editor.init(allocator);
+    defer editor.deinit();
+
+    try editor.newBuffer();
+    const buffer_id = editor.buffer_manager.active_buffer_id.?;
+    const buffer = editor.buffer_manager.getBufferMut(buffer_id).?;
+    try buffer.rope.setText("abcxyz");
+
+    try editor.selections.setSingleCursor(allocator, .{ .line = 0, .col = 0 });
+
+    // Execute till char 'x' (should stop at column 2, before 'x')
+    try editor.completeFindChar('x', true, true);
+
+    const pos = editor.getCursorPosition();
+    try std.testing.expectEqual(@as(usize, 2), pos.col);
+}
+
+test "completeSetMark: valid register" {
+    const allocator = std.testing.allocator;
+    var editor = try Editor.init(allocator);
+    defer editor.deinit();
+
+    try editor.newBuffer();
+    try editor.selections.setSingleCursor(allocator, .{ .line = 0, .col = 5 });
+
+    // Set mark 'a'
+    try editor.completeSetMark('a');
+
+    // Verify mark was set
+    const mark = editor.marks.getMark('a');
+    try std.testing.expect(mark != null);
+    try std.testing.expectEqual(@as(usize, 5), mark.?.position.col);
+}
+
+test "completeSetMark: invalid register shows error" {
+    const allocator = std.testing.allocator;
+    var editor = try Editor.init(allocator);
+    defer editor.deinit();
+
+    try editor.newBuffer();
+
+    // Try to set mark with invalid register (number)
+    try editor.completeSetMark('1');
+
+    // Verify no crash occurred (error was handled gracefully)
+    // Note: We can't easily verify the error message without exposing messages.items
+}
+
+test "completeGotoMark: jump to existing mark" {
+    const allocator = std.testing.allocator;
+    var editor = try Editor.init(allocator);
+    defer editor.deinit();
+
+    try editor.newBuffer();
+    const buffer_id = editor.buffer_manager.active_buffer_id.?;
+
+    // Set mark at position 10
+    try editor.selections.setSingleCursor(allocator, .{ .line = 0, .col = 10 });
+    try editor.marks.setMark('a', .{ .line = 0, .col = 10 }, buffer_id);
+
+    // Move to different position
+    try editor.selections.setSingleCursor(allocator, .{ .line = 0, .col = 0 });
+
+    // Jump to mark
+    try editor.completeGotoMark('a');
+
+    // Verify cursor moved to mark
+    const pos = editor.getCursorPosition();
+    try std.testing.expectEqual(@as(usize, 10), pos.col);
+}
+
+test "completeGotoMark: unset mark shows error" {
+    const allocator = std.testing.allocator;
+    var editor = try Editor.init(allocator);
+    defer editor.deinit();
+
+    try editor.newBuffer();
+
+    // Try to jump to unset mark
+    try editor.completeGotoMark('z');
+
+    // Verify no crash (error handled gracefully)
+}
+
+test "completeRecordMacro: valid register starts recording" {
+    const allocator = std.testing.allocator;
+    var editor = try Editor.init(allocator);
+    defer editor.deinit();
+
+    // Start recording
+    try editor.completeRecordMacro('a');
+
+    // Verify recording started
+    try std.testing.expect(editor.macro_recorder.isRecording());
+    try std.testing.expectEqual(@as(?u8, 'a'), editor.macro_recorder.getRecordingRegister());
+}
+
+test "completeRecordMacro: invalid register shows error" {
+    const allocator = std.testing.allocator;
+    var editor = try Editor.init(allocator);
+    defer editor.deinit();
+
+    // Try to record with invalid register
+    try editor.completeRecordMacro('1');
+
+    // Verify recording didn't start
+    try std.testing.expect(!editor.macro_recorder.isRecording());
+}
+
+test "completePlayMacro: empty register shows error" {
+    const allocator = std.testing.allocator;
+    var editor = try Editor.init(allocator);
+    defer editor.deinit();
+
+    try editor.newBuffer();
+
+    // Try to play empty register
+    try editor.completePlayMacro('z');
+
+    // Verify no crash (error handled gracefully)
+}
+
+test "completeReplaceChar: replaces character at cursor" {
+    const allocator = std.testing.allocator;
+    var editor = try Editor.init(allocator);
+    defer editor.deinit();
+
+    try editor.newBuffer();
+    const buffer_id = editor.buffer_manager.active_buffer_id.?;
+    const buffer = editor.buffer_manager.getBufferMut(buffer_id).?;
+    try buffer.rope.setText("abcdef");
+
+    // Position cursor at 'a'
+    try editor.selections.setSingleCursor(allocator, .{ .line = 0, .col = 0 });
+
+    // Replace 'a' with 'X'
+    try editor.completeReplaceChar('X');
+
+    // Verify text was replaced
+    const text = try buffer.rope.toString(allocator);
+    defer allocator.free(text);
+    try std.testing.expect(std.mem.startsWith(u8, text, "Xbcdef"));
+}
+
+test "handlePendingCommandInput: escape cancels pending command" {
+    const allocator = std.testing.allocator;
+    var editor = try Editor.init(allocator);
+    defer editor.deinit();
+
+    try editor.newBuffer();
+
+    // Set pending command
+    editor.pending_command = PendingCommand{ .find_char = .{ .forward = true, .till = false } };
+    editor.prompt.show("Test:", .character);
+
+    // Press escape
+    try editor.handlePendingCommandInput(Keymap.Key{ .special = .escape });
+
+    // Verify pending command was cleared
+    try std.testing.expect(!editor.pending_command.isWaiting());
+}
+
+test "handlePendingCommandInput: special keys ignored" {
+    const allocator = std.testing.allocator;
+    var editor = try Editor.init(allocator);
+    defer editor.deinit();
+
+    try editor.newBuffer();
+
+    // Set pending command
+    editor.pending_command = PendingCommand{ .find_char = .{ .forward = true, .till = false } };
+
+    // Press arrow key (should be ignored)
+    try editor.handlePendingCommandInput(Keymap.Key{ .special = .arrow_right });
+
+    // Verify still waiting for input
+    try std.testing.expect(editor.pending_command.isWaiting());
+}
+
+test "handlePendingCommandInput: character dispatches to handler" {
+    const allocator = std.testing.allocator;
+    var editor = try Editor.init(allocator);
+    defer editor.deinit();
+
+    try editor.newBuffer();
+    const buffer_id = editor.buffer_manager.active_buffer_id.?;
+    const buffer = editor.buffer_manager.getBufferMut(buffer_id).?;
+    try buffer.rope.setText("abcxyz");
+
+    // Set pending find_char command
+    editor.pending_command = PendingCommand{ .find_char = .{ .forward = true, .till = false } };
+    try editor.selections.setSingleCursor(allocator, .{ .line = 0, .col = 0 });
+
+    // Send character 'x'
+    try editor.handlePendingCommandInput(Keymap.Key{ .char = 'x' });
+
+    // Verify command completed and cursor moved
+    try std.testing.expect(!editor.pending_command.isWaiting());
+    const pos = editor.getCursorPosition();
+    try std.testing.expectEqual(@as(usize, 3), pos.col);
 }

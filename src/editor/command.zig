@@ -4,7 +4,9 @@
 const std = @import("std");
 
 // Forward declare Editor to avoid circular dependency
-pub const Editor = @import("editor.zig").Editor;
+const EditorModule = @import("editor.zig");
+pub const Editor = EditorModule.Editor;
+const PendingCommand = EditorModule.PendingCommand;
 
 /// Command context - passed to command handlers
 pub const Context = struct {
@@ -253,78 +255,48 @@ fn jumpToMatchingBracket(ctx: *Context) Result {
 
 // Find/Till Character Motions
 
+/// Find character forward (f command)
+///
+/// Initiates find-forward motion by activating the prompt system.
+/// Completion occurs in completeFindChar after user provides character input.
+/// Updates find_till_state for repeat commands (;/,).
 fn findCharForward(ctx: *Context) Result {
-    // TODO: Get character from user input (prompt system)
-    // For now, use 'e' as example
-    const ch: u8 = 'e';
-
-    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
-    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
-
-    const new_sel = Motions.findCharForward(primary_sel, buffer, ch);
-
-    if (new_sel.head.eql(primary_sel.head)) {
-        return Result.err("Character not found");
-    }
-
-    // Update find/till state for repeat
-    ctx.editor.find_till_state = Motions.FindTillState.findForward(ch);
-
-    return applyMotion(ctx, new_sel);
+    ctx.editor.pending_command = PendingCommand{ .find_char = .{ .forward = true, .till = false } };
+    ctx.editor.prompt.show("Find char:", .character);
+    return Result.ok();
 }
 
+/// Find character backward (F command)
+///
+/// Initiates find-backward motion by activating the prompt system.
+/// Completion occurs in completeFindChar after user provides character input.
+/// Updates find_till_state for repeat commands (;/,).
 fn findCharBackward(ctx: *Context) Result {
-    // TODO: Get character from user input (prompt system)
-    const ch: u8 = 'e';
-
-    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
-    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
-
-    const new_sel = Motions.findCharBackward(primary_sel, buffer, ch);
-
-    if (new_sel.head.eql(primary_sel.head)) {
-        return Result.err("Character not found");
-    }
-
-    ctx.editor.find_till_state = Motions.FindTillState.findBackward(ch);
-
-    return applyMotion(ctx, new_sel);
+    ctx.editor.pending_command = PendingCommand{ .find_char = .{ .forward = false, .till = false } };
+    ctx.editor.prompt.show("Find char backward:", .character);
+    return Result.ok();
 }
 
+/// Till character forward (t command)
+///
+/// Initiates till-forward motion (stops before target character).
+/// Completion occurs in completeFindChar after user provides character input.
+/// Updates find_till_state for repeat commands (;/,).
 fn tillCharForward(ctx: *Context) Result {
-    // TODO: Get character from user input (prompt system)
-    const ch: u8 = 'e';
-
-    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
-    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
-
-    const new_sel = Motions.tillCharForward(primary_sel, buffer, ch);
-
-    if (new_sel.head.eql(primary_sel.head)) {
-        return Result.err("Character not found");
-    }
-
-    ctx.editor.find_till_state = Motions.FindTillState.tillForward(ch);
-
-    return applyMotion(ctx, new_sel);
+    ctx.editor.pending_command = PendingCommand{ .find_char = .{ .forward = true, .till = true } };
+    ctx.editor.prompt.show("Till char:", .character);
+    return Result.ok();
 }
 
+/// Till character backward (T command)
+///
+/// Initiates till-backward motion (stops after target character).
+/// Completion occurs in completeFindChar after user provides character input.
+/// Updates find_till_state for repeat commands (;/,).
 fn tillCharBackward(ctx: *Context) Result {
-    // TODO: Get character from user input (prompt system)
-    const ch: u8 = 'e';
-
-    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
-    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
-
-    const new_sel = Motions.tillCharBackward(primary_sel, buffer, ch);
-
-    if (new_sel.head.eql(primary_sel.head)) {
-        return Result.err("Character not found");
-    }
-
-    ctx.editor.find_till_state = Motions.FindTillState.tillBackward(ch);
-
-    return applyMotion(ctx, new_sel);
+    ctx.editor.pending_command = PendingCommand{ .find_char = .{ .forward = false, .till = true } };
+    ctx.editor.prompt.show("Till char backward:", .character);
+    return Result.ok();
 }
 
 fn repeatFindTill(ctx: *Context) Result {
@@ -1609,54 +1581,21 @@ fn changeInnerBrace(ctx: *Context) Result {
     return Result.err("No active buffer");
 }
 
-/// Set mark at current cursor position
+/// Set mark at cursor position (m command)
+///
+/// Initiates mark-setting by activating the prompt system.
+/// Completion occurs in completeSetMark after user provides register name.
+/// Marks persist across buffers and can be used for cross-file navigation.
 fn setMark(ctx: *Context) Result {
-    // TODO: Get mark name from user input (for now, use 'a')
-    const mark_name: u8 = 'a';
-
-    const buffer_id = ctx.editor.buffer_manager.active_buffer_id orelse {
-        return Result.err("No active buffer");
-    };
-
-    const cursor_pos = ctx.editor.getCursorPosition();
-
-    ctx.editor.marks.setMark(mark_name, cursor_pos, buffer_id) catch {
-        return Result.err("Failed to set mark");
-    };
-
-    var buf: [32]u8 = undefined;
-    const msg = std.fmt.bufPrint(&buf, "Mark '{c}' set", .{mark_name}) catch "Mark set";
-    ctx.editor.messages.add(msg, .info) catch {};
-
+    ctx.editor.pending_command = .set_mark;
+    ctx.editor.prompt.show("Mark:", .character);
     return Result.ok();
 }
 
 /// Jump to mark
 fn jumpToMark(ctx: *Context) Result {
-    // TODO: Get mark name from user input (for now, use 'a')
-    const mark_name: u8 = 'a';
-
-    const mark = ctx.editor.marks.getMark(mark_name);
-    if (mark == null) {
-        var buf: [32]u8 = undefined;
-        const msg = std.fmt.bufPrint(&buf, "Mark '{c}' not set", .{mark_name}) catch "Mark not found";
-        return Result.err(msg);
-    }
-
-    // Switch to the buffer if needed
-    if (mark.?.buffer_id != ctx.editor.buffer_manager.active_buffer_id) {
-        ctx.editor.buffer_manager.active_buffer_id = mark.?.buffer_id;
-    }
-
-    // Move cursor to mark position
-    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, mark.?.position) catch {
-        return Result.err("Failed to move cursor");
-    };
-
-    var buf: [32]u8 = undefined;
-    const msg = std.fmt.bufPrint(&buf, "Jumped to mark '{c}'", .{mark_name}) catch "Jumped to mark";
-    ctx.editor.messages.add(msg, .info) catch {};
-
+    ctx.editor.pending_command = .goto_mark;
+    ctx.editor.prompt.show("Go to mark:", .character);
     return Result.ok();
 }
 
@@ -2954,23 +2893,15 @@ fn replaceAll(ctx: *Context) Result {
 
 // === Macro Commands ===
 
-/// Start recording macro to register
+/// Start recording macro (q command)
+///
+/// Initiates macro recording by activating the prompt system.
+/// Completion occurs in completeRecordMacro after user provides register name.
+/// Subsequent commands are captured until stopMacroRecording is called.
+/// Macros are stored in registers (a-z) and persist across sessions.
 fn startMacroRecording(ctx: *Context) Result {
-    // NOTE: Full integration requires user input for register selection
-    // For now, use 'q' as default register
-    const register: u8 = 'q'; // TODO: Prompt for register (a-z)
-
-    ctx.editor.macro_recorder.startRecording(register) catch |err| {
-        return switch (err) {
-            error.AlreadyRecording => Result.err("Already recording macro"),
-            error.InvalidRegister => Result.err("Invalid register (use a-z)"),
-        };
-    };
-
-    var msg_buf: [32]u8 = undefined;
-    const msg = std.fmt.bufPrint(&msg_buf, "Recording @{c}", .{register}) catch "Recording macro";
-    ctx.editor.messages.add(msg, .info) catch {};
-
+    ctx.editor.pending_command = .record_macro;
+    ctx.editor.prompt.show("Record macro to register:", .character);
     return Result.ok();
 }
 
@@ -2989,53 +2920,8 @@ fn stopMacroRecording(ctx: *Context) Result {
 
 /// Play macro from register
 fn playMacro(ctx: *Context) Result {
-    // NOTE: Full integration requires user input for register selection
-    // For now, use 'q' as default register
-    const register: u8 = 'q'; // TODO: Prompt for register (a-z)
-
-    // Get macro from register
-    const reg_id = Registers.RegisterId{ .named = register };
-    const content = ctx.editor.registers.get(reg_id) orelse {
-        var msg_buf: [32]u8 = undefined;
-        const msg = std.fmt.bufPrint(&msg_buf, "Register @{c} empty", .{register}) catch "Register empty";
-        return Result.err(msg);
-    };
-
-    // Deserialize commands
-    ctx.editor.macro_recorder.deserializeCommands(content.text) catch {
-        return Result.err("Failed to load macro");
-    };
-
-    const commands = ctx.editor.macro_recorder.getCommands();
-    if (commands.len == 0) {
-        return Result.err("Empty macro");
-    }
-
-    // Get playback count
-    const count = ctx.editor.macro_recorder.consumePlaybackCount();
-
-    // Execute commands (count times)
-    var i: usize = 0;
-    while (i < count) : (i += 1) {
-        for (commands) |cmd| {
-            // Execute command via registry
-            const result = ctx.editor.command_registry.execute(cmd.name, ctx);
-
-            // Check result
-            switch (result) {
-                .success => {},
-                .error_msg => |msg| {
-                    // Show error but continue
-                    ctx.editor.messages.add(msg, .error_msg) catch {};
-                },
-            }
-        }
-    }
-
-    var msg_buf: [64]u8 = undefined;
-    const msg = std.fmt.bufPrint(&msg_buf, "Played @{c} {d}x ({d} commands)", .{ register, count, commands.len }) catch "Macro complete";
-    ctx.editor.messages.add(msg, .success) catch {};
-
+    ctx.editor.pending_command = .play_macro;
+    ctx.editor.prompt.show("Play macro from register:", .character);
     return Result.ok();
 }
 
