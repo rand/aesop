@@ -555,6 +555,26 @@ fn undo(ctx: *Context) Result {
     return Result.ok();
 }
 
+/// Save current buffer
+fn saveBuffer(ctx: *Context) Result {
+    ctx.editor.save() catch |err| {
+        const msg = switch (err) {
+            error.NoActiveBuffer => "No active buffer to save",
+            error.NoFilePath => "No file path (use save_as)",
+            else => "Failed to save file",
+        };
+        return Result.err(msg);
+    };
+
+    ctx.editor.messages.add("File saved", .success) catch {};
+    return Result.ok();
+}
+
+/// Write buffer (alias for save)
+fn writeBuffer(ctx: *Context) Result {
+    return saveBuffer(ctx);
+}
+
 /// Toggle command palette
 fn togglePalette(ctx: *Context) Result {
     if (ctx.editor.palette.visible) {
@@ -815,6 +835,21 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .description = "Toggle command palette (Space P)",
         .handler = togglePalette,
         .category = .system,
+    });
+
+    // File operations
+    try registry.register(.{
+        .name = "save",
+        .description = "Save current buffer (Space W)",
+        .handler = saveBuffer,
+        .category = .file,
+    });
+
+    try registry.register(.{
+        .name = "write",
+        .description = "Write current buffer (alias for save)",
+        .handler = writeBuffer,
+        .category = .file,
     });
 }
 

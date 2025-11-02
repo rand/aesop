@@ -130,10 +130,44 @@ pub const Editor = struct {
                     self.messages.add(msg, .error_msg) catch {};
                 },
             }
+
+            // Auto-scroll viewport to follow cursor
+            self.ensureCursorVisible();
         } else if (mode.acceptsTextInput()) {
             // Handle text input in insert/command mode
             try self.handleTextInput(key);
+
+            // Auto-scroll viewport to follow cursor
+            self.ensureCursorVisible();
         }
+    }
+
+    /// Ensure cursor is visible in viewport (auto-scroll)
+    pub fn ensureCursorVisible(self: *Editor) void {
+        const cursor_pos = self.getCursorPosition();
+        const buffer = self.getActiveBuffer() orelse return;
+        const total_lines = buffer.lineCount();
+
+        // Assume standard terminal height for now (will be passed from renderer later)
+        const viewport_height: usize = 24;
+        const visible_lines = viewport_height -| 2; // Reserve for status
+
+        // Calculate desired viewport bounds
+        const viewport_end = self.scroll_offset + visible_lines;
+
+        // Scroll down if cursor is below viewport
+        if (cursor_pos.line >= viewport_end) {
+            self.scroll_offset = cursor_pos.line -| (visible_lines - 1);
+        }
+
+        // Scroll up if cursor is above viewport
+        if (cursor_pos.line < self.scroll_offset) {
+            self.scroll_offset = cursor_pos.line;
+        }
+
+        // Clamp to valid range
+        const max_scroll = if (total_lines > visible_lines) total_lines - visible_lines else 0;
+        self.scroll_offset = @min(self.scroll_offset, max_scroll);
     }
 
     /// Handle text input (characters, newlines, backspace, tab)

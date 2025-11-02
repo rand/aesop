@@ -285,6 +285,9 @@ pub fn setupDefaults(manager: *KeymapManager) !void {
     // Command palette
     try normal_map.bind(Binding.fromChord(.{ .char = ' ' }, .{ .char = 'p' }, "toggle_palette"));
 
+    // File operations
+    try normal_map.bind(Binding.fromChord(.{ .char = ' ' }, .{ .char = 'w' }, "save"));
+
     // Insert mode bindings
     const insert_map = manager.getKeymap(.insert);
     try insert_map.bind(Binding.fromSingleKey(.{ .special = .escape }, "normal_mode"));
