@@ -3,9 +3,13 @@
 
 const std = @import("std");
 const Editor = @import("editor/editor.zig").Editor;
-const Renderer = @import("render/renderer.zig").Renderer;
+const Cursor = @import("editor/cursor.zig");
+const renderer_mod = @import("render/renderer.zig");
+const Renderer = renderer_mod.Renderer;
+const Attrs = renderer_mod.Attrs;
 const statusline = @import("render/statusline.zig");
 const messageline = @import("render/messageline.zig");
+const keyhints = @import("render/keyhints.zig");
 const gutter = @import("render/gutter.zig");
 const input_mod = @import("terminal/input.zig");
 const Keymap = @import("editor/keymap.zig");
@@ -154,6 +158,9 @@ pub const EditorApp = struct {
         // Render status line
         try statusline.render(&self.renderer, &self.editor);
 
+        // Render key hints (overlays on status line)
+        try keyhints.render(&self.renderer, &self.editor);
+
         // Perform render
         try self.renderer.render();
     }
@@ -164,6 +171,11 @@ pub const EditorApp = struct {
 
         const viewport = self.editor.getViewport(visible_lines);
         const gutter_width = gutter.calculateWidth(self.gutter_config, buffer.lineCount());
+
+        // Get selection (for highlighting)
+        const primary_sel = self.editor.selections.primary(self.allocator) orelse return;
+        const in_visual_mode = self.editor.getMode() == .select and !primary_sel.isCollapsed();
+        const sel_range = if (in_visual_mode) primary_sel.range() else null;
 
         // Get buffer text
         const text = try buffer.getText();
@@ -195,15 +207,32 @@ pub const EditorApp = struct {
 
             const line_text = text[line_start..line_end];
 
-            // Render line
-            self.renderer.writeText(
-                row,
-                gutter_width,
-                line_text,
-                .default,
-                .default,
-                .{},
-            );
+            // Check if this line has selection
+            const line_has_selection = if (sel_range) |range|
+                (line_num >= range.start.line and line_num <= range.end.line)
+            else
+                false;
+
+            if (line_has_selection and sel_range != null) {
+                // Render line character by character with selection highlighting
+                try self.renderLineWithSelection(
+                    row,
+                    gutter_width,
+                    line_text,
+                    line_num,
+                    sel_range.?,
+                );
+            } else {
+                // Render line normally
+                self.renderer.writeText(
+                    row,
+                    gutter_width,
+                    line_text,
+                    .default,
+                    .default,
+                    .{},
+                );
+            }
 
             // Move to next line
             i = if (line_end < text.len) line_end + 1 else line_end;
@@ -211,6 +240,58 @@ pub const EditorApp = struct {
             row += 1;
 
             if (row >= visible_lines) break;
+        }
+    }
+
+    /// Render a line with selection highlighting
+    fn renderLineWithSelection(
+        self: *EditorApp,
+        row: u16,
+        start_col: u16,
+        line_text: []const u8,
+        line_num: usize,
+        sel_range: anytype,
+    ) !void {
+        var col: usize = 0;
+        var screen_col = start_col;
+
+        while (col < line_text.len) : (col += 1) {
+            // Determine if this character is in selection
+            const is_selected = blk: {
+                // Check if on selection start line
+                if (line_num == sel_range.start.line and line_num == sel_range.end.line) {
+                    // Single line selection
+                    break :blk col >= sel_range.start.col and col < sel_range.end.col;
+                } else if (line_num == sel_range.start.line) {
+                    // Start of multi-line selection
+                    break :blk col >= sel_range.start.col;
+                } else if (line_num == sel_range.end.line) {
+                    // End of multi-line selection
+                    break :blk col < sel_range.end.col;
+                } else if (line_num > sel_range.start.line and line_num < sel_range.end.line) {
+                    // Middle of multi-line selection
+                    break :blk true;
+                } else {
+                    break :blk false;
+                }
+            };
+
+            const char_slice = line_text[col .. col + 1];
+            const attrs = if (is_selected)
+                Attrs{ .reverse = true }
+            else
+                Attrs{};
+
+            self.renderer.writeText(
+                row,
+                screen_col,
+                char_slice,
+                .default,
+                .default,
+                attrs,
+            );
+
+            screen_col += 1;
         }
     }
 };
