@@ -220,6 +220,22 @@ fn moveFileEnd(ctx: *Context) Result {
     return applyMotion(ctx, new_sel);
 }
 
+/// Jump to matching bracket
+fn jumpToMatchingBracket(ctx: *Context) Result {
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+    const new_sel = Motions.jumpToMatchingBracket(primary_sel, buffer) catch {
+        return Result.err("Failed to find matching bracket");
+    };
+
+    if (new_sel.head.eql(primary_sel.head)) {
+        return Result.err("No matching bracket found");
+    }
+
+    return applyMotion(ctx, new_sel);
+}
+
 fn insertMode(ctx: *Context) Result {
     ctx.editor.enterInsertMode() catch return Result.err("Failed to enter insert mode");
     return Result.ok();
@@ -573,6 +589,69 @@ fn saveBuffer(ctx: *Context) Result {
 /// Write buffer (alias for save)
 fn writeBuffer(ctx: *Context) Result {
     return saveBuffer(ctx);
+}
+
+/// Save all modified buffers
+fn saveAllBuffers(ctx: *Context) Result {
+    var saved_count: usize = 0;
+    var skipped_count: usize = 0;
+
+    // Access buffers mutably through buffer_manager
+    for (ctx.editor.buffer_manager.buffers.items) |*buffer| {
+        if (buffer.metadata.modified) {
+            if (buffer.metadata.filepath != null) {
+                buffer.save() catch {
+                    skipped_count += 1;
+                    continue;
+                };
+                saved_count += 1;
+            } else {
+                // Skip unsaved buffers without filepath
+                skipped_count += 1;
+            }
+        }
+    }
+
+    if (saved_count == 0 and skipped_count == 0) {
+        ctx.editor.messages.add("No modified buffers", .info) catch {};
+        return Result.ok();
+    }
+
+    var msg_buf: [128]u8 = undefined;
+    const msg = if (skipped_count > 0)
+        std.fmt.bufPrint(&msg_buf, "Saved {d} buffer(s), skipped {d}", .{ saved_count, skipped_count }) catch "Saved buffers"
+    else
+        std.fmt.bufPrint(&msg_buf, "Saved {d} buffer(s)", .{saved_count}) catch "Saved buffers";
+
+    ctx.editor.messages.add(msg, .success) catch {};
+    return Result.ok();
+}
+
+/// Force close current buffer without saving
+fn forceCloseBuffer(ctx: *Context) Result {
+    const current_id = ctx.editor.buffer_manager.active_buffer_id orelse {
+        return Result.err("No active buffer");
+    };
+
+    const buffers = ctx.editor.buffer_manager.listBuffers();
+
+    // If this is the only buffer, create an empty one first
+    if (buffers.len == 1) {
+        _ = ctx.editor.buffer_manager.createEmpty() catch {
+            return Result.err("Failed to create new buffer");
+        };
+    }
+
+    ctx.editor.buffer_manager.closeBuffer(current_id) catch {
+        return Result.err("Failed to close buffer");
+    };
+
+    // Reset selections for new buffer
+    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, .{ .line = 0, .col = 0 }) catch {};
+    ctx.editor.scroll_offset = 0;
+
+    ctx.editor.messages.add("Buffer closed", .info) catch {};
+    return Result.ok();
 }
 
 /// Toggle command palette
@@ -1845,6 +1924,13 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .category = .motion,
     });
 
+    try registry.register(.{
+        .name = "jump_to_matching_bracket",
+        .description = "Jump to matching bracket/brace/paren (%)",
+        .handler = jumpToMatchingBracket,
+        .category = .motion,
+    });
+
     // Mode commands
     try registry.register(.{
         .name = "insert_mode",
@@ -2098,6 +2184,27 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .name = "write",
         .description = "Write current buffer (alias for save)",
         .handler = writeBuffer,
+        .category = .file,
+    });
+
+    try registry.register(.{
+        .name = "save_all",
+        .description = "Save all modified buffers",
+        .handler = saveAllBuffers,
+        .category = .file,
+    });
+
+    try registry.register(.{
+        .name = "close_buffer",
+        .description = "Close current buffer (warns if modified)",
+        .handler = closeCurrentBuffer,
+        .category = .file,
+    });
+
+    try registry.register(.{
+        .name = "force_close_buffer",
+        .description = "Force close buffer without saving",
+        .handler = forceCloseBuffer,
         .category = .file,
     });
 

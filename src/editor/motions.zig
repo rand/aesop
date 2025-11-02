@@ -284,6 +284,137 @@ fn isWordChar(ch: u8) bool {
         ch == '_';
 }
 
+/// Check if character is an opening bracket
+fn isOpenBracket(ch: u8) bool {
+    return ch == '(' or ch == '[' or ch == '{';
+}
+
+/// Check if character is a closing bracket
+fn isCloseBracket(ch: u8) bool {
+    return ch == ')' or ch == ']' or ch == '}';
+}
+
+/// Get matching bracket character
+fn getMatchingBracket(ch: u8) ?u8 {
+    return switch (ch) {
+        '(' => ')',
+        ')' => '(',
+        '[' => ']',
+        ']' => '[',
+        '{' => '}',
+        '}' => '{',
+        else => null,
+    };
+}
+
+/// Jump to matching bracket/brace/parenthesis
+pub fn jumpToMatchingBracket(selection: Cursor.Selection, buffer: *const Buffer.Buffer) !Cursor.Selection {
+    const allocator = std.heap.page_allocator;
+
+    // Get buffer text
+    const text = try buffer.rope.toString(allocator);
+    defer allocator.free(text);
+
+    if (text.len == 0) return selection;
+
+    // Convert position to byte offset
+    var offset: usize = 0;
+    var line: usize = 0;
+    var col: usize = 0;
+
+    while (offset < text.len) {
+        if (line == selection.head.line and col == selection.head.col) {
+            break;
+        }
+        if (text[offset] == '\n') {
+            line += 1;
+            col = 0;
+        } else {
+            col += 1;
+        }
+        offset += 1;
+    }
+
+    if (offset >= text.len) return selection;
+
+    const current_char = text[offset];
+    const matching_char = getMatchingBracket(current_char) orelse return selection;
+
+    // Determine search direction
+    const is_forward = isOpenBracket(current_char);
+    var search_offset = offset;
+    var depth: i32 = 1;
+
+    if (is_forward) {
+        // Search forward
+        search_offset += 1;
+        while (search_offset < text.len) {
+            const ch = text[search_offset];
+            if (ch == current_char) {
+                depth += 1;
+            } else if (ch == matching_char) {
+                depth -= 1;
+                if (depth == 0) {
+                    // Found matching bracket
+                    var match_line: usize = 0;
+                    var match_col: usize = 0;
+                    var i: usize = 0;
+                    while (i <= search_offset) : (i += 1) {
+                        if (text[i] == '\n') {
+                            match_line += 1;
+                            match_col = 0;
+                        } else {
+                            match_col += 1;
+                        }
+                    }
+                    // Adjust for the last character
+                    if (match_col > 0) match_col -= 1;
+
+                    return selection.moveTo(.{ .line = match_line, .col = match_col });
+                }
+            }
+            search_offset += 1;
+        }
+    } else {
+        // Search backward
+        if (search_offset == 0) return selection;
+        search_offset -= 1;
+
+        while (true) {
+            const ch = text[search_offset];
+            if (ch == current_char) {
+                depth += 1;
+            } else if (ch == matching_char) {
+                depth -= 1;
+                if (depth == 0) {
+                    // Found matching bracket
+                    var match_line: usize = 0;
+                    var match_col: usize = 0;
+                    var i: usize = 0;
+                    while (i <= search_offset) : (i += 1) {
+                        if (text[i] == '\n') {
+                            match_line += 1;
+                            match_col = 0;
+                        } else {
+                            match_col += 1;
+                        }
+                    }
+                    // Adjust for the last character
+                    if (match_col > 0) match_col -= 1;
+
+                    return selection.moveTo(.{ .line = match_line, .col = match_col });
+                }
+            }
+
+            if (search_offset == 0) break;
+            search_offset -= 1;
+        }
+    }
+
+    // No matching bracket found
+    return selection;
+}
+
 // === Tests ===
 
 test "motion: move left" {
