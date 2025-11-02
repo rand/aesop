@@ -155,6 +155,7 @@ const Motions = @import("motions.zig");
 const Actions = @import("actions.zig");
 const Cursor = @import("cursor.zig");
 const Undo = @import("undo.zig");
+const Registers = @import("registers.zig");
 const Buffer = @import("../buffer/manager.zig");
 
 fn moveLeft(ctx: *Context) Result {
@@ -2951,6 +2952,93 @@ fn replaceAll(ctx: *Context) Result {
     return Result.err("No active buffer");
 }
 
+// === Macro Commands ===
+
+/// Start recording macro to register
+fn startMacroRecording(ctx: *Context) Result {
+    // NOTE: Full integration requires user input for register selection
+    // For now, use 'q' as default register
+    const register: u8 = 'q'; // TODO: Prompt for register (a-z)
+
+    ctx.editor.macro_recorder.startRecording(register) catch |err| {
+        return switch (err) {
+            error.AlreadyRecording => Result.err("Already recording macro"),
+            error.InvalidRegister => Result.err("Invalid register (use a-z)"),
+        };
+    };
+
+    var msg_buf: [32]u8 = undefined;
+    const msg = std.fmt.bufPrint(&msg_buf, "Recording @{c}", .{register}) catch "Recording macro";
+    ctx.editor.messages.add(msg, .info) catch {};
+
+    return Result.ok();
+}
+
+/// Stop recording macro
+fn stopMacroRecording(ctx: *Context) Result {
+    ctx.editor.macro_recorder.stopRecording(&ctx.editor.registers) catch |err| {
+        return switch (err) {
+            error.NotRecording => Result.err("Not recording"),
+            else => Result.err("Failed to stop recording"),
+        };
+    };
+
+    ctx.editor.messages.add("Macro saved", .success) catch {};
+    return Result.ok();
+}
+
+/// Play macro from register
+fn playMacro(ctx: *Context) Result {
+    // NOTE: Full integration requires user input for register selection
+    // For now, use 'q' as default register
+    const register: u8 = 'q'; // TODO: Prompt for register (a-z)
+
+    // Get macro from register
+    const reg_id = Registers.RegisterId{ .named = register };
+    const content = ctx.editor.registers.get(reg_id) orelse {
+        var msg_buf: [32]u8 = undefined;
+        const msg = std.fmt.bufPrint(&msg_buf, "Register @{c} empty", .{register}) catch "Register empty";
+        return Result.err(msg);
+    };
+
+    // Deserialize commands
+    ctx.editor.macro_recorder.deserializeCommands(content.text) catch {
+        return Result.err("Failed to load macro");
+    };
+
+    const commands = ctx.editor.macro_recorder.getCommands();
+    if (commands.len == 0) {
+        return Result.err("Empty macro");
+    }
+
+    // Get playback count
+    const count = ctx.editor.macro_recorder.consumePlaybackCount();
+
+    // Execute commands (count times)
+    var i: usize = 0;
+    while (i < count) : (i += 1) {
+        for (commands) |cmd| {
+            // Execute command via registry
+            const result = ctx.editor.command_registry.execute(cmd.name, ctx);
+
+            // Check result
+            switch (result) {
+                .success => {},
+                .error_msg => |msg| {
+                    // Show error but continue
+                    ctx.editor.messages.add(msg, .error_msg) catch {};
+                },
+            }
+        }
+    }
+
+    var msg_buf: [64]u8 = undefined;
+    const msg = std.fmt.bufPrint(&msg_buf, "Played @{c} {d}x ({d} commands)", .{ register, count, commands.len }) catch "Macro complete";
+    ctx.editor.messages.add(msg, .success) catch {};
+
+    return Result.ok();
+}
+
 /// Register all built-in commands
 pub fn registerBuiltins(registry: *Registry) !void {
     // Motion commands - basic
@@ -3807,6 +3895,28 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .description = "Cancel search (Escape)",
         .handler = cancelSearch,
         .category = .search,
+    });
+
+    // Macro commands
+    try registry.register(.{
+        .name = "start_macro_recording",
+        .description = "Start recording macro (q)",
+        .handler = startMacroRecording,
+        .category = .system,
+    });
+
+    try registry.register(.{
+        .name = "stop_macro_recording",
+        .description = "Stop recording macro (q when recording)",
+        .handler = stopMacroRecording,
+        .category = .system,
+    });
+
+    try registry.register(.{
+        .name = "play_macro",
+        .description = "Play macro from register (@)",
+        .handler = playMacro,
+        .category = .system,
     });
 }
 
