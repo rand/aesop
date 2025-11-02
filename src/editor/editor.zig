@@ -7,6 +7,8 @@ const Cursor = @import("cursor.zig");
 const Buffer = @import("../buffer/manager.zig");
 const Command = @import("command.zig");
 const Keymap = @import("keymap.zig");
+const Motions = @import("motions.zig");
+const Actions = @import("actions.zig");
 const Renderer = @import("../render/renderer.zig").Renderer;
 
 /// Editor state - the main coordinator
@@ -19,6 +21,7 @@ pub const Editor = struct {
     selections: Cursor.SelectionSet,
     command_registry: Command.Registry,
     keymap_manager: Keymap.KeymapManager,
+    clipboard: Actions.Clipboard,
 
     // Viewport
     scroll_offset: usize, // Line offset for scrolling
@@ -32,6 +35,7 @@ pub const Editor = struct {
             .selections = try Cursor.SelectionSet.initWithCursor(allocator, .{ .line = 0, .col = 0 }),
             .command_registry = Command.Registry.init(allocator),
             .keymap_manager = Keymap.KeymapManager.init(allocator),
+            .clipboard = Actions.Clipboard.init(allocator),
             .scroll_offset = 0,
         };
 
@@ -46,6 +50,7 @@ pub const Editor = struct {
 
     /// Clean up editor
     pub fn deinit(self: *Editor) void {
+        self.clipboard.deinit();
         self.selections.deinit(self.allocator);
         self.buffer_manager.deinit();
         self.command_registry.deinit();
@@ -102,8 +107,8 @@ pub const Editor = struct {
 
         // Try to match key to command
         if (try self.keymap_manager.processKey(mode, key)) |command_name| {
-            // Execute command
-            var ctx = Command.Context{};
+            // Execute command with editor context
+            var ctx = Command.Context{ .editor = self };
             const result = self.command_registry.execute(command_name, &ctx);
 
             switch (result) {

@@ -3,11 +3,12 @@
 
 const std = @import("std");
 
+// Forward declare Editor to avoid circular dependency
+pub const Editor = @import("editor.zig").Editor;
+
 /// Command context - passed to command handlers
 pub const Context = struct {
-    // Placeholder - will be filled with editor state
-    // This will include: buffers, selections, mode, etc.
-    user_data: ?*anyopaque = null,
+    editor: *Editor,
 };
 
 /// Command result
@@ -117,41 +118,140 @@ pub const Registry = struct {
     }
 };
 
-// === Built-in command handlers (placeholders) ===
+// === Built-in command handlers ===
+
+const Motions = @import("motions.zig");
+const Actions = @import("actions.zig");
+const Buffer = @import("../buffer/manager.zig");
 
 fn moveLeft(ctx: *Context) Result {
-    _ = ctx;
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+    const new_sel = Motions.moveLeft(primary_sel, buffer);
+    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch return Result.err("Failed to update selection");
+
     return Result.ok();
 }
 
 fn moveRight(ctx: *Context) Result {
-    _ = ctx;
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+    const new_sel = Motions.moveRight(primary_sel, buffer);
+    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch return Result.err("Failed to update selection");
+
     return Result.ok();
 }
 
 fn moveUp(ctx: *Context) Result {
-    _ = ctx;
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+    const new_sel = Motions.moveUp(primary_sel, buffer);
+    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch return Result.err("Failed to update selection");
+
     return Result.ok();
 }
 
 fn moveDown(ctx: *Context) Result {
-    _ = ctx;
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+    const new_sel = Motions.moveDown(primary_sel, buffer);
+    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch return Result.err("Failed to update selection");
+
+    return Result.ok();
+}
+
+fn moveWordForward(ctx: *Context) Result {
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+    const new_sel = Motions.moveWordForward(primary_sel, buffer);
+    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch return Result.err("Failed to update selection");
+
+    return Result.ok();
+}
+
+fn moveWordBackward(ctx: *Context) Result {
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+    const new_sel = Motions.moveWordBackward(primary_sel, buffer);
+    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch return Result.err("Failed to update selection");
+
+    return Result.ok();
+}
+
+fn moveWordEnd(ctx: *Context) Result {
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+    const new_sel = Motions.moveWordEnd(primary_sel, buffer);
+    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch return Result.err("Failed to update selection");
+
+    return Result.ok();
+}
+
+fn moveLineStart(ctx: *Context) Result {
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+    const new_sel = Motions.moveLineStart(primary_sel, buffer);
+    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch return Result.err("Failed to update selection");
+
+    return Result.ok();
+}
+
+fn moveLineEnd(ctx: *Context) Result {
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+    const new_sel = Motions.moveLineEnd(primary_sel, buffer);
+    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch return Result.err("Failed to update selection");
+
+    return Result.ok();
+}
+
+fn moveFileStart(ctx: *Context) Result {
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+    const new_sel = Motions.moveFileStart(primary_sel, buffer);
+    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch return Result.err("Failed to update selection");
+
+    return Result.ok();
+}
+
+fn moveFileEnd(ctx: *Context) Result {
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+    const new_sel = Motions.moveFileEnd(primary_sel, buffer);
+    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch return Result.err("Failed to update selection");
+
     return Result.ok();
 }
 
 fn insertMode(ctx: *Context) Result {
-    _ = ctx;
+    ctx.editor.enterInsertMode() catch return Result.err("Failed to enter insert mode");
     return Result.ok();
 }
 
 fn normalMode(ctx: *Context) Result {
-    _ = ctx;
+    ctx.editor.enterNormalMode() catch return Result.err("Failed to enter normal mode");
+    return Result.ok();
+}
+
+fn selectMode(ctx: *Context) Result {
+    ctx.editor.enterSelectMode() catch return Result.err("Failed to enter select mode");
     return Result.ok();
 }
 
 /// Register all built-in commands
 pub fn registerBuiltins(registry: *Registry) !void {
-    // Motion commands
+    // Motion commands - basic
     try registry.register(.{
         .name = "move_left",
         .description = "Move cursor left",
@@ -180,6 +280,58 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .category = .motion,
     });
 
+    // Motion commands - word
+    try registry.register(.{
+        .name = "move_word_forward",
+        .description = "Move to start of next word",
+        .handler = moveWordForward,
+        .category = .motion,
+    });
+
+    try registry.register(.{
+        .name = "move_word_backward",
+        .description = "Move to start of previous word",
+        .handler = moveWordBackward,
+        .category = .motion,
+    });
+
+    try registry.register(.{
+        .name = "move_word_end",
+        .description = "Move to end of word",
+        .handler = moveWordEnd,
+        .category = .motion,
+    });
+
+    // Motion commands - line
+    try registry.register(.{
+        .name = "move_line_start",
+        .description = "Move to start of line",
+        .handler = moveLineStart,
+        .category = .motion,
+    });
+
+    try registry.register(.{
+        .name = "move_line_end",
+        .description = "Move to end of line",
+        .handler = moveLineEnd,
+        .category = .motion,
+    });
+
+    // Motion commands - file
+    try registry.register(.{
+        .name = "move_file_start",
+        .description = "Move to start of file",
+        .handler = moveFileStart,
+        .category = .motion,
+    });
+
+    try registry.register(.{
+        .name = "move_file_end",
+        .description = "Move to end of file",
+        .handler = moveFileEnd,
+        .category = .motion,
+    });
+
     // Mode commands
     try registry.register(.{
         .name = "insert_mode",
@@ -192,6 +344,13 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .name = "normal_mode",
         .description = "Enter normal mode",
         .handler = normalMode,
+        .category = .mode,
+    });
+
+    try registry.register(.{
+        .name = "select_mode",
+        .description = "Enter select mode",
+        .handler = selectMode,
         .category = .mode,
     });
 }
