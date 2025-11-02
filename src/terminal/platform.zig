@@ -90,7 +90,7 @@ pub const Terminal = struct {
 
         switch (builtin.os.tag) {
             .linux, .macos => {
-                var winsize: std.posix.system.winsize = undefined;
+                var winsize: std.posix.winsize = undefined;
                 const result = std.posix.system.ioctl(std.posix.STDOUT_FILENO, std.posix.T.IOCGWINSZ, @intFromPtr(&winsize));
                 if (result < 0) {
                     return error.IoctlFailed;
