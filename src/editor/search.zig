@@ -4,6 +4,13 @@
 const std = @import("std");
 const Cursor = @import("cursor.zig");
 
+/// Search options
+pub const SearchOptions = struct {
+    case_sensitive: bool = true,
+    whole_word: bool = false,
+    wrap_around: bool = true,
+};
+
 /// Search state
 pub const Search = struct {
     query: [128]u8 = undefined,
@@ -16,6 +23,10 @@ pub const Search = struct {
     match_count: usize = 0,
     match_index: usize = 0,
     replacements_made: usize = 0,
+    options: SearchOptions = .{},
+    history: std.ArrayList([]const u8),
+    history_index: ?usize = null,
+    max_history: usize = 50,
     allocator: std.mem.Allocator,
 
     pub const Match = struct {
@@ -26,11 +37,16 @@ pub const Search = struct {
     pub fn init(allocator: std.mem.Allocator) Search {
         return .{
             .allocator = allocator,
+            .history = std.ArrayList([]const u8).empty,
         };
     }
 
     pub fn deinit(self: *Search) void {
-        _ = self;
+        // Free history entries
+        for (self.history.items) |entry| {
+            self.allocator.free(entry);
+        }
+        self.history.deinit(self.allocator);
     }
 
     /// Set search query
@@ -91,6 +107,85 @@ pub const Search = struct {
         }
     }
 
+    /// Add query to history (avoid duplicates)
+    pub fn addToHistory(self: *Search) !void {
+        const query = self.getQuery();
+        if (query.len == 0) return;
+
+        // Check if already in history (most recent entries)
+        for (self.history.items) |entry| {
+            if (std.mem.eql(u8, entry, query)) {
+                return; // Already in history, don't add duplicate
+            }
+        }
+
+        // Add to history
+        const query_copy = try self.allocator.dupe(u8, query);
+        try self.history.append(self.allocator, query_copy);
+
+        // Enforce max history size
+        if (self.history.items.len > self.max_history) {
+            const removed = self.history.orderedRemove(0);
+            self.allocator.free(removed);
+        }
+
+        self.history_index = null; // Reset history navigation
+    }
+
+    /// Navigate to previous history item
+    pub fn historyPrevious(self: *Search) void {
+        if (self.history.items.len == 0) return;
+
+        if (self.history_index) |idx| {
+            if (idx > 0) {
+                self.history_index = idx - 1;
+            }
+        } else {
+            // Start from end
+            self.history_index = self.history.items.len - 1;
+        }
+
+        if (self.history_index) |idx| {
+            const entry = self.history.items[idx];
+            const len = @min(entry.len, self.query.len);
+            @memcpy(self.query[0..len], entry[0..len]);
+            self.query_len = len;
+        }
+    }
+
+    /// Navigate to next history item
+    pub fn historyNext(self: *Search) void {
+        if (self.history_index == null) return;
+
+        const idx = self.history_index.?;
+        if (idx + 1 < self.history.items.len) {
+            self.history_index = idx + 1;
+            const entry = self.history.items[idx + 1];
+            const len = @min(entry.len, self.query.len);
+            @memcpy(self.query[0..len], entry[0..len]);
+            self.query_len = len;
+        } else {
+            // Back to current/empty
+            self.history_index = null;
+            self.query_len = 0;
+        }
+    }
+
+    /// Toggle case sensitivity
+    pub fn toggleCaseSensitive(self: *Search) void {
+        self.options.case_sensitive = !self.options.case_sensitive;
+    }
+
+    /// Toggle whole word matching
+    pub fn toggleWholeWord(self: *Search) void {
+        self.options.whole_word = !self.options.whole_word;
+    }
+
+    /// Toggle wrap around
+    pub fn toggleWrapAround(self: *Search) void {
+        self.options.wrap_around = !self.options.wrap_around;
+    }
+
     /// Get match statistics string
     pub fn getMatchInfo(self: *const Search) [64]u8 {
         var buf: [64]u8 = undefined;
@@ -100,6 +195,48 @@ pub const Search = struct {
             _ = std.fmt.bufPrint(&buf, "Match {d}/{d}", .{ self.match_index + 1, self.match_count }) catch unreachable;
         }
         return buf;
+    }
+
+    // === Helper Functions ===
+
+    /// Check if character is a word boundary character
+    fn isWordBoundary(c: u8) bool {
+        return !((c >= 'a' and c <= 'z') or
+            (c >= 'A' and c <= 'Z') or
+            (c >= '0' and c <= '9') or
+            c == '_');
+    }
+
+    /// Check if match is at word boundary
+    fn isAtWordBoundary(text: []const u8, offset: usize, len: usize) bool {
+        // Check before match
+        const before_is_boundary = (offset == 0) or isWordBoundary(text[offset - 1]);
+        // Check after match
+        const after_is_boundary = (offset + len >= text.len) or isWordBoundary(text[offset + len]);
+        return before_is_boundary and after_is_boundary;
+    }
+
+    /// Check if query matches at given position with respect to search options
+    fn matchesAt(self: *const Search, text: []const u8, offset: usize) bool {
+        const query = self.getQuery();
+        if (offset + query.len > text.len) return false;
+
+        const slice = text[offset..offset + query.len];
+
+        // Check match based on case sensitivity
+        const matches = if (self.options.case_sensitive)
+            std.mem.eql(u8, slice, query)
+        else
+            std.ascii.eqlIgnoreCase(slice, query);
+
+        if (!matches) return false;
+
+        // Check whole word if enabled
+        if (self.options.whole_word) {
+            return isAtWordBoundary(text, offset, query.len);
+        }
+
+        return true;
     }
 
     /// Find next match in text starting from position
@@ -135,8 +272,8 @@ pub const Search = struct {
         while (offset < text.len) {
             if (offset + query.len > text.len) break;
 
-            // Check if query matches at current position
-            if (std.mem.eql(u8, text[offset..offset + query.len], query)) {
+            // Check if query matches at current position with options
+            if (self.matchesAt(text, offset)) {
                 // Found match - calculate position
                 const match_start = Cursor.Position{ .line = line, .col = col };
 
@@ -219,9 +356,8 @@ pub const Search = struct {
                 continue;
             }
 
-            // Check if query matches at this position
-            if (pos.offset + query.len <= text.len and
-                std.mem.eql(u8, text[pos.offset..pos.offset + query.len], query)) {
+            // Check if query matches at this position with options
+            if (self.matchesAt(text, pos.offset)) {
 
                 // Found match - calculate end position
                 var end_line = pos.line;
@@ -267,8 +403,8 @@ pub const Search = struct {
         while (offset < text.len) {
             if (offset + query.len > text.len) break;
 
-            // Check if query matches at current position
-            if (std.mem.eql(u8, text[offset..offset + query.len], query)) {
+            // Check if query matches at current position with options
+            if (self.matchesAt(text, offset)) {
                 // Found match - calculate end position
                 var end_line = line;
                 var end_col = col;
@@ -327,8 +463,8 @@ pub const Search = struct {
         var col: usize = 0;
 
         while (offset + query.len <= text.len) {
-            // Check if query matches at current position
-            if (std.mem.eql(u8, text[offset .. offset + query.len], query)) {
+            // Check if query matches at current position with options
+            if (self.matchesAt(text, offset)) {
                 // Found match - calculate positions
                 const match_start = Cursor.Position{ .line = line, .col = col };
 
