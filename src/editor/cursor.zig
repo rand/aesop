@@ -211,6 +211,13 @@ pub const SelectionSet = struct {
         self.primary_index = 0;
     }
 
+    /// Set a single selection (anchor and head)
+    pub fn setSingleSelection(self: *SelectionSet, allocator: std.mem.Allocator, selection: Selection) !void {
+        self.clear(allocator);
+        try self.selections.append(allocator, selection);
+        self.primary_index = 0;
+    }
+
     /// Count selections
     pub fn count(self: *const SelectionSet, _: std.mem.Allocator) usize {
         return self.selections.items.len;

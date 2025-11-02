@@ -289,6 +289,23 @@ pub fn setupDefaults(manager: *KeymapManager) !void {
     // Select mode bindings
     const select_map = manager.getKeymap(.select);
     try select_map.bind(Binding.fromSingleKey(.{ .special = .escape }, "normal_mode"));
+
+    // Visual mode operations
+    try select_map.bind(Binding.fromSingleKey(.{ .char = 'd' }, "delete_selection"));
+    try select_map.bind(Binding.fromSingleKey(.{ .char = 'y' }, "yank_selection"));
+
+    // Motion commands in select mode (extend selection)
+    try select_map.bind(Binding.fromSingleKey(.{ .char = 'h' }, "move_left"));
+    try select_map.bind(Binding.fromSingleKey(.{ .char = 'j' }, "move_down"));
+    try select_map.bind(Binding.fromSingleKey(.{ .char = 'k' }, "move_up"));
+    try select_map.bind(Binding.fromSingleKey(.{ .char = 'l' }, "move_right"));
+    try select_map.bind(Binding.fromSingleKey(.{ .char = 'w' }, "move_word_forward"));
+    try select_map.bind(Binding.fromSingleKey(.{ .char = 'b' }, "move_word_backward"));
+    try select_map.bind(Binding.fromSingleKey(.{ .char = 'e' }, "move_word_end"));
+    try select_map.bind(Binding.fromSingleKey(.{ .char = '0' }, "move_line_start"));
+    try select_map.bind(Binding.fromSingleKey(.{ .char = '$' }, "move_line_end"));
+    try select_map.bind(Binding.fromChord(.{ .char = 'g' }, .{ .char = 'g' }, "move_file_start"));
+    try select_map.bind(Binding.fromSingleKey(.{ .char = 'G' }, "move_file_end"));
 }
 
 test "keymap: bind and lookup" {

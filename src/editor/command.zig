@@ -11,6 +11,24 @@ pub const Context = struct {
     editor: *Editor,
 };
 
+/// Helper: Apply motion result based on current mode
+/// In visual/select mode: extend selection
+/// In normal mode: collapse to cursor
+fn applyMotion(ctx: *Context, new_sel: Cursor.Selection) Result {
+    if (ctx.editor.getMode() == .select) {
+        // Visual mode: keep selection extended
+        ctx.editor.selections.setSingleSelection(ctx.editor.allocator, new_sel) catch {
+            return Result.err("Failed to update selection");
+        };
+    } else {
+        // Normal mode: collapse to cursor
+        ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch {
+            return Result.err("Failed to update cursor");
+        };
+    }
+    return Result.ok();
+}
+
 /// Command result
 pub const Result = union(enum) {
     success: void,
@@ -128,111 +146,78 @@ const Buffer = @import("../buffer/manager.zig");
 fn moveLeft(ctx: *Context) Result {
     const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
     const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
-
     const new_sel = Motions.moveLeft(primary_sel, buffer);
-    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch return Result.err("Failed to update selection");
-
-    return Result.ok();
+    return applyMotion(ctx, new_sel);
 }
 
 fn moveRight(ctx: *Context) Result {
     const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
     const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
-
     const new_sel = Motions.moveRight(primary_sel, buffer);
-    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch return Result.err("Failed to update selection");
-
-    return Result.ok();
+    return applyMotion(ctx, new_sel);
 }
 
 fn moveUp(ctx: *Context) Result {
     const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
     const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
-
     const new_sel = Motions.moveUp(primary_sel, buffer);
-    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch return Result.err("Failed to update selection");
-
-    return Result.ok();
+    return applyMotion(ctx, new_sel);
 }
 
 fn moveDown(ctx: *Context) Result {
     const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
     const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
-
     const new_sel = Motions.moveDown(primary_sel, buffer);
-    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch return Result.err("Failed to update selection");
-
-    return Result.ok();
+    return applyMotion(ctx, new_sel);
 }
 
 fn moveWordForward(ctx: *Context) Result {
     const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
     const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
-
     const new_sel = Motions.moveWordForward(primary_sel, buffer);
-    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch return Result.err("Failed to update selection");
-
-    return Result.ok();
+    return applyMotion(ctx, new_sel);
 }
 
 fn moveWordBackward(ctx: *Context) Result {
     const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
     const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
-
     const new_sel = Motions.moveWordBackward(primary_sel, buffer);
-    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch return Result.err("Failed to update selection");
-
-    return Result.ok();
+    return applyMotion(ctx, new_sel);
 }
 
 fn moveWordEnd(ctx: *Context) Result {
     const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
     const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
-
     const new_sel = Motions.moveWordEnd(primary_sel, buffer);
-    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch return Result.err("Failed to update selection");
-
-    return Result.ok();
+    return applyMotion(ctx, new_sel);
 }
 
 fn moveLineStart(ctx: *Context) Result {
     const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
     const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
-
     const new_sel = Motions.moveLineStart(primary_sel, buffer);
-    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch return Result.err("Failed to update selection");
-
-    return Result.ok();
+    return applyMotion(ctx, new_sel);
 }
 
 fn moveLineEnd(ctx: *Context) Result {
     const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
     const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
-
     const new_sel = Motions.moveLineEnd(primary_sel, buffer);
-    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch return Result.err("Failed to update selection");
-
-    return Result.ok();
+    return applyMotion(ctx, new_sel);
 }
 
 fn moveFileStart(ctx: *Context) Result {
     const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
     const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
-
     const new_sel = Motions.moveFileStart(primary_sel, buffer);
-    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch return Result.err("Failed to update selection");
-
-    return Result.ok();
+    return applyMotion(ctx, new_sel);
 }
 
 fn moveFileEnd(ctx: *Context) Result {
     const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
     const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
-
     const new_sel = Motions.moveFileEnd(primary_sel, buffer);
-    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch return Result.err("Failed to update selection");
-
-    return Result.ok();
+    return applyMotion(ctx, new_sel);
 }
 
 fn insertMode(ctx: *Context) Result {
@@ -478,6 +463,71 @@ fn pasteBefore(ctx: *Context) Result {
 
     // Show message
     ctx.editor.messages.add("Pasted before cursor", .success) catch {};
+
+    return Result.ok();
+}
+
+/// Delete selection (visual mode)
+fn deleteSelection(ctx: *Context) Result {
+    const buffer_id = ctx.editor.buffer_manager.active_buffer_id orelse {
+        return Result.err("No active buffer");
+    };
+    const buffer = ctx.editor.buffer_manager.getBufferMut(buffer_id) orelse {
+        return Result.err("No active buffer");
+    };
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse {
+        return Result.err("No selection");
+    };
+
+    // Only works on non-collapsed selections
+    if (primary_sel.isCollapsed()) {
+        return Result.err("No selection to delete");
+    }
+
+    // Delete and yank to clipboard
+    const new_sel = Actions.deleteSelection(buffer, primary_sel, &ctx.editor.clipboard) catch {
+        return Result.err("Failed to delete selection");
+    };
+
+    // Update cursor and mark modified
+    ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch {
+        return Result.err("Failed to update cursor");
+    };
+    buffer.metadata.markModified();
+
+    // Return to normal mode
+    ctx.editor.enterNormalMode() catch {};
+
+    // Show message
+    ctx.editor.messages.add("Deleted selection", .success) catch {};
+
+    return Result.ok();
+}
+
+/// Yank selection (visual mode)
+fn yankSelection(ctx: *Context) Result {
+    const buffer = ctx.editor.buffer_manager.getActiveBuffer() orelse {
+        return Result.err("No active buffer");
+    };
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse {
+        return Result.err("No selection");
+    };
+
+    // Only works on non-collapsed selections
+    if (primary_sel.isCollapsed()) {
+        return Result.err("No selection to yank");
+    }
+
+    // Yank to clipboard
+    Actions.yankSelection(buffer, primary_sel, &ctx.editor.clipboard) catch {
+        return Result.err("Failed to yank selection");
+    };
+
+    // Return to normal mode
+    ctx.editor.enterNormalMode() catch {};
+
+    // Show message
+    ctx.editor.messages.add("Yanked selection", .success) catch {};
 
     return Result.ok();
 }
@@ -731,6 +781,21 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .name = "paste_before",
         .description = "Paste before cursor (P)",
         .handler = pasteBefore,
+        .category = .edit,
+    });
+
+    // Visual mode operations
+    try registry.register(.{
+        .name = "delete_selection",
+        .description = "Delete visual selection (d in visual)",
+        .handler = deleteSelection,
+        .category = .edit,
+    });
+
+    try registry.register(.{
+        .name = "yank_selection",
+        .description = "Yank visual selection (y in visual)",
+        .handler = yankSelection,
         .category = .edit,
     });
 }
