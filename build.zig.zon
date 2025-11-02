@@ -37,6 +37,10 @@
             .url = "https://github.com/lalinsky/zio/archive/refs/tags/v0.4.0.tar.gz",
             .hash = "zio-0.4.0-xHbVVCDyGgCLDUGXDdbugnE8I7dbNkTungdjWQGIIOqq",
         },
+        .zigjr = .{
+            .url = "https://github.com/williamw520/zigjr/archive/refs/tags/1.6.0.tar.gz",
+            .hash = "zigjr-1.6.0-bESYotAXBgDnPsrQulE770Jo4m8hlWlxgf3ZT-m70kOc",
+        },
     },
     // Specifies the set of files and directories that are included in this package.
     // Only files and directories listed here are included in the `hash` that

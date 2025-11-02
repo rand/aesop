@@ -150,7 +150,9 @@ pub const Config = struct {
         const file = try std.fs.cwd().createFile(path, .{});
         defer file.close();
 
-        var writer = file.writer();
+        var buf: [8192]u8 = undefined;
+        var fbs = std.io.fixedBufferStream(&buf);
+        const writer = fbs.writer();
 
         try writer.writeAll("# Aesop Editor Configuration\n");
         try writer.writeAll("# Edit this file to customize your editor settings\n\n");
@@ -189,6 +191,8 @@ pub const Config = struct {
         try writer.print("auto_save_delay_ms={d}\n", .{self.auto_save_delay_ms});
         try writer.print("trim_trailing_whitespace={s}\n", .{if (self.trim_trailing_whitespace) "true" else "false"});
         try writer.print("ensure_newline_at_eof={s}\n", .{if (self.ensure_newline_at_eof) "true" else "false"});
+
+        try file.writeAll(fbs.getWritten());
     }
 
     /// Validate configuration values

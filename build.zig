@@ -64,6 +64,13 @@ pub fn build(b: *std.Build) void {
     });
     const zio_module = zio_dep.module("zio");
 
+    // Add zigjr dependency for LSP JSON-RPC
+    const zigjr_dep = b.dependency("zigjr", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    const zigjr_module = zigjr_dep.module("zigjr");
+
     const exe = b.addExecutable(.{
         .name = "aesop",
         .root_module = b.createModule(.{
@@ -87,6 +94,7 @@ pub fn build(b: *std.Build) void {
                 // importing modules from different packages).
                 .{ .name = "aesop", .module = mod },
                 .{ .name = "zio", .module = zio_module },
+                .{ .name = "zigjr", .module = zigjr_module },
             },
         }),
     });
