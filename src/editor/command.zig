@@ -1254,6 +1254,99 @@ fn selectInnerQuote(ctx: *Context) Result {
     return Result.ok();
 }
 
+/// Select inside brackets
+fn selectInnerBracket(ctx: *Context) Result {
+    const buffer = ctx.editor.buffer_manager.getActiveBuffer() orelse return Result.err("No active buffer");
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+    const new_sel = Actions.selectInnerPair(buffer, primary_sel, .bracket, ctx.editor.allocator) catch {
+        return Result.err("Failed to select inside brackets");
+    };
+
+    ctx.editor.selections.setSingleSelection(ctx.editor.allocator, new_sel) catch {
+        return Result.err("Failed to update selection");
+    };
+
+    return Result.ok();
+}
+
+/// Delete inside brackets
+fn deleteInnerBracket(ctx: *Context) Result {
+    if (ctx.editor.buffer_manager.active_buffer_id) |id| {
+        const buffer = ctx.editor.buffer_manager.getBufferMut(id) orelse return Result.err("No active buffer");
+        const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+        const new_sel = Actions.deleteInnerPair(buffer, primary_sel, .bracket, ctx.editor.allocator) catch {
+            return Result.err("Failed to delete inside brackets");
+        };
+        buffer.metadata.markModified();
+
+        ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch {
+            return Result.err("Failed to update cursor");
+        };
+
+        return Result.ok();
+    }
+    return Result.err("No active buffer");
+}
+
+/// Select inside braces
+fn selectInnerBrace(ctx: *Context) Result {
+    const buffer = ctx.editor.buffer_manager.getActiveBuffer() orelse return Result.err("No active buffer");
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+    const new_sel = Actions.selectInnerPair(buffer, primary_sel, .brace, ctx.editor.allocator) catch {
+        return Result.err("Failed to select inside braces");
+    };
+
+    ctx.editor.selections.setSingleSelection(ctx.editor.allocator, new_sel) catch {
+        return Result.err("Failed to update selection");
+    };
+
+    return Result.ok();
+}
+
+/// Delete inside braces
+fn deleteInnerBrace(ctx: *Context) Result {
+    if (ctx.editor.buffer_manager.active_buffer_id) |id| {
+        const buffer = ctx.editor.buffer_manager.getBufferMut(id) orelse return Result.err("No active buffer");
+        const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+        const new_sel = Actions.deleteInnerPair(buffer, primary_sel, .brace, ctx.editor.allocator) catch {
+            return Result.err("Failed to delete inside braces");
+        };
+        buffer.metadata.markModified();
+
+        ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch {
+            return Result.err("Failed to update cursor");
+        };
+
+        return Result.ok();
+    }
+    return Result.err("No active buffer");
+}
+
+/// Change inside braces
+fn changeInnerBrace(ctx: *Context) Result {
+    if (ctx.editor.buffer_manager.active_buffer_id) |id| {
+        const buffer = ctx.editor.buffer_manager.getBufferMut(id) orelse return Result.err("No active buffer");
+        const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+        const new_sel = Actions.changeInnerPair(buffer, primary_sel, .brace, ctx.editor.allocator) catch {
+            return Result.err("Failed to change inside braces");
+        };
+        buffer.metadata.markModified();
+
+        ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch {
+            return Result.err("Failed to update cursor");
+        };
+
+        ctx.editor.mode_manager.transitionTo(.insert) catch {};
+        return Result.ok();
+    }
+    return Result.err("No active buffer");
+}
+
 /// Set mark at current cursor position
 fn setMark(ctx: *Context) Result {
     // TODO: Get mark name from user input (for now, use 'a')
@@ -2353,6 +2446,41 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .description = "Select inside double quotes (vi\")",
         .handler = selectInnerQuote,
         .category = .selection,
+    });
+
+    try registry.register(.{
+        .name = "select_inner_bracket",
+        .description = "Select inside brackets (vi[)",
+        .handler = selectInnerBracket,
+        .category = .selection,
+    });
+
+    try registry.register(.{
+        .name = "delete_inner_bracket",
+        .description = "Delete inside brackets (di[)",
+        .handler = deleteInnerBracket,
+        .category = .edit,
+    });
+
+    try registry.register(.{
+        .name = "select_inner_brace",
+        .description = "Select inside braces (vi{)",
+        .handler = selectInnerBrace,
+        .category = .selection,
+    });
+
+    try registry.register(.{
+        .name = "delete_inner_brace",
+        .description = "Delete inside braces (di{)",
+        .handler = deleteInnerBrace,
+        .category = .edit,
+    });
+
+    try registry.register(.{
+        .name = "change_inner_brace",
+        .description = "Change inside braces (ci{)",
+        .handler = changeInnerBrace,
+        .category = .edit,
     });
 
     // Mark commands
