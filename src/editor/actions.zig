@@ -1066,3 +1066,103 @@ pub fn titlecaseSelection(
 
     return selection;
 }
+
+// === Enhanced Text Objects ===
+
+const TextObjects = @import("textobjects.zig");
+
+/// Select paragraph text object (around)
+pub fn selectParagraphAround(
+    buffer: *const Buffer.Buffer,
+    selection: Cursor.Selection,
+    allocator: std.mem.Allocator,
+) !Cursor.Selection {
+    const range = try TextObjects.selectParagraphAround(buffer, selection.head, allocator);
+    if (range == null) return selection;
+
+    return Cursor.Selection.init(range.?.start, range.?.end);
+}
+
+/// Select paragraph text object (inside)
+pub fn selectParagraphInside(
+    buffer: *const Buffer.Buffer,
+    selection: Cursor.Selection,
+    allocator: std.mem.Allocator,
+) !Cursor.Selection {
+    const range = try TextObjects.selectParagraphInside(buffer, selection.head, allocator);
+    if (range == null) return selection;
+
+    return Cursor.Selection.init(range.?.start, range.?.end);
+}
+
+/// Select indent level text object (around)
+pub fn selectIndentAround(
+    buffer: *const Buffer.Buffer,
+    selection: Cursor.Selection,
+    allocator: std.mem.Allocator,
+) !Cursor.Selection {
+    const range = try TextObjects.selectIndentAround(buffer, selection.head, allocator);
+    if (range == null) return selection;
+
+    return Cursor.Selection.init(range.?.start, range.?.end);
+}
+
+/// Select indent level text object (inside)
+pub fn selectIndentInside(
+    buffer: *const Buffer.Buffer,
+    selection: Cursor.Selection,
+    allocator: std.mem.Allocator,
+) !Cursor.Selection {
+    const range = try TextObjects.selectIndentInside(buffer, selection.head, allocator);
+    if (range == null) return selection;
+
+    return Cursor.Selection.init(range.?.start, range.?.end);
+}
+
+/// Select line text object (around)
+pub fn selectLineAround(
+    buffer: *const Buffer.Buffer,
+    selection: Cursor.Selection,
+    allocator: std.mem.Allocator,
+) !Cursor.Selection {
+    const range = try TextObjects.selectLineAround(buffer, selection.head, allocator);
+    if (range == null) return selection;
+
+    return Cursor.Selection.init(range.?.start, range.?.end);
+}
+
+/// Select line text object (inside)
+pub fn selectLineInside(
+    buffer: *const Buffer.Buffer,
+    selection: Cursor.Selection,
+    allocator: std.mem.Allocator,
+) !Cursor.Selection {
+    const range = try TextObjects.selectLineInside(buffer, selection.head, allocator);
+    if (range == null) return selection;
+
+    return Cursor.Selection.init(range.?.start, range.?.end);
+}
+
+/// Select buffer text object (around)
+pub fn selectBufferAround(
+    buffer: *const Buffer.Buffer,
+    selection: Cursor.Selection,
+    allocator: std.mem.Allocator,
+) !Cursor.Selection {
+    const range = try TextObjects.selectBufferAround(buffer, allocator);
+    if (range == null) return selection;
+
+    return Cursor.Selection.init(range.?.start, range.?.end);
+}
+
+/// Select buffer text object (inside)
+pub fn selectBufferInside(
+    buffer: *const Buffer.Buffer,
+    selection: Cursor.Selection,
+    allocator: std.mem.Allocator,
+) !Cursor.Selection {
+    const range = try TextObjects.selectBufferInside(buffer, allocator);
+    if (range == null) return selection;
+
+    return Cursor.Selection.init(range.?.start, range.?.end);
+}

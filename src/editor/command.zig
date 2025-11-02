@@ -359,6 +359,128 @@ fn reverseFindTill(ctx: *Context) Result {
     return applyMotion(ctx, new_sel);
 }
 
+// Enhanced Text Objects
+
+fn selectParagraphAround(ctx: *Context) Result {
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+    const new_sel = Actions.selectParagraphAround(buffer, primary_sel, ctx.editor.allocator) catch {
+        return Result.err("Failed to select paragraph");
+    };
+
+    ctx.editor.selections.setSingleSelection(ctx.editor.allocator, new_sel) catch {
+        return Result.err("Failed to update selection");
+    };
+
+    return Result.ok();
+}
+
+fn selectParagraphInside(ctx: *Context) Result {
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+    const new_sel = Actions.selectParagraphInside(buffer, primary_sel, ctx.editor.allocator) catch {
+        return Result.err("Failed to select paragraph");
+    };
+
+    ctx.editor.selections.setSingleSelection(ctx.editor.allocator, new_sel) catch {
+        return Result.err("Failed to update selection");
+    };
+
+    return Result.ok();
+}
+
+fn selectIndentAround(ctx: *Context) Result {
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+    const new_sel = Actions.selectIndentAround(buffer, primary_sel, ctx.editor.allocator) catch {
+        return Result.err("Failed to select indent level");
+    };
+
+    ctx.editor.selections.setSingleSelection(ctx.editor.allocator, new_sel) catch {
+        return Result.err("Failed to update selection");
+    };
+
+    return Result.ok();
+}
+
+fn selectIndentInside(ctx: *Context) Result {
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+    const new_sel = Actions.selectIndentInside(buffer, primary_sel, ctx.editor.allocator) catch {
+        return Result.err("Failed to select indent level");
+    };
+
+    ctx.editor.selections.setSingleSelection(ctx.editor.allocator, new_sel) catch {
+        return Result.err("Failed to update selection");
+    };
+
+    return Result.ok();
+}
+
+fn selectLineAround(ctx: *Context) Result {
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+    const new_sel = Actions.selectLineAround(buffer, primary_sel, ctx.editor.allocator) catch {
+        return Result.err("Failed to select line");
+    };
+
+    ctx.editor.selections.setSingleSelection(ctx.editor.allocator, new_sel) catch {
+        return Result.err("Failed to update selection");
+    };
+
+    return Result.ok();
+}
+
+fn selectLineInside(ctx: *Context) Result {
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+    const new_sel = Actions.selectLineInside(buffer, primary_sel, ctx.editor.allocator) catch {
+        return Result.err("Failed to select line");
+    };
+
+    ctx.editor.selections.setSingleSelection(ctx.editor.allocator, new_sel) catch {
+        return Result.err("Failed to update selection");
+    };
+
+    return Result.ok();
+}
+
+fn selectBufferAround(ctx: *Context) Result {
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+    const new_sel = Actions.selectBufferAround(buffer, primary_sel, ctx.editor.allocator) catch {
+        return Result.err("Failed to select buffer");
+    };
+
+    ctx.editor.selections.setSingleSelection(ctx.editor.allocator, new_sel) catch {
+        return Result.err("Failed to update selection");
+    };
+
+    return Result.ok();
+}
+
+fn selectBufferInside(ctx: *Context) Result {
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    const primary_sel = ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No selection");
+
+    const new_sel = Actions.selectBufferInside(buffer, primary_sel, ctx.editor.allocator) catch {
+        return Result.err("Failed to select buffer");
+    };
+
+    ctx.editor.selections.setSingleSelection(ctx.editor.allocator, new_sel) catch {
+        return Result.err("Failed to update selection");
+    };
+
+    return Result.ok();
+}
+
 fn insertMode(ctx: *Context) Result {
     ctx.editor.enterInsertMode() catch return Result.err("Failed to enter insert mode");
     return Result.ok();
@@ -2929,6 +3051,63 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .description = "Reverse last find/till (,)",
         .handler = reverseFindTill,
         .category = .motion,
+    });
+
+    // Enhanced text objects
+    try registry.register(.{
+        .name = "select_paragraph_around",
+        .description = "Select paragraph (around - ap)",
+        .handler = selectParagraphAround,
+        .category = .selection,
+    });
+
+    try registry.register(.{
+        .name = "select_paragraph_inside",
+        .description = "Select paragraph (inside - ip)",
+        .handler = selectParagraphInside,
+        .category = .selection,
+    });
+
+    try registry.register(.{
+        .name = "select_indent_around",
+        .description = "Select indent level (around - ai)",
+        .handler = selectIndentAround,
+        .category = .selection,
+    });
+
+    try registry.register(.{
+        .name = "select_indent_inside",
+        .description = "Select indent level (inside - ii)",
+        .handler = selectIndentInside,
+        .category = .selection,
+    });
+
+    try registry.register(.{
+        .name = "select_line_around",
+        .description = "Select line (around - al)",
+        .handler = selectLineAround,
+        .category = .selection,
+    });
+
+    try registry.register(.{
+        .name = "select_line_inside",
+        .description = "Select line (inside - il)",
+        .handler = selectLineInside,
+        .category = .selection,
+    });
+
+    try registry.register(.{
+        .name = "select_buffer_around",
+        .description = "Select entire buffer (around - ab)",
+        .handler = selectBufferAround,
+        .category = .selection,
+    });
+
+    try registry.register(.{
+        .name = "select_buffer_inside",
+        .description = "Select entire buffer (inside - ib)",
+        .handler = selectBufferInside,
+        .category = .selection,
     });
 
     // Mode commands
