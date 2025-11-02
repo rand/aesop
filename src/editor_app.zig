@@ -7,9 +7,11 @@ const Cursor = @import("editor/cursor.zig");
 const renderer_mod = @import("render/renderer.zig");
 const Renderer = renderer_mod.Renderer;
 const Attrs = renderer_mod.Attrs;
+const Cell = renderer_mod.Cell;
 const statusline = @import("render/statusline.zig");
 const messageline = @import("render/messageline.zig");
 const keyhints = @import("render/keyhints.zig");
+const paletteline = @import("render/paletteline.zig");
 const gutter = @import("render/gutter.zig");
 const input_mod = @import("terminal/input.zig");
 const Keymap = @import("editor/keymap.zig");
@@ -86,6 +88,12 @@ pub const EditorApp = struct {
 
     /// Handle input event
     fn handleEvent(self: *EditorApp, event: input_mod.Event) !void {
+        // Handle palette input separately
+        if (self.editor.palette.visible) {
+            try self.handlePaletteInput(event);
+            return;
+        }
+
         switch (event) {
             .char => |c| {
                 // Convert to keymap key
@@ -127,6 +135,71 @@ pub const EditorApp = struct {
             },
 
             else => {},
+        }
+    }
+
+    /// Handle palette input
+    fn handlePaletteInput(self: *EditorApp, event: input_mod.Event) !void {
+        switch (event) {
+            .char => |c| {
+                // Add character to query
+                try self.editor.palette.addChar(c.codepoint);
+            },
+
+            .key => |k| {
+                switch (k.key) {
+                    .escape => {
+                        // Close palette
+                        self.editor.palette.hide();
+                    },
+                    .backspace => {
+                        // Remove last character
+                        self.editor.palette.backspace();
+                    },
+                    .enter => {
+                        // Execute selected command
+                        try self.executePaletteCommand();
+                    },
+                    .up => {
+                        // Move selection up
+                        self.editor.palette.selectPrevious();
+                    },
+                    .down => {
+                        // Move selection down
+                        const matches = try self.editor.palette.filterCommands(&self.editor.command_registry, self.allocator);
+                        defer self.allocator.free(matches);
+                        self.editor.palette.selectNext(matches.len);
+                    },
+                    else => {},
+                }
+            },
+
+            else => {},
+        }
+    }
+
+    /// Execute the currently selected palette command
+    fn executePaletteCommand(self: *EditorApp) !void {
+        const matches = try self.editor.palette.filterCommands(&self.editor.command_registry, self.allocator);
+        defer self.allocator.free(matches);
+
+        if (matches.len == 0) return;
+
+        const selected_idx = @min(self.editor.palette.selected_index, matches.len - 1);
+        const command_name = matches[selected_idx].name;
+
+        // Hide palette
+        self.editor.palette.hide();
+
+        // Execute command
+        var ctx = @import("editor/command.zig").Context{ .editor = &self.editor };
+        const result = self.editor.command_registry.execute(command_name, &ctx);
+
+        switch (result) {
+            .success => {},
+            .error_msg => |msg| {
+                self.editor.messages.add(msg, .error_msg) catch {};
+            },
         }
     }
 
@@ -215,8 +288,49 @@ pub const EditorApp = struct {
         // Render key hints (overlays on status line)
         try keyhints.render(&self.renderer, &self.editor);
 
+        // Render cursor (if not in command palette)
+        if (!self.editor.palette.visible) {
+            try self.renderCursor(size.height - reserved_lines);
+        }
+
+        // Render command palette (overlay on top of everything)
+        try paletteline.render(&self.renderer, &self.editor, self.allocator);
+
         // Perform render
         try self.renderer.render();
+    }
+
+    /// Render cursor at current position
+    fn renderCursor(self: *EditorApp, visible_lines: usize) !void {
+        const buffer = self.editor.getActiveBuffer() orelse return;
+        const cursor_pos = self.editor.getCursorPosition();
+        const viewport = self.editor.getViewport(visible_lines);
+        const gutter_width = gutter.calculateWidth(self.gutter_config, buffer.lineCount());
+
+        // Check if cursor is in viewport
+        if (cursor_pos.line < viewport.start_line or cursor_pos.line >= viewport.end_line) {
+            return; // Cursor is off-screen
+        }
+
+        // Calculate screen position
+        const screen_row = @as(u16, @intCast(cursor_pos.line - viewport.start_line));
+        const screen_col = gutter_width + @as(u16, @intCast(cursor_pos.col));
+
+        // Get current cell at cursor position or create empty cell
+        const cell = self.renderer.output.getCell(screen_row, screen_col) orelse Cell{
+            .char = ' ',
+            .fg = .default,
+            .bg = .default,
+            .attrs = .{},
+        };
+
+        // Set cursor with reverse video
+        self.renderer.output.setCell(screen_row, screen_col, .{
+            .char = cell.char,
+            .fg = cell.bg, // Swap colors for cursor
+            .bg = cell.fg,
+            .attrs = .{ .reverse = true },
+        });
     }
 
     /// Render buffer content

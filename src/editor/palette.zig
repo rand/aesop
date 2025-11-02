@@ -90,8 +90,8 @@ pub const Palette = struct {
         registry: *const Command.Registry,
         allocator: std.mem.Allocator,
     ) ![]CommandMatch {
-        var matches = std.ArrayList(CommandMatch).init(allocator);
-        errdefer matches.deinit();
+        var matches = std.ArrayList(CommandMatch).empty;
+        errdefer matches.deinit(allocator);
 
         const query = self.getQuery();
 
@@ -99,7 +99,7 @@ pub const Palette = struct {
         if (query.len == 0) {
             var iter = registry.commands.iterator();
             while (iter.next()) |entry| {
-                try matches.append(.{
+                try matches.append(allocator, .{
                     .name = entry.key_ptr.*,
                     .description = entry.value_ptr.description,
                     .score = 0,
@@ -114,7 +114,7 @@ pub const Palette = struct {
 
                 if (fuzzyMatch(query, name) or fuzzyMatch(query, desc)) {
                     const score = fuzzyScore(query, name);
-                    try matches.append(.{
+                    try matches.append(allocator, .{
                         .name = name,
                         .description = desc,
                         .score = score,
@@ -130,7 +130,7 @@ pub const Palette = struct {
             }.lessThan);
         }
 
-        return matches.toOwnedSlice();
+        return matches.toOwnedSlice(allocator);
     }
 };
 
