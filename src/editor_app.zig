@@ -13,6 +13,7 @@ const messageline = @import("render/messageline.zig");
 const keyhints = @import("render/keyhints.zig");
 const paletteline = @import("render/paletteline.zig");
 const filefinderline = @import("render/filefinderline.zig");
+const completionline = @import("render/completion.zig");
 const bufferswitcher = @import("render/bufferswitcher.zig");
 const gutter = @import("render/gutter.zig");
 const input_mod = @import("terminal/input.zig");
@@ -620,6 +621,9 @@ pub const EditorApp = struct {
 
         // Render file finder (overlay on top of everything)
         try filefinderline.render(&self.renderer, &self.editor, self.allocator);
+
+        // Render completion popup (overlay on top of everything)
+        try completionline.render(&self.renderer, &self.editor, &self.editor.completion_list);
 
         // Render buffer switcher (overlay on top of everything)
         try bufferswitcher.render(

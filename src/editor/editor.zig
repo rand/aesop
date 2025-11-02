@@ -26,6 +26,7 @@ const PluginSystem = @import("../plugin/system.zig");
 const Renderer = @import("../render/renderer.zig").Renderer;
 const LspClient = @import("../lsp/client.zig").Client;
 const LspHandlers = @import("../lsp/handlers.zig");
+const CompletionList = @import("completion.zig").CompletionList;
 
 /// Pending command awaiting user input
 ///
@@ -87,6 +88,7 @@ pub const Editor = struct {
     buffer_switcher_visible: bool,
     buffer_switcher_selected: usize,
     lsp_client: ?LspClient, // Optional LSP client (null if not initialized)
+    completion_list: CompletionList, // Code completion popup
 
     // Viewport (legacy - will be replaced by window_manager)
     scroll_offset: usize, // Line offset for scrolling
@@ -135,6 +137,7 @@ pub const Editor = struct {
             .buffer_switcher_visible = false,
             .buffer_switcher_selected = 0,
             .lsp_client = null, // LSP client initialized on-demand
+            .completion_list = CompletionList.init(allocator),
             .scroll_offset = 0,
         };
 
@@ -149,6 +152,7 @@ pub const Editor = struct {
 
     /// Clean up editor
     pub fn deinit(self: *Editor) void {
+        self.completion_list.deinit();
         if (self.lsp_client) |*client| {
             client.deinit();
         }
