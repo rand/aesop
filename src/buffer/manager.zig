@@ -230,8 +230,18 @@ pub const BufferManager = struct {
         return id;
     }
 
-    /// Get buffer by ID
+    /// Get buffer by ID (const)
     pub fn getBuffer(self: *const BufferManager, id: BufferId) ?*const Buffer {
+        for (self.buffers.items) |*buffer| {
+            if (buffer.metadata.id == id) {
+                return buffer;
+            }
+        }
+        return null;
+    }
+
+    /// Get buffer by ID (mutable)
+    pub fn getBufferMut(self: *BufferManager, id: BufferId) ?*Buffer {
         for (self.buffers.items) |*buffer| {
             if (buffer.metadata.id == id) {
                 return buffer;

@@ -118,9 +118,65 @@ pub const Editor = struct {
                     _ = msg;
                 },
             }
-        } else if (mode.acceptsTextInput() and key == .char) {
-            // Insert character in insert/command mode
-            // TODO: Implement text insertion
+        } else if (mode.acceptsTextInput()) {
+            // Handle text input in insert/command mode
+            try self.handleTextInput(key);
+        }
+    }
+
+    /// Handle text input (characters, newlines, backspace, tab)
+    fn handleTextInput(self: *Editor, key: Keymap.Key) !void {
+        // Get mutable buffer reference for text modification
+        if (self.buffer_manager.active_buffer_id) |id| {
+            const buffer = self.buffer_manager.getBufferMut(id) orelse return error.NoActiveBuffer;
+
+            // Get primary selection
+            const primary_sel = self.selections.primary(self.allocator) orelse return error.NoSelection;
+
+            // Handle different key types
+            switch (key) {
+                .char => |codepoint| {
+                    // Convert character to UTF-8 bytes
+                    var buf: [4]u8 = undefined;
+                    const len = try std.unicode.utf8Encode(codepoint, &buf);
+                    const text = buf[0..len];
+
+                    // Insert the character
+                    const new_sel = try Actions.insertText(buffer, primary_sel, text);
+
+                    // Update selection
+                    try self.selections.setSingleCursor(self.allocator, new_sel.head);
+
+                    // Mark buffer as modified
+                    buffer.metadata.markModified();
+                },
+                .special => |special_key| {
+                    switch (special_key) {
+                        .enter => {
+                            // Insert newline
+                            const new_sel = try Actions.insertNewline(buffer, primary_sel);
+                            try self.selections.setSingleCursor(self.allocator, new_sel.head);
+                            buffer.metadata.markModified();
+                        },
+                        .backspace => {
+                            // Delete character before cursor
+                            const new_sel = try Actions.deleteCharBefore(buffer, primary_sel);
+                            try self.selections.setSingleCursor(self.allocator, new_sel.head);
+                            buffer.metadata.markModified();
+                        },
+                        .tab => {
+                            // Insert tab (TODO: make spaces configurable)
+                            const tab_text = "    "; // 4 spaces default
+                            const new_sel = try Actions.insertText(buffer, primary_sel, tab_text);
+                            try self.selections.setSingleCursor(self.allocator, new_sel.head);
+                            buffer.metadata.markModified();
+                        },
+                        else => {
+                            // Ignore other special keys in insert mode
+                        },
+                    }
+                },
+            }
         }
     }
 
