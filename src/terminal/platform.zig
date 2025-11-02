@@ -117,7 +117,7 @@ pub const Terminal = struct {
     pub fn readInput(self: *const Terminal, buffer: []u8) !usize {
         _ = self;
 
-        const stdin = std.fs.File{ .handle = std.posix.STDIN_FILENO };
+        const stdin = std.fs.File.stdin();
         return stdin.read(buffer) catch |err| {
             if (err == error.WouldBlock) return 0;
             return err;
