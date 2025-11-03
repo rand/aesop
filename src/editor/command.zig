@@ -163,6 +163,7 @@ const Cursor = @import("cursor.zig");
 const Undo = @import("undo.zig");
 const Registers = @import("registers.zig");
 const Buffer = @import("../buffer/manager.zig");
+const Rope = @import("../buffer/rope.zig").Rope;
 
 fn moveLeft(ctx: *Context) Result {
     const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
