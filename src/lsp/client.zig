@@ -267,11 +267,7 @@ pub const Client = struct {
 
         if (root.object.get("params")) |params_value| {
             // Stringify just the params portion
-            var params_buf = std.ArrayList(u8).empty;
-            defer params_buf.deinit(self.allocator);
-
-            try std.json.Stringify.value(params_value, .{}, params_buf.writer(self.allocator));
-            params_owned = try params_buf.toOwnedSlice(self.allocator);
+            params_owned = try std.json.Stringify.valueAlloc(self.allocator, params_value, .{});
             params_json = params_owned.?;
         }
 

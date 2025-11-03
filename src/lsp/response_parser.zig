@@ -659,11 +659,7 @@ pub fn parseCodeActionResponse(allocator: std.mem.Allocator, json_text: []const 
                                 // Parse arguments if present and stringify them
                                 var arguments: ?[]const u8 = null;
                                 if (cmd_obj.get("arguments")) |args_value| {
-                                    var args_buf = std.ArrayList(u8).empty;
-                                    defer args_buf.deinit(allocator);
-
-                                    try std.json.Stringify.value(args_value, .{}, args_buf.writer(allocator));
-                                    arguments = try args_buf.toOwnedSlice(allocator);
+                                    arguments = try std.json.Stringify.valueAlloc(allocator, args_value, .{});
                                 }
 
                                 command = Command{
