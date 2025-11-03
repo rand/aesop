@@ -26,42 +26,17 @@ jobs:
     - name: Verify Zig installation
       run: zig version
 
-    - name: Install tree-sitter core library
-      run: |
-        mkdir -p $HOME/lib
-
-        # Install tree-sitter core library only
-        # Grammar libraries require local build and are not needed for tests
-        git clone --depth 1 https://github.com/tree-sitter/tree-sitter.git /tmp/tree-sitter
-        cd /tmp/tree-sitter
-        make
-        sudo make install PREFIX=/usr/local || make install PREFIX=$HOME/.local
-
-        echo "Tree-sitter core installed"
-        echo "Note: Grammar libraries (zig, rust, etc.) require local build"
-        echo "Tests will run with MockTerminal (no tree-sitter needed)"
+    - name: Build aesop without tree-sitter (CI mode)
+      run: zig build -Denable-treesitter=false
       shell: bash
 
-    - name: Build aesop (may fail due to tree-sitter grammars)
-      run: zig build || echo "Build requires local tree-sitter grammars"
-      continue-on-error: true
-      env:
-        LD_LIBRARY_PATH: $HOME/lib
-        DYLD_LIBRARY_PATH: $HOME/lib
+    - name: Run unit tests without tree-sitter
+      run: zig build test-unit -Denable-treesitter=false
+      shell: bash
 
-    - name: Run unit tests (requires tree-sitter grammars)
-      run: zig build test-unit || echo "Unit tests require local tree-sitter grammars"
-      continue-on-error: true
-      env:
-        LD_LIBRARY_PATH: $HOME/lib
-        DYLD_LIBRARY_PATH: $HOME/lib
-
-    - name: Run integration tests (requires tree-sitter grammars)
-      run: zig build test-integration || echo "Integration tests require local tree-sitter grammars"
-      continue-on-error: true
-      env:
-        LD_LIBRARY_PATH: $HOME/lib
-        DYLD_LIBRARY_PATH: $HOME/lib
+    - name: Run integration tests without tree-sitter
+      run: zig build test-integration -Denable-treesitter=false
+      shell: bash
 
     - name: Install tmux for E2E tests
       run: |
@@ -72,28 +47,17 @@ jobs:
         fi
       shell: bash
 
-    - name: Run E2E smoke tests (requires built binary)
-      run: |
-        export LD_LIBRARY_PATH=$HOME/lib
-        export DYLD_LIBRARY_PATH=$HOME/lib
-        ./tests/e2e/smoke_test.sh || echo "E2E tests require successful build"
-      continue-on-error: true
+    - name: Run E2E smoke tests
+      run: ./tests/e2e/smoke_test.sh
       shell: bash
 
-    - name: Run E2E workflow tests (requires built binary)
-      run: |
-        export LD_LIBRARY_PATH=$HOME/lib
-        export DYLD_LIBRARY_PATH=$HOME/lib
-        ./tests/e2e/workflow_test.sh || echo "E2E tests require successful build"
-      continue-on-error: true
+    - name: Run E2E workflow tests
+      run: ./tests/e2e/workflow_test.sh
       shell: bash
 
-    - name: Build release (requires tree-sitter grammars)
-      run: zig build -Doptimize=ReleaseSafe || echo "Release build requires local tree-sitter grammars"
-      continue-on-error: true
-      env:
-        LD_LIBRARY_PATH: $HOME/lib
-        DYLD_LIBRARY_PATH: $HOME/lib
+    - name: Build release without tree-sitter
+      run: zig build -Doptimize=ReleaseSafe -Denable-treesitter=false
+      shell: bash
 
   lint:
     name: Code Quality
