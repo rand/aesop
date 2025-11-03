@@ -4,17 +4,29 @@
 const std = @import("std");
 
 /// Mock terminal for testing without real terminal I/O
+/// Simulates a 2D screen buffer and tracks VT100 escape sequences
 pub const MockTerminal = struct {
     input_buffer: std.ArrayList(u8),
     output_buffer: std.ArrayList(u8),
+    screen: []u8, // 2D buffer: screen[row * width + col]
     allocator: std.mem.Allocator,
     width: u16 = 80,
     height: u16 = 24,
+    cursor_row: u16 = 0,
+    cursor_col: u16 = 0,
+    cursor_visible: bool = true,
+    in_alt_screen: bool = false,
 
-    pub fn init(allocator: std.mem.Allocator) MockTerminal {
+    pub fn init(allocator: std.mem.Allocator) !MockTerminal {
+        const w: usize = 80;
+        const h: usize = 24;
+        const screen = try allocator.alloc(u8, w * h);
+        @memset(screen, ' ');
+
         return .{
             .input_buffer = std.ArrayList(u8).init(allocator),
             .output_buffer = std.ArrayList(u8).init(allocator),
+            .screen = screen,
             .allocator = allocator,
         };
     }
@@ -22,6 +34,7 @@ pub const MockTerminal = struct {
     pub fn deinit(self: *MockTerminal) void {
         self.input_buffer.deinit();
         self.output_buffer.deinit();
+        self.allocator.free(self.screen);
     }
 
     /// Queue input for reading
@@ -44,9 +57,45 @@ pub const MockTerminal = struct {
         return to_read;
     }
 
-    /// Write to output buffer (simulates terminal write)
+    /// Write to output buffer and parse VT100 sequences
     pub fn write(self: *MockTerminal, data: []const u8) !usize {
         try self.output_buffer.appendSlice(data);
+
+        // Simple VT100 parsing: track cursor, alt screen, clear
+        // This is a basic implementation for testing purposes
+        var i: usize = 0;
+        while (i < data.len) {
+            if (data[i] == '\x1b') {
+                // Escape sequence
+                if (i + 1 < data.len and data[i + 1] == '[') {
+                    // CSI sequence
+                    i += 2;
+                    // Skip until we hit a letter (command byte)
+                    while (i < data.len and !std.ascii.isAlphabetic(data[i])) : (i += 1) {}
+                    if (i < data.len) i += 1; // Skip command byte
+                } else {
+                    i += 1;
+                }
+            } else if (data[i] == '\n') {
+                self.cursor_row +|= 1;
+                self.cursor_col = 0;
+                i += 1;
+            } else if (data[i] == '\r') {
+                self.cursor_col = 0;
+                i += 1;
+            } else if (std.ascii.isPrint(data[i])) {
+                // Printable character - add to screen buffer
+                if (self.cursor_row < self.height and self.cursor_col < self.width) {
+                    const idx = @as(usize, self.cursor_row) * @as(usize, self.width) + @as(usize, self.cursor_col);
+                    self.screen[idx] = data[i];
+                    self.cursor_col +|= 1;
+                }
+                i += 1;
+            } else {
+                i += 1;
+            }
+        }
+
         return data.len;
     }
 
@@ -58,11 +107,94 @@ pub const MockTerminal = struct {
     /// Clear output buffer
     pub fn clearOutput(self: *MockTerminal) void {
         self.output_buffer.clearRetainingCapacity();
+        @memset(self.screen, ' ');
+        self.cursor_row = 0;
+        self.cursor_col = 0;
     }
 
     /// Get terminal size
     pub fn getSize(self: *const MockTerminal) struct { width: u16, height: u16 } {
         return .{ .width = self.width, .height = self.height };
+    }
+
+    /// Get cursor position
+    pub fn getCursorPosition(self: *const MockTerminal) struct { row: u16, col: u16 } {
+        return .{ .row = self.cursor_row, .col = self.cursor_col };
+    }
+
+    /// Check if output is blank (all spaces or escape sequences only)
+    pub fn isBlankScreen(self: *const MockTerminal) bool {
+        // Check if screen buffer is all spaces
+        for (self.screen) |ch| {
+            if (ch != ' ') return false;
+        }
+        return true;
+    }
+
+    /// Check if output contains visible text (not just escape sequences)
+    pub fn hasVisibleText(self: *const MockTerminal) bool {
+        return !self.isBlankScreen();
+    }
+
+    /// Check if output contains a specific string (in screen buffer)
+    pub fn screenContains(self: *const MockTerminal, needle: []const u8) bool {
+        return std.mem.indexOf(u8, self.screen, needle) != null;
+    }
+
+    /// Check if status line is present (checks last row for common status patterns)
+    pub fn hasStatusLine(self: *const MockTerminal) bool {
+        const last_row_start = (@as(usize, self.height) - 1) * @as(usize, self.width);
+        const last_row = self.screen[last_row_start..][0..self.width];
+
+        // Status line typically has mode indicator or filename
+        return std.mem.indexOf(u8, last_row, "NORMAL") != null or
+               std.mem.indexOf(u8, last_row, "INSERT") != null or
+               std.mem.indexOf(u8, last_row, "SELECT") != null or
+               std.mem.indexOf(u8, last_row, ".zig") != null or
+               std.mem.indexOf(u8, last_row, ".rs") != null;
+    }
+
+    /// Check for proper line breaks (no staircase effect)
+    pub fn hasCorrectLineBreaks(self: *const MockTerminal) bool {
+        // Simple heuristic: check that newlines don't cause staircase
+        // Look for common patterns of proper rendering
+        const output = self.output_buffer.items;
+
+        // If we have newlines, check they're followed by carriage return or cursor positioning
+        var i: usize = 0;
+        while (std.mem.indexOfPos(u8, output, i, "\n")) |pos| {
+            // After newline, we should have either:
+            // - \r (carriage return)
+            // - ESC[ (cursor positioning)
+            // - Start of next line content
+            if (pos + 1 < output.len) {
+                const next = output[pos + 1];
+                // This is a simplified check - in real output with OPOST enabled,
+                // newlines are converted to \r\n
+                if (next != '\r' and next != '\x1b') {
+                    // Might be staircase effect
+                    return false;
+                }
+            }
+            i = pos + 1;
+        }
+        return true;
+    }
+
+    /// Get a specific line from the screen buffer
+    pub fn getScreenLine(self: *const MockTerminal, row: u16) []const u8 {
+        if (row >= self.height) return &[_]u8{};
+        const start = @as(usize, row) * @as(usize, self.width);
+        return self.screen[start..][0..self.width];
+    }
+
+    /// Count non-space characters in screen (measure of actual content)
+    pub fn countVisibleChars(self: *const MockTerminal) usize {
+        var count: usize = 0;
+        for (self.screen) |ch| {
+            if (ch != ' ') count += 1;
+        }
+        return count;
     }
 };
 

@@ -190,12 +190,73 @@ pub fn build(b: *std.Build) void {
     // A run step that will run the second test executable.
     const run_exe_tests = b.addRunArtifact(exe_tests);
 
+    // Integration tests (tests/integration/)
+    // These test full subsystem interactions using mock components
+    const integration_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/rendering_test.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "aesop", .module = mod },
+                .{ .name = "zio", .module = zio_module },
+                .{ .name = "zigjr", .module = zigjr_module },
+            },
+        }),
+    });
+    integration_tests.linkSystemLibrary("tree-sitter");
+    integration_tests.linkLibC();
+    integration_tests.addLibraryPath(.{ .cwd_relative = user_lib_path });
+    integration_tests.linkSystemLibrary("tree-sitter-zig");
+    integration_tests.linkSystemLibrary("tree-sitter-rust");
+    integration_tests.linkSystemLibrary("tree-sitter-go");
+    integration_tests.linkSystemLibrary("tree-sitter-python");
+    integration_tests.linkSystemLibrary("tree-sitter-c");
+
+    const run_integration_tests = b.addRunArtifact(integration_tests);
+
+    // Input integration tests
+    const input_integration_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/integration/input_test.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "aesop", .module = mod },
+                .{ .name = "zio", .module = zio_module },
+                .{ .name = "zigjr", .module = zigjr_module },
+            },
+        }),
+    });
+    input_integration_tests.linkSystemLibrary("tree-sitter");
+    input_integration_tests.linkLibC();
+    input_integration_tests.addLibraryPath(.{ .cwd_relative = user_lib_path });
+    input_integration_tests.linkSystemLibrary("tree-sitter-zig");
+    input_integration_tests.linkSystemLibrary("tree-sitter-rust");
+    input_integration_tests.linkSystemLibrary("tree-sitter-go");
+    input_integration_tests.linkSystemLibrary("tree-sitter-python");
+    input_integration_tests.linkSystemLibrary("tree-sitter-c");
+
+    const run_input_integration_tests = b.addRunArtifact(input_integration_tests);
+
     // A top level step for running all tests. dependOn can be called multiple
     // times and since the two run steps do not depend on one another, this will
     // make the two of them run in parallel.
-    const test_step = b.step("test", "Run tests");
+    const test_step = b.step("test", "Run all tests (unit + integration)");
     test_step.dependOn(&run_mod_tests.step);
     test_step.dependOn(&run_exe_tests.step);
+    test_step.dependOn(&run_integration_tests.step);
+    test_step.dependOn(&run_input_integration_tests.step);
+
+    // Separate integration test step for selective testing
+    const integration_test_step = b.step("test-integration", "Run integration tests only");
+    integration_test_step.dependOn(&run_integration_tests.step);
+    integration_test_step.dependOn(&run_input_integration_tests.step);
+
+    // Unit tests only
+    const unit_test_step = b.step("test-unit", "Run unit tests only");
+    unit_test_step.dependOn(&run_mod_tests.step);
+    unit_test_step.dependOn(&run_exe_tests.step);
 
     // Just like flags, top level steps are also listed in the `--help` menu.
     //
