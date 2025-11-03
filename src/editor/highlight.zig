@@ -44,6 +44,35 @@ pub const ZigKeywords = [_][]const u8{
     "true",   "false",    "undefined",
 };
 
+pub const RustKeywords = [_][]const u8{
+    "as",      "async",  "await",   "break",    "const",   "continue",
+    "crate",   "dyn",    "else",    "enum",     "extern",  "false",
+    "fn",      "for",    "if",      "impl",     "in",      "let",
+    "loop",    "match",  "mod",     "move",     "mut",     "pub",
+    "ref",     "return", "self",    "Self",     "static",  "struct",
+    "super",   "trait",  "true",    "type",     "unsafe",  "use",
+    "where",   "while",  "abstract", "become",  "box",     "do",
+    "final",   "macro",  "override", "priv",    "typeof",  "unsized",
+    "virtual", "yield",
+};
+
+pub const PythonKeywords = [_][]const u8{
+    "False",  "None",   "True",    "and",     "as",      "assert",
+    "async",  "await",  "break",   "class",   "continue", "def",
+    "del",    "elif",   "else",    "except",  "finally", "for",
+    "from",   "global", "if",      "import",  "in",      "is",
+    "lambda", "nonlocal", "not",   "or",      "pass",    "raise",
+    "return", "try",    "while",   "with",    "yield",
+};
+
+pub const GoKeywords = [_][]const u8{
+    "break",    "case",     "chan",      "const",    "continue",
+    "default",  "defer",    "else",      "fallthrough", "for",
+    "func",     "go",       "goto",      "if",       "import",
+    "interface", "map",     "package",   "range",    "return",
+    "select",   "struct",   "switch",    "type",     "var",
+};
+
 /// Check if a word is a keyword
 pub fn isKeyword(word: []const u8, keywords: []const []const u8) bool {
     for (keywords) |keyword| {
@@ -67,6 +96,16 @@ pub fn tokenizeLine(allocator: std.mem.Allocator, line: []const u8, language: La
             continue;
         }
 
+        // Python comment (#)
+        if (language == .python and line[i] == '#') {
+            try tokens.append(allocator, .{
+                .type = .comment,
+                .start = i,
+                .end = line.len,
+            });
+            break; // Rest of line is comment
+        }
+
         // Line comment (//)
         if (i + 1 < line.len and line[i] == '/' and line[i + 1] == '/') {
             try tokens.append(allocator, .{
@@ -75,6 +114,32 @@ pub fn tokenizeLine(allocator: std.mem.Allocator, line: []const u8, language: La
                 .end = line.len,
             });
             break; // Rest of line is comment
+        }
+
+        // Python triple-quoted strings (""" or ''')
+        if (language == .python and i + 2 < line.len) {
+            if ((line[i] == '"' and line[i + 1] == '"' and line[i + 2] == '"') or
+                (line[i] == '\'' and line[i + 1] == '\'' and line[i + 2] == '\''))
+            {
+                const quote_char = line[i];
+                const start = i;
+                i += 3;
+                // Note: This doesn't handle multi-line strings properly
+                // but marks the start of one
+                while (i + 2 < line.len) {
+                    if (line[i] == quote_char and line[i + 1] == quote_char and line[i + 2] == quote_char) {
+                        i += 3;
+                        break;
+                    }
+                    i += 1;
+                }
+                try tokens.append(allocator, .{
+                    .type = .string,
+                    .start = start,
+                    .end = i,
+                });
+                continue;
+            }
         }
 
         // String literals
@@ -126,15 +191,42 @@ pub fn tokenizeLine(allocator: std.mem.Allocator, line: []const u8, language: La
             continue;
         }
 
+        // Python decorators
+        if (language == .python and line[i] == '@') {
+            const start = i;
+            i += 1;
+            while (i < line.len and (std.ascii.isAlphanumeric(line[i]) or line[i] == '_' or line[i] == '.')) {
+                i += 1;
+            }
+            try tokens.append(allocator, .{
+                .type = .function_name, // Treat decorators like function names
+                .start = start,
+                .end = i,
+            });
+            continue;
+        }
+
         // Identifiers (keywords, types, functions)
-        if (std.ascii.isAlphabetic(line[i]) or line[i] == '_' or line[i] == '@') {
+        if (std.ascii.isAlphabetic(line[i]) or line[i] == '_') {
             const start = i;
             while (i < line.len and (std.ascii.isAlphanumeric(line[i]) or line[i] == '_')) {
                 i += 1;
             }
 
             const word = line[start..i];
-            const token_type = classifyWord(word, language);
+
+            // Peek ahead for function call
+            var is_function_call = false;
+            var peek = i;
+            while (peek < line.len and std.ascii.isWhitespace(line[peek])) : (peek += 1) {}
+            if (peek < line.len and line[peek] == '(') {
+                is_function_call = true;
+            }
+
+            const token_type = if (is_function_call)
+                TokenType.function_name
+            else
+                classifyWord(word, language);
 
             try tokens.append(allocator, .{
                 .type = token_type,
@@ -171,6 +263,10 @@ pub fn tokenizeLine(allocator: std.mem.Allocator, line: []const u8, language: La
 fn classifyWord(word: []const u8, language: Language) TokenType {
     const keywords = switch (language) {
         .zig => &ZigKeywords,
+        .rust => &RustKeywords,
+        .python => &PythonKeywords,
+        .go => &GoKeywords,
+        .c => &ZigKeywords, // C shares many keywords with Zig
         .unknown => &[_][]const u8{},
     };
 
@@ -196,10 +292,18 @@ pub const Token = struct {
 /// Supported languages
 pub const Language = enum {
     zig,
+    rust,
+    python,
+    go,
+    c,
     unknown,
 
     pub fn fromFilename(filename: []const u8) Language {
         if (std.mem.endsWith(u8, filename, ".zig")) return .zig;
+        if (std.mem.endsWith(u8, filename, ".rs")) return .rust;
+        if (std.mem.endsWith(u8, filename, ".py")) return .python;
+        if (std.mem.endsWith(u8, filename, ".go")) return .go;
+        if (std.mem.endsWith(u8, filename, ".c") or std.mem.endsWith(u8, filename, ".h")) return .c;
         return .unknown;
     }
 };
