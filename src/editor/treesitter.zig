@@ -124,6 +124,74 @@ pub const Language = enum {
     }
 };
 
+/// Load and compile a highlight query for a language
+fn loadHighlightQuery(
+    allocator: std.mem.Allocator,
+    ts_language: *const ts.TSLanguage,
+    language: Language,
+) !*ts.TSQuery {
+    // Construct path to query file: queries/{language}/highlights.scm
+    const lang_name = language.getName();
+    const query_path = try std.fmt.allocPrint(
+        allocator,
+        "queries/{s}/highlights.scm",
+        .{lang_name},
+    );
+    defer allocator.free(query_path);
+
+    // Read query file
+    const query_source = std.fs.cwd().readFileAlloc(
+        allocator,
+        query_path,
+        1024 * 1024, // Max 1MB query file
+    ) catch |err| {
+        std.debug.print("Failed to read query file '{s}': {}\n", .{ query_path, err });
+        return error.QueryFileNotFound;
+    };
+    defer allocator.free(query_source);
+
+    // Compile query
+    var error_offset: u32 = 0;
+    var error_type: ts.TSQueryError = .TSQueryErrorNone;
+
+    const query = ts.ts_query_new(
+        ts_language,
+        query_source.ptr,
+        @intCast(query_source.len),
+        &error_offset,
+        &error_type,
+    ) orelse {
+        std.debug.print("Query compilation failed at offset {d}: {}\n", .{ error_offset, error_type });
+        return error.QueryCompilationFailed;
+    };
+
+    return query;
+}
+
+/// Map tree-sitter capture name to HighlightGroup
+fn captureNameToHighlightGroup(capture_name: []const u8) HighlightGroup {
+    // Map common capture names to highlight groups
+    if (std.mem.eql(u8, capture_name, "keyword")) return .keyword;
+    if (std.mem.eql(u8, capture_name, "keyword.operator")) return .keyword;
+    if (std.mem.eql(u8, capture_name, "function.definition")) return .function_name;
+    if (std.mem.eql(u8, capture_name, "function.call")) return .function_name;
+    if (std.mem.eql(u8, capture_name, "function.builtin")) return .function_name;
+    if (std.mem.eql(u8, capture_name, "type.builtin")) return .type_name;
+    if (std.mem.eql(u8, capture_name, "type.definition")) return .type_name;
+    if (std.mem.eql(u8, capture_name, "constant")) return .constant;
+    if (std.mem.eql(u8, capture_name, "constant.builtin")) return .constant;
+    if (std.mem.eql(u8, capture_name, "string")) return .string;
+    if (std.mem.eql(u8, capture_name, "string.special")) return .string;
+    if (std.mem.eql(u8, capture_name, "number")) return .number;
+    if (std.mem.eql(u8, capture_name, "comment")) return .comment;
+    if (std.mem.eql(u8, capture_name, "operator")) return .operator;
+    if (std.mem.eql(u8, capture_name, "punctuation.delimiter")) return .punctuation;
+    if (std.mem.eql(u8, capture_name, "error")) return .error_node;
+
+    // Default to variable for unknown captures
+    return .variable;
+}
+
 /// Get tree-sitter language grammar for a Language
 /// Returns null if the grammar is not available (not linked or not implemented)
 fn getTreeSitterLanguage(language: Language) ?*const ts.TSLanguage {
@@ -157,6 +225,8 @@ pub const Parser = struct {
     ts_parser: ?*ts.TSParser,
     ts_tree: ?*ts.TSTree,
     ts_language: ?*const ts.TSLanguage,
+    ts_query: ?*ts.TSQuery,
+    ts_query_cursor: ?*ts.TSQueryCursor,
 
     pub fn init(allocator: std.mem.Allocator, language: Language) !Parser {
         // Create tree-sitter parser
@@ -174,16 +244,39 @@ pub const Parser = struct {
             }
         }
 
+        // Load and compile highlight query (if language grammar available)
+        const ts_query: ?*ts.TSQuery = if (ts_language) |lang|
+            loadHighlightQuery(allocator, lang, language) catch |err| blk: {
+                std.debug.print("Warning: Failed to load highlight query: {}\n", .{err});
+                break :blk null;
+            }
+        else
+            null;
+
+        // Create query cursor (if we have a query)
+        var ts_query_cursor: ?*ts.TSQueryCursor = null;
+        if (ts_query != null) {
+            ts_query_cursor = ts.ts_query_cursor_new();
+        }
+
         return .{
             .language = language,
             .allocator = allocator,
             .ts_parser = ts_parser,
             .ts_tree = null,
             .ts_language = ts_language,
+            .ts_query = ts_query,
+            .ts_query_cursor = ts_query_cursor,
         };
     }
 
     pub fn deinit(self: *Parser) void {
+        if (self.ts_query_cursor) |cursor| {
+            ts.ts_query_cursor_delete(cursor);
+        }
+        if (self.ts_query) |query| {
+            ts.ts_query_delete(query);
+        }
         if (self.ts_tree) |tree| {
             ts.ts_tree_delete(tree);
         }
@@ -212,7 +305,7 @@ pub const Parser = struct {
         self.ts_tree = new_tree;
     }
 
-    /// Get highlights for a line range
+    /// Get highlights for a line range using tree-sitter queries
     pub fn getHighlights(
         self: *Parser,
         text: []const u8,
@@ -222,14 +315,58 @@ pub const Parser = struct {
         _ = start_line;
         _ = end_line;
 
-        // If tree-sitter is not available for this language, fall back to basic highlighting
-        if (self.ts_language == null or self.ts_tree == null) {
+        // If query-based highlighting is not available, fall back to basic highlighting
+        if (self.ts_query == null or self.ts_query_cursor == null or self.ts_tree == null) {
             return try basicHighlight(self.allocator, text, self.language);
         }
 
-        // For now, still use basic highlighting until we implement query-based highlighting
-        // in Phase 2.3. This ensures the parser works without requiring highlight queries.
-        return try basicHighlight(self.allocator, text, self.language);
+        const query = self.ts_query.?;
+        const cursor = self.ts_query_cursor.?;
+        const tree = self.ts_tree.?;
+
+        // Get root node
+        const root_node = ts.ts_tree_root_node(tree);
+
+        // Execute query on root node
+        ts.ts_query_cursor_exec(cursor, query, root_node);
+
+        // Collect all matches
+        var tokens = std.ArrayList(HighlightToken).empty;
+        errdefer tokens.deinit(self.allocator);
+
+        var match: ts.TSQueryMatch = undefined;
+        while (ts.ts_query_cursor_next_match(cursor, &match)) {
+            // Process each capture in the match
+            const captures = match.captures[0..match.capture_count];
+            for (captures) |capture| {
+                // Get capture name
+                var name_len: u32 = 0;
+                const name_ptr = ts.ts_query_capture_name_for_id(
+                    query,
+                    capture.index,
+                    &name_len,
+                );
+                const capture_name = name_ptr[0..name_len];
+
+                // Map capture name to highlight group
+                const group = captureNameToHighlightGroup(capture_name);
+
+                // Get node position
+                const start_byte = ts.ts_node_start_byte(capture.node);
+                const end_byte = ts.ts_node_end_byte(capture.node);
+                const start_point = ts.ts_node_start_point(capture.node);
+
+                // Create highlight token
+                try tokens.append(self.allocator, HighlightToken{
+                    .start_byte = start_byte,
+                    .end_byte = end_byte,
+                    .line = start_point.row,
+                    .group = group,
+                });
+            }
+        }
+
+        return tokens.toOwnedSlice(self.allocator);
     }
 };
 
