@@ -270,7 +270,7 @@ pub const Client = struct {
             var params_buf = std.ArrayList(u8).empty;
             defer params_buf.deinit(self.allocator);
 
-            try std.json.stringify(params_value, .{}, params_buf.writer(self.allocator));
+            try std.json.Stringify.value(params_value, .{}, params_buf.writer(self.allocator));
             params_owned = try params_buf.toOwnedSlice(self.allocator);
             params_json = params_owned.?;
         }

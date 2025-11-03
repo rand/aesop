@@ -662,7 +662,7 @@ pub fn parseCodeActionResponse(allocator: std.mem.Allocator, json_text: []const 
                                     var args_buf = std.ArrayList(u8).empty;
                                     defer args_buf.deinit(allocator);
 
-                                    try std.json.stringify(args_value, .{}, args_buf.writer(allocator));
+                                    try std.json.Stringify.value(args_value, .{}, args_buf.writer(allocator));
                                     arguments = try args_buf.toOwnedSlice(allocator);
                                 }
 
