@@ -99,6 +99,16 @@ pub fn build(b: *std.Build) void {
         }),
     });
 
+    // Link tree-sitter library for syntax highlighting
+    // Note: tree-sitter must be installed on the system
+    // See docs/BUILDING_WITH_TREE_SITTER.md for installation instructions
+    exe.linkSystemLibrary("tree-sitter");
+    exe.linkLibC();
+
+    // Language grammar libraries will be added in Phase 2.2-2.4
+    // when the parser wrapper and language support is implemented.
+    // For now, we link only the core tree-sitter library.
+
     // This declares intent for the executable to be installed into the
     // install prefix when running `zig build` (i.e. when executing the default
     // step). By default the install prefix is `zig-out/` but can be overridden
@@ -137,6 +147,9 @@ pub fn build(b: *std.Build) void {
     const mod_tests = b.addTest(.{
         .root_module = mod,
     });
+    // Link tree-sitter for module tests
+    mod_tests.linkSystemLibrary("tree-sitter");
+    mod_tests.linkLibC();
 
     // A run step that will run the test executable.
     const run_mod_tests = b.addRunArtifact(mod_tests);
@@ -147,6 +160,9 @@ pub fn build(b: *std.Build) void {
     const exe_tests = b.addTest(.{
         .root_module = exe.root_module,
     });
+    // Link tree-sitter for exe tests
+    exe_tests.linkSystemLibrary("tree-sitter");
+    exe_tests.linkLibC();
 
     // A run step that will run the second test executable.
     const run_exe_tests = b.addRunArtifact(exe_tests);
