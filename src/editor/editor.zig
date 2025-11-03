@@ -766,8 +766,13 @@ pub const Editor = struct {
                 undo_group.cursor_after = new_selections.items[0].head;
             }
 
-            // Push undo group to history
-            try self.undo_history.push(undo_group);
+            // Push undo group to history (only if it contains operations)
+            if (undo_group.operations.items.len > 0) {
+                try self.undo_history.push(undo_group);
+            } else {
+                // Clean up empty group
+                undo_group.deinit(self.allocator);
+            }
 
             // Mark buffer as modified
             buffer.metadata.markModified();
