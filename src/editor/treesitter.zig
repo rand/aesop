@@ -241,7 +241,6 @@ fn tokenTypeToHighlightGroup(token_type: Highlight.TokenType) HighlightGroup {
     };
 }
 
-
 // === Tests ===
 
 test "treesitter: language from filename" {

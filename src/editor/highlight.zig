@@ -34,13 +34,13 @@ pub fn getTokenColor(token_type: TokenType) Color {
 
 /// Language-specific keywords
 pub const ZigKeywords = [_][]const u8{
-    "const",  "var",      "fn",       "pub",     "return",
-    "if",     "else",     "while",    "for",     "switch",
-    "break",  "continue", "defer",    "errdefer", "try",
-    "catch",  "async",    "await",    "suspend", "resume",
-    "struct", "enum",     "union",    "error",   "comptime",
-    "inline", "export",   "extern",   "packed",  "align",
-    "test",   "and",      "or",       "orelse",  "null",
+    "const",  "var",      "fn",        "pub",      "return",
+    "if",     "else",     "while",     "for",      "switch",
+    "break",  "continue", "defer",     "errdefer", "try",
+    "catch",  "async",    "await",     "suspend",  "resume",
+    "struct", "enum",     "union",     "error",    "comptime",
+    "inline", "export",   "extern",    "packed",   "align",
+    "test",   "and",      "or",        "orelse",   "null",
     "true",   "false",    "undefined",
 };
 

@@ -120,7 +120,7 @@ fn renderBorder(
 
     // Title or horizontal line
     if (config.title) |title| {
-        const title_text = if (title.len + 4 > width) title[0 .. width -| 4] else title;
+        const title_text = if (title.len + 4 > width) title[0..width -| 4] else title;
         rend.writeText(
             position.row,
             col,

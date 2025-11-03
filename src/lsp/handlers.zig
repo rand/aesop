@@ -60,7 +60,6 @@ pub fn sendInitialized(client: *Client) !void {
 }
 
 /// Text document synchronization handlers
-
 /// Send didOpen notification when a file is opened
 pub fn didOpen(
     client: *Client,
@@ -147,7 +146,6 @@ pub fn completion(
     callback: *const fn (ctx: ?*anyopaque, result: []const u8) anyerror!void,
     callback_ctx: ?*anyopaque,
 ) !u32 {
-
     if (!client.isReady()) {
         return error.NotInitialized;
     }
@@ -172,7 +170,6 @@ pub fn hover(
     callback: *const fn (ctx: ?*anyopaque, result: []const u8) anyerror!void,
     callback_ctx: ?*anyopaque,
 ) !u32 {
-
     if (!client.isReady()) {
         return error.NotInitialized;
     }
@@ -197,7 +194,6 @@ pub fn definition(
     callback: *const fn (ctx: ?*anyopaque, result: []const u8) anyerror!void,
     callback_ctx: ?*anyopaque,
 ) !u32 {
-
     if (!client.isReady()) {
         return error.NotInitialized;
     }
@@ -223,7 +219,6 @@ pub fn references(
     callback: *const fn (ctx: ?*anyopaque, result: []const u8) anyerror!void,
     callback_ctx: ?*anyopaque,
 ) !u32 {
-
     if (!client.isReady()) {
         return error.NotInitialized;
     }
@@ -251,7 +246,6 @@ pub fn formatting(
     callback: *const fn (ctx: ?*anyopaque, result: []const u8) anyerror!void,
     callback_ctx: ?*anyopaque,
 ) !u32 {
-
     if (!client.isReady()) {
         return error.NotInitialized;
     }

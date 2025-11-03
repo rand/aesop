@@ -9,10 +9,10 @@ const DiagnosticSeverity = @import("../lsp/response_parser.zig").DiagnosticSever
 
 /// Diagnostic icon configuration
 pub const DiagnosticIcons = struct {
-    error_icon: []const u8 = "●",  // Red circle for errors
+    error_icon: []const u8 = "●", // Red circle for errors
     warning_icon: []const u8 = "▲", // Yellow triangle for warnings
-    info_icon: []const u8 = "ⓘ",    // Blue info circle
-    hint_icon: []const u8 = "💡",   // Light bulb for hints
+    info_icon: []const u8 = "ⓘ", // Blue info circle
+    hint_icon: []const u8 = "💡", // Light bulb for hints
 };
 
 /// Get color for diagnostic severity

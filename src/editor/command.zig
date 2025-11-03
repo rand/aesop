@@ -3360,7 +3360,7 @@ fn applyTextEdits(editor: *Editor, buffer_id: Buffer.BufferId, edits: []const @i
                 // Sort by line, then character (reverse order)
                 const a_gt_b = a.range.start.line > b.range.start.line or
                     (a.range.start.line == b.range.start.line and
-                    a.range.start.character > b.range.start.character);
+                        a.range.start.character > b.range.start.character);
 
                 if (!a_gt_b) {
                     const temp = sorted_edits[j];
