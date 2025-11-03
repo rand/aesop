@@ -3434,6 +3434,9 @@ fn lspFormattingCallback(ctx: ?*anyopaque, result_json: []const u8) !void {
     }) catch "Formatting applied";
 
     editor.messages.add(msg, .success) catch {};
+
+    // Free formatting context (prevents memory leak)
+    editor.allocator.destroy(fmt_ctx);
 }
 
 /// Find all references to symbol under cursor

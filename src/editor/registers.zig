@@ -2,6 +2,7 @@
 //! Supports vim-style registers: a-z, 0-9, unnamed, system, black hole
 
 const std = @import("std");
+const clipboard = @import("../terminal/clipboard.zig");
 
 /// Register identifier
 pub const RegisterId = union(enum) {
@@ -124,14 +125,27 @@ pub const RegisterManager = struct {
                     old.deinit(self.allocator);
                 }
                 self.system_register = content;
-                // TODO: Actually copy to system clipboard
+
+                // Copy to actual system clipboard
+                clipboard.copy(self.allocator, content.text) catch |err| {
+                    std.debug.print("[Clipboard] Failed to copy to system clipboard: {}\n", .{err});
+                    // Continue anyway - content is stored in system_register
+                };
             },
             .black_hole => unreachable,
         }
     }
 
     /// Get register content (returns reference, caller must not free)
-    pub fn get(self: *const RegisterManager, id: RegisterId) ?*const RegisterContent {
+    pub fn get(self: *RegisterManager, id: RegisterId) ?*const RegisterContent {
+        // For system register, try to sync from OS clipboard first
+        if (id == .system) {
+            self.syncFromSystemClipboard() catch |err| {
+                std.debug.print("[Clipboard] Failed to sync from system clipboard: {}\n", .{err});
+                // Fall through to return cached content
+            };
+        }
+
         return switch (id) {
             .named => |ch| blk: {
                 const idx = ch - 'a';
@@ -149,6 +163,22 @@ pub const RegisterManager = struct {
             .unnamed => if (self.unnamed_register) |*content| content else null,
             .system => if (self.system_register) |*content| content else null,
             .black_hole => null,
+        };
+    }
+
+    /// Sync system register from OS clipboard
+    fn syncFromSystemClipboard(self: *RegisterManager) !void {
+        const clipboard_text = try clipboard.paste(self.allocator);
+        errdefer self.allocator.free(clipboard_text);
+
+        // Replace system register content
+        if (self.system_register) |*old| {
+            old.deinit(self.allocator);
+        }
+
+        self.system_register = RegisterContent{
+            .text = clipboard_text,
+            .is_linewise = false, // Assume characterwise for clipboard content
         };
     }
 

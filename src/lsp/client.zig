@@ -214,7 +214,18 @@ pub const Client = struct {
 
         // Invoke callback with result (or error)
         if (rpc_response.isError()) {
-            // TODO: Extract error message and pass to callback
+            // Extract error information
+            if (rpc_response.@"error") |err_obj| {
+                const code = err_obj.code;
+                const message = err_obj.message orelse "Unknown error";
+                std.debug.print("[LSP] Server error for {s} (code {d}): {s}\n", .{
+                    pending.method,
+                    code,
+                    message,
+                });
+            } else {
+                std.debug.print("[LSP] Server error for {s}: no error details\n", .{pending.method});
+            }
             return error.ServerError;
         }
 
