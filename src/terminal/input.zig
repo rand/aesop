@@ -119,6 +119,13 @@ pub const Parser = struct {
             }
         }
 
+        // If we're still in escape state after processing all bytes,
+        // treat it as a standalone Escape key (not part of an escape sequence)
+        if (self.state == .escape) {
+            self.state = .normal;
+            try events.append(allocator, Event{ .key = .{ .key = .escape, .mods = Modifiers.none() } });
+        }
+
         return events.toOwnedSlice(allocator);
     }
 

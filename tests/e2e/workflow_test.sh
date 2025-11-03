@@ -216,8 +216,8 @@ test_undo_redo_workflow() {
 
     assert_screen_contains "Edit 1" "After undo: Edit 1 should remain" || return 1
 
-    # Redo (Ctrl+R)
-    send_keys "C-r"
+    # Redo (Shift+U)
+    send_keys "U"
     sleep 0.3
 
     # Edit 2 should be back

@@ -77,6 +77,7 @@ pub const Editor = struct {
     clipboard: Actions.Clipboard,
     messages: Message.MessageQueue,
     undo_history: Undo.UndoHistory,
+    current_undo_group: ?Undo.OperationGroup, // Accumulates ops during insert session
     palette: Palette.Palette,
     search: Search.Search,
     marks: Marks.MarkRegistry,
@@ -128,6 +129,7 @@ pub const Editor = struct {
             .clipboard = Actions.Clipboard.init(allocator),
             .messages = Message.MessageQueue.init(allocator),
             .undo_history = Undo.UndoHistory.init(allocator),
+            .current_undo_group = null,
             .palette = Palette.Palette.init(allocator),
             .search = Search.Search.initWithOptions(allocator, search_options),
             .marks = Marks.MarkRegistry.init(allocator),
@@ -656,10 +658,12 @@ pub const Editor = struct {
             // Get all selections
             const all_selections = self.selections.all(self.allocator);
 
-            // Create undo group for this edit operation
-            const cursor_before = if (all_selections.len > 0) all_selections[0].head else Cursor.Position{ .line = 0, .col = 0 };
-            var undo_group = Undo.OperationGroup.init(self.allocator, cursor_before);
-            errdefer undo_group.deinit(self.allocator);
+            // Get or create undo group for this editing session
+            // If we're in insert mode but don't have a group yet, create one
+            if (self.current_undo_group == null) {
+                const cursor_before = if (all_selections.len > 0) all_selections[0].head else Cursor.Position{ .line = 0, .col = 0 };
+                self.current_undo_group = Undo.OperationGroup.init(self.allocator, cursor_before);
+            }
 
             // Check for auto-pairing
             const autopair_config = AutoPair.AutoPairConfig{ .enabled = self.config.auto_pair_brackets };
@@ -706,27 +710,28 @@ pub const Editor = struct {
                 i -= 1;
                 const sel = all_selections[i];
 
-                // Record operation for undo
-                if (text_to_insert) |txt| {
-                    const op = try Undo.Operation.init(
-                        self.allocator,
-                        .insert,
-                        sel.head,
-                        txt,
-                        null,
-                    );
-                    try undo_group.addOperation(self.allocator, op);
-                } else if (key == .special and key.special == .backspace) {
-                    // For backspace, we need to record what we're deleting
-                    // Get the character before cursor to record it
-                    const op = try Undo.Operation.init(
-                        self.allocator,
-                        .delete,
-                        sel.head,
-                        &[_]u8{}, // We're deleting, so text is empty
-                        null,
-                    );
-                    try undo_group.addOperation(self.allocator, op);
+                // Record operation for undo (add to current editing session's group)
+                if (self.current_undo_group) |*group| {
+                    if (text_to_insert) |txt| {
+                        const op = try Undo.Operation.init(
+                            self.allocator,
+                            .insert,
+                            sel.head,
+                            txt,
+                            null,
+                        );
+                        try group.addOperation(self.allocator, op);
+                    } else if (key == .special and key.special == .backspace) {
+                        // For backspace, we need to record what we're deleting
+                        const op = try Undo.Operation.init(
+                            self.allocator,
+                            .delete,
+                            sel.head,
+                            &[_]u8{}, // We're deleting, so text is empty
+                            null,
+                        );
+                        try group.addOperation(self.allocator, op);
+                    }
                 }
 
                 var new_sel = blk: {
@@ -761,17 +766,11 @@ pub const Editor = struct {
             }
             self.selections.primary_index = if (new_selections.items.len > 0) new_selections.items.len - 1 else 0;
 
-            // Update cursor_after in undo group
-            if (new_selections.items.len > 0) {
-                undo_group.cursor_after = new_selections.items[0].head;
-            }
-
-            // Push undo group to history (only if it contains operations)
-            if (undo_group.operations.items.len > 0) {
-                try self.undo_history.push(undo_group);
-            } else {
-                // Clean up empty group
-                undo_group.deinit(self.allocator);
+            // Update cursor_after in current undo group
+            if (self.current_undo_group) |*group| {
+                if (new_selections.items.len > 0) {
+                    group.cursor_after = new_selections.items[0].head;
+                }
             }
 
             // Mark buffer as modified
@@ -782,6 +781,20 @@ pub const Editor = struct {
     /// Handle mode transitions
     pub fn enterNormalMode(self: *Editor) !void {
         const old_mode = self.mode_manager.getMode();
+
+        // If exiting insert mode, push the accumulated undo group
+        if (old_mode == .insert and self.current_undo_group != null) {
+            var group = self.current_undo_group.?;
+            self.current_undo_group = null;
+
+            // Only push if it has operations
+            if (group.operations.items.len > 0) {
+                try self.undo_history.push(group);
+            } else {
+                group.deinit(self.allocator);
+            }
+        }
+
         try self.mode_manager.enterNormal();
         self.keymap_manager.clearPending();
 
@@ -793,6 +806,10 @@ pub const Editor = struct {
         const old_mode = self.mode_manager.getMode();
         try self.mode_manager.enterInsert();
         self.keymap_manager.clearPending();
+
+        // Start a new undo group for this editing session
+        const cursor_pos = if (self.selections.primary(self.allocator)) |sel| sel.head else Cursor.Position{ .line = 0, .col = 0 };
+        self.current_undo_group = Undo.OperationGroup.init(self.allocator, cursor_pos);
 
         // Dispatch mode change to plugins
         self.plugin_manager.dispatchModeChange(@intFromEnum(old_mode), @intFromEnum(Mode.Mode.insert)) catch {};

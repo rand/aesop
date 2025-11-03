@@ -284,6 +284,7 @@ pub fn setupDefaults(manager: *KeymapManager) !void {
     // Undo/redo
     try normal_map.bind(Binding.fromSingleKey(.{ .char = 'u' }, "undo"));
     try normal_map.bind(Binding.fromSingleKey(.{ .char = 'U' }, "redo"));
+    try normal_map.bind(Binding.fromSingleKey(.{ .char = 0x12 }, "redo")); // Ctrl+R
 
     // Clipboard (yank/paste)
     try normal_map.bind(Binding.fromChord(.{ .char = 'y' }, .{ .char = 'y' }, "yank_line"));

@@ -534,7 +534,9 @@ fn openAbove(ctx: *Context) Result {
 }
 
 fn normalMode(ctx: *Context) Result {
-    ctx.editor.enterNormalMode() catch return Result.err("Failed to enter normal mode");
+    ctx.editor.enterNormalMode() catch {
+        return Result.err("Failed to enter normal mode");
+    };
     return Result.ok();
 }
 

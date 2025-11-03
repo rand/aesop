@@ -167,20 +167,22 @@ pub const UndoHistory = struct {
             }
         }
 
-        // Check if we can merge with previous group
-        if (self.groups.items.len > 0) {
-            const last = &self.groups.items[self.groups.items.len - 1];
-            if (last.canMerge(&group)) {
-                // Merge operations into last group
-                for (group.operations.items) |op| {
-                    try last.operations.append(self.allocator, op);
-                }
-                last.cursor_after = group.cursor_after;
-                last.timestamp = group.timestamp;
-                // Don't deinit group since we transferred ownership of operations
-                return;
-            }
-        }
+        // DISABLED: Check if we can merge with previous group
+        // Merging causes issues when multiple editing sessions happen within 1 second.
+        // TODO: Re-enable with proper session tracking (track mode enter/exit)
+        // if (self.groups.items.len > 0) {
+        //     const last = &self.groups.items[self.groups.items.len - 1];
+        //     if (last.canMerge(&group)) {
+        //         // Merge operations into last group
+        //         for (group.operations.items) |op| {
+        //             try last.operations.append(self.allocator, op);
+        //         }
+        //         last.cursor_after = group.cursor_after;
+        //         last.timestamp = group.timestamp;
+        //         // Don't deinit group since we transferred ownership of operations
+        //         return;
+        //     }
+        // }
 
         // Add new group
         try self.groups.append(self.allocator, group);
