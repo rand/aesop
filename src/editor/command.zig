@@ -10,6 +10,7 @@ const PendingCommand = EditorModule.PendingCommand;
 
 const LspHandlers = @import("../lsp/handlers.zig");
 const ResponseParser = @import("../lsp/response_parser.zig");
+const Markdown = @import("../render/markdown.zig");
 
 /// Command context - passed to command handlers
 pub const Context = struct {
@@ -3140,6 +3141,19 @@ fn lspHoverCallback(ctx: ?*anyopaque, result_json: []const u8) !void {
         editor.messages.add("Failed to parse hover information", .error_msg) catch {};
         return;
     };
+    defer editor.allocator.free(hover_text);
+
+    // Convert markdown to plain text for better rendering
+    const plain_text = Markdown.toPlainText(editor.allocator, hover_text) catch |err| {
+        std.debug.print("[LSP] Failed to convert markdown: {}\n", .{err});
+        // Fall back to original text if markdown conversion fails
+        const fallback = editor.allocator.dupe(u8, hover_text) catch return;
+        if (editor.hover_content) |old_content| {
+            editor.allocator.free(old_content);
+        }
+        editor.hover_content = fallback;
+        return;
+    };
 
     // Free old hover content if exists
     if (editor.hover_content) |old_content| {
@@ -3147,7 +3161,7 @@ fn lspHoverCallback(ctx: ?*anyopaque, result_json: []const u8) !void {
     }
 
     // Store new hover content
-    editor.hover_content = hover_text;
+    editor.hover_content = plain_text;
 }
 
 /// Callback for LSP goto definition response
@@ -3559,6 +3573,19 @@ fn lspGetCodeActions(ctx: *Context) Result {
     const uri = ctx.editor.makeFileUri(filepath) catch return Result.err("Failed to create URI");
     defer ctx.editor.allocator.free(uri);
 
+    // Get diagnostics at cursor position
+    const diagnostics = ctx.editor.diagnostic_manager.getAtPosition(
+        ctx.editor.allocator,
+        uri,
+        @intCast(cursor.line),
+        @intCast(cursor.col),
+    ) catch &[_]LspHandlers.Diagnostic{};
+    defer {
+        if (diagnostics.len > 0) {
+            ctx.editor.allocator.free(diagnostics);
+        }
+    }
+
     // Create context for callback
     const code_ctx = ctx.editor.allocator.create(CodeActionsContext) catch return Result.err("Out of memory");
     code_ctx.* = .{
@@ -3566,12 +3593,13 @@ fn lspGetCodeActions(ctx: *Context) Result {
         .buffer_id = buffer.metadata.id,
     };
 
-    // Send LSP code action request
+    // Send LSP code action request with diagnostics
     _ = LspHandlers.codeAction(
         client,
         uri,
         @intCast(cursor.line),
         @intCast(cursor.col),
+        diagnostics,
         lspCodeActionsCallback,
         code_ctx,
     ) catch |err| {
@@ -3652,6 +3680,213 @@ fn lspGetDocumentSymbols(ctx: *Context) Result {
         ctx.editor.allocator.destroy(sym_ctx);
         std.debug.print("[LSP] Failed to request document symbols: {}\n", .{err});
         return Result.err("LSP document symbols request failed");
+    };
+
+    return Result.ok();
+}
+
+/// Context for signature help callback (Stream B)
+const SignatureHelpContext = struct {
+    editor: *Editor,
+};
+
+/// Callback for LSP signature help response (Stream B)
+fn lspSignatureHelpCallback(ctx: ?*anyopaque, result_json: []const u8) !void {
+    const sig_ctx: *SignatureHelpContext = @ptrCast(@alignCast(ctx.?));
+    const editor = sig_ctx.editor;
+    const allocator = editor.allocator;
+
+    var sig_help = ResponseParser.parseSignatureHelpResponse(allocator, result_json) catch |err| {
+        std.debug.print("[LSP] Failed to parse signature help: {}\n", .{err});
+        allocator.destroy(sig_ctx);
+        return error.ParseFailed;
+    };
+    defer sig_help.deinit(allocator);
+
+    if (sig_help.signatures.len == 0) {
+        allocator.destroy(sig_ctx);
+        return;
+    }
+
+    const active_sig_idx = sig_help.active_signature orelse 0;
+    if (active_sig_idx >= sig_help.signatures.len) {
+        allocator.destroy(sig_ctx);
+        return;
+    }
+
+    const sig = sig_help.signatures[active_sig_idx];
+
+    // Format signature with active parameter highlighted
+    var formatted = std.ArrayList(u8).empty;
+    defer formatted.deinit(allocator);
+
+    try formatted.appendSlice(allocator, sig.label);
+
+    // Show in message (future: show in popup)
+    const msg = try allocator.dupe(u8, formatted.items);
+    defer allocator.free(msg);
+    editor.messages.add(msg, .info) catch {};
+
+    allocator.destroy(sig_ctx);
+}
+
+/// Request signature help at cursor (Stream B)
+fn lspGetSignatureHelp(ctx: *Context) Result {
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    const client = &(ctx.editor.lsp_client orelse return Result.err("LSP not initialized"));
+
+    const cursor = (ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No cursor")).head;
+
+    const filepath = buffer.metadata.filepath orelse return Result.err("Buffer has no file path");
+    const uri = ctx.editor.makeFileUri(filepath) catch return Result.err("Failed to create URI");
+    defer ctx.editor.allocator.free(uri);
+
+    const sig_ctx = ctx.editor.allocator.create(SignatureHelpContext) catch return Result.err("Out of memory");
+    sig_ctx.* = .{ .editor = ctx.editor };
+
+    _ = LspHandlers.signatureHelp(
+        client,
+        uri,
+        @intCast(cursor.line),
+        @intCast(cursor.col),
+        lspSignatureHelpCallback,
+        sig_ctx,
+    ) catch |err| {
+        ctx.editor.allocator.destroy(sig_ctx);
+        std.debug.print("[LSP] Failed to request signature help: {}\n", .{err});
+        return Result.err("LSP signature help request failed");
+    };
+
+    return Result.ok();
+}
+
+/// Context for rename callback (Stream A)
+const RenameContext = struct {
+    editor: *Editor,
+    new_name: []const u8,
+};
+
+/// Callback for LSP rename response (Stream A)
+fn lspRenameCallback(ctx: ?*anyopaque, result_json: []const u8) !void {
+    const rename_ctx: *RenameContext = @ptrCast(@alignCast(ctx.?));
+    const editor = rename_ctx.editor;
+    const allocator = editor.allocator;
+
+    defer {
+        allocator.free(rename_ctx.new_name);
+        allocator.destroy(rename_ctx);
+    }
+
+    const rename_edits = ResponseParser.parseRenameResponse(allocator, result_json) catch |err| {
+        std.debug.print("[LSP] Failed to parse rename response: {}\n", .{err});
+        editor.messages.add("Failed to parse rename response", .error_msg) catch {};
+        return error.ParseFailed;
+    };
+    defer {
+        for (rename_edits) |*edit| {
+            edit.deinit(allocator);
+        }
+        allocator.free(rename_edits);
+    }
+
+    if (rename_edits.len == 0) {
+        editor.messages.add("No changes to apply", .info) catch {};
+        return;
+    }
+
+    // Apply edits to all affected files
+    var files_modified: usize = 0;
+    var total_edits: usize = 0;
+
+    for (rename_edits) |rename_edit| {
+        // Extract filepath from URI
+        const uri_prefix = "file://";
+        const filepath = if (std.mem.startsWith(u8, rename_edit.uri, uri_prefix))
+            rename_edit.uri[uri_prefix.len..]
+        else
+            rename_edit.uri;
+
+        // Find buffer for this file
+        var found_buffer: ?*Buffer.Buffer = null;
+        for (editor.buffer_manager.buffers.items) |*buf| {
+            if (buf.metadata.filepath) |buf_path| {
+                if (std.mem.eql(u8, buf_path, filepath)) {
+                    found_buffer = buf;
+                    break;
+                }
+            }
+        }
+
+        // Skip if file not open
+        const buffer = found_buffer orelse {
+            std.debug.print("[LSP] Skipping rename in unopened file: {s}\n", .{filepath});
+            continue;
+        };
+
+        // Apply edits (similar to formatting)
+        for (rename_edit.edits) |edit| {
+            const start_offset = lineCharToByteOffset(buffer, edit.range.start.line, edit.range.start.character) catch continue;
+            const end_offset = lineCharToByteOffset(buffer, edit.range.end.line, edit.range.end.character) catch continue;
+
+            if (end_offset > start_offset) {
+                buffer.rope.delete(start_offset, end_offset) catch continue;
+            }
+
+            if (edit.newText.len > 0) {
+                buffer.rope.insert(start_offset, edit.newText) catch continue;
+            }
+
+            total_edits += 1;
+        }
+
+        buffer.metadata.modified = true;
+        files_modified += 1;
+    }
+
+    const msg = std.fmt.allocPrint(allocator, "Renamed in {d} file(s), {d} location(s)", .{ files_modified, total_edits }) catch {
+        editor.messages.add("Rename completed", .success) catch {};
+        return;
+    };
+    defer allocator.free(msg);
+    editor.messages.add(msg, .success) catch {};
+}
+
+/// Request rename symbol (Stream A)
+fn lspRenameSymbol(ctx: *Context) Result {
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    const client = &(ctx.editor.lsp_client orelse return Result.err("LSP not initialized"));
+
+    const cursor = (ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No cursor")).head;
+
+    const filepath = buffer.metadata.filepath orelse return Result.err("Buffer has no file path");
+    const uri = ctx.editor.makeFileUri(filepath) catch return Result.err("Failed to create URI");
+    defer ctx.editor.allocator.free(uri);
+
+    // TODO: Prompt user for new name (for now use placeholder)
+    const new_name = ctx.editor.allocator.dupe(u8, "renamed") catch return Result.err("Out of memory");
+
+    const rename_ctx = ctx.editor.allocator.create(RenameContext) catch {
+        ctx.editor.allocator.free(new_name);
+        return Result.err("Out of memory");
+    };
+    rename_ctx.* = .{
+        .editor = ctx.editor,
+        .new_name = new_name,
+    };
+
+    _ = LspHandlers.rename(
+        client,
+        uri,
+        @intCast(cursor.line),
+        @intCast(cursor.col),
+        new_name,
+        lspRenameCallback,
+        rename_ctx,
+    ) catch |err| {
+        ctx.editor.allocator.free(new_name);
+        ctx.editor.allocator.destroy(rename_ctx);
+        std.debug.print("[LSP] Failed to request rename: {}\n", .{err});
+        return Result.err("LSP rename request failed");
     };
 
     return Result.ok();
@@ -4627,6 +4862,20 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .name = "lsp_document_symbols",
         .description = "Show document symbols/outline (go)",
         .handler = lspGetDocumentSymbols,
+        .category = .system,
+    });
+
+    try registry.register(.{
+        .name = "lsp_signature_help",
+        .description = "Show function signature help",
+        .handler = lspGetSignatureHelp,
+        .category = .system,
+    });
+
+    try registry.register(.{
+        .name = "lsp_rename",
+        .description = "Rename symbol under cursor",
+        .handler = lspRenameSymbol,
         .category = .system,
     });
 }

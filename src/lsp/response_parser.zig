@@ -823,6 +823,256 @@ fn parseRange(value: std.json.Value) !Range {
     };
 }
 
+/// Signature help structures (Stream B)
+pub const ParameterInformation = struct {
+    label: []const u8, // Parameter name or range
+    documentation: ?[]const u8,
+
+    pub fn deinit(self: *ParameterInformation, allocator: std.mem.Allocator) void {
+        allocator.free(self.label);
+        if (self.documentation) |doc| allocator.free(doc);
+    }
+};
+
+pub const SignatureInformation = struct {
+    label: []const u8, // Function signature
+    documentation: ?[]const u8,
+    parameters: []ParameterInformation,
+    active_parameter: ?u32,
+
+    pub fn deinit(self: *SignatureInformation, allocator: std.mem.Allocator) void {
+        allocator.free(self.label);
+        if (self.documentation) |doc| allocator.free(doc);
+        for (self.parameters) |*param| {
+            param.deinit(allocator);
+        }
+        allocator.free(self.parameters);
+    }
+};
+
+pub const SignatureHelp = struct {
+    signatures: []SignatureInformation,
+    active_signature: ?u32,
+    active_parameter: ?u32,
+
+    pub fn deinit(self: *SignatureHelp, allocator: std.mem.Allocator) void {
+        for (self.signatures) |*sig| {
+            sig.deinit(allocator);
+        }
+        allocator.free(self.signatures);
+    }
+};
+
+/// Parse signature help response
+pub fn parseSignatureHelpResponse(allocator: std.mem.Allocator, json_text: []const u8) !SignatureHelp {
+    const parsed = try std.json.parseFromSlice(std.json.Value, allocator, json_text, .{});
+    defer parsed.deinit();
+
+    const root = parsed.value;
+
+    if (root == .null) {
+        return SignatureHelp{
+            .signatures = try allocator.alloc(SignatureInformation, 0),
+            .active_signature = null,
+            .active_parameter = null,
+        };
+    }
+
+    if (root != .object) return error.InvalidSignatureHelpResponse;
+    const obj = root.object;
+
+    // Parse signatures array
+    const sigs_value = obj.get("signatures") orelse return error.MissingSignatures;
+    if (sigs_value != .array) return error.InvalidSignatures;
+
+    var signatures = std.ArrayList(SignatureInformation).empty;
+    errdefer {
+        for (signatures.items) |*sig| {
+            sig.deinit(allocator);
+        }
+        signatures.deinit(allocator);
+    }
+
+    for (sigs_value.array.items) |sig_value| {
+        if (sig_value != .object) continue;
+        const sig_obj = sig_value.object;
+
+        const label = sig_obj.get("label") orelse continue;
+        if (label != .string) continue;
+        const label_str = try allocator.dupe(u8, label.string);
+        errdefer allocator.free(label_str);
+
+        var documentation: ?[]const u8 = null;
+        if (sig_obj.get("documentation")) |doc_value| {
+            if (doc_value == .string) {
+                documentation = try allocator.dupe(u8, doc_value.string);
+            }
+        }
+        errdefer if (documentation) |doc| allocator.free(doc);
+
+        // Parse parameters
+        var parameters = std.ArrayList(ParameterInformation).empty;
+        errdefer {
+            for (parameters.items) |*param| {
+                param.deinit(allocator);
+            }
+            parameters.deinit(allocator);
+        }
+
+        if (sig_obj.get("parameters")) |params_value| {
+            if (params_value == .array) {
+                for (params_value.array.items) |param_value| {
+                    if (param_value != .object) continue;
+                    const param_obj = param_value.object;
+
+                    const param_label = param_obj.get("label") orelse continue;
+                    if (param_label != .string) continue;
+                    const param_label_str = try allocator.dupe(u8, param_label.string);
+
+                    var param_doc: ?[]const u8 = null;
+                    if (param_obj.get("documentation")) |param_doc_value| {
+                        if (param_doc_value == .string) {
+                            param_doc = try allocator.dupe(u8, param_doc_value.string);
+                        }
+                    }
+
+                    try parameters.append(allocator, ParameterInformation{
+                        .label = param_label_str,
+                        .documentation = param_doc,
+                    });
+                }
+            }
+        }
+
+        const active_param = if (sig_obj.get("activeParameter")) |ap| blk: {
+            if (ap == .integer) break :blk @as(u32, @intCast(ap.integer)) else break :blk null;
+        } else null;
+
+        try signatures.append(allocator, SignatureInformation{
+            .label = label_str,
+            .documentation = documentation,
+            .parameters = try parameters.toOwnedSlice(allocator),
+            .active_parameter = active_param,
+        });
+    }
+
+    const active_sig = if (obj.get("activeSignature")) |as| blk: {
+        if (as == .integer) break :blk @as(u32, @intCast(as.integer)) else break :blk null;
+    } else null;
+
+    const active_param = if (obj.get("activeParameter")) |ap| blk: {
+        if (ap == .integer) break :blk @as(u32, @intCast(ap.integer)) else break :blk null;
+    } else null;
+
+    return SignatureHelp{
+        .signatures = try signatures.toOwnedSlice(allocator),
+        .active_signature = active_sig,
+        .active_parameter = active_param,
+    };
+}
+
+/// Rename structures (Stream A)
+pub const PrepareRenameResponse = struct {
+    range: Range,
+    placeholder: []const u8,
+
+    pub fn deinit(self: *PrepareRenameResponse, allocator: std.mem.Allocator) void {
+        allocator.free(self.placeholder);
+    }
+};
+
+pub const RenameEdit = struct {
+    uri: []const u8,
+    edits: []TextEdit,
+
+    pub fn deinit(self: *RenameEdit, allocator: std.mem.Allocator) void {
+        allocator.free(self.uri);
+        for (self.edits) |*edit| {
+            edit.deinit(allocator);
+        }
+        allocator.free(self.edits);
+    }
+};
+
+/// Parse prepare rename response
+pub fn parsePrepareRenameResponse(allocator: std.mem.Allocator, json_text: []const u8) !PrepareRenameResponse {
+    const parsed = try std.json.parseFromSlice(std.json.Value, allocator, json_text, .{});
+    defer parsed.deinit();
+
+    const root = parsed.value;
+    if (root == .null) return error.CannotRename;
+    if (root != .object) return error.InvalidPrepareRenameResponse;
+
+    const obj = root.object;
+    const range = parseRange(obj.get("range") orelse return error.MissingRange) catch return error.InvalidRange;
+
+    const placeholder_value = obj.get("placeholder") orelse return error.MissingPlaceholder;
+    if (placeholder_value != .string) return error.InvalidPlaceholder;
+    const placeholder = try allocator.dupe(u8, placeholder_value.string);
+
+    return PrepareRenameResponse{
+        .range = range,
+        .placeholder = placeholder,
+    };
+}
+
+/// Parse rename response (WorkspaceEdit with document changes)
+pub fn parseRenameResponse(allocator: std.mem.Allocator, json_text: []const u8) ![]RenameEdit {
+    const parsed = try std.json.parseFromSlice(std.json.Value, allocator, json_text, .{});
+    defer parsed.deinit();
+
+    const root = parsed.value;
+    if (root == .null) {
+        return try allocator.alloc(RenameEdit, 0);
+    }
+
+    if (root != .object) return error.InvalidRenameResponse;
+    const obj = root.object;
+
+    // Parse workspace edit
+    const changes_value = obj.get("changes") orelse return error.MissingChanges;
+    if (changes_value != .object) return error.InvalidChanges;
+
+    var rename_edits = std.ArrayList(RenameEdit).empty;
+    errdefer {
+        for (rename_edits.items) |*edit| {
+            edit.deinit(allocator);
+        }
+        rename_edits.deinit(allocator);
+    }
+
+    var changes_iter = changes_value.object.iterator();
+    while (changes_iter.next()) |entry| {
+        const uri = try allocator.dupe(u8, entry.key_ptr.*);
+        errdefer allocator.free(uri);
+
+        if (entry.value_ptr.* != .array) {
+            allocator.free(uri);
+            continue;
+        }
+
+        var text_edits = std.ArrayList(TextEdit).empty;
+        errdefer {
+            for (text_edits.items) |*te| {
+                te.deinit(allocator);
+            }
+            text_edits.deinit(allocator);
+        }
+
+        for (entry.value_ptr.array.items) |edit_value| {
+            const edit = parseTextEdit(allocator, edit_value) catch continue;
+            try text_edits.append(allocator, edit);
+        }
+
+        try rename_edits.append(allocator, RenameEdit{
+            .uri = uri,
+            .edits = try text_edits.toOwnedSlice(allocator),
+        });
+    }
+
+    return rename_edits.toOwnedSlice(allocator);
+}
+
 // === Tests ===
 
 test "parse completion response: CompletionList format" {

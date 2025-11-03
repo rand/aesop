@@ -267,6 +267,7 @@ pub fn codeAction(
     uri: []const u8,
     line: u32,
     character: u32,
+    diagnostics: []const Diagnostic,
     callback: *const fn (ctx: ?*anyopaque, result: []const u8) anyerror!void,
     callback_ctx: ?*anyopaque,
 ) !u32 {
@@ -287,12 +288,15 @@ pub fn codeAction(
             },
         },
         .context = .{
-            .diagnostics = .{}, // Empty for now, could include diagnostics at position
+            .diagnostics = diagnostics,
         },
     };
 
     return try client.sendRequest("textDocument/codeAction", params, callback, callback_ctx);
 }
+
+// Re-export Diagnostic type for convenience
+pub const Diagnostic = @import("response_parser.zig").Diagnostic;
 
 /// Request document symbols (outline)
 pub fn documentSymbol(
@@ -310,6 +314,80 @@ pub fn documentSymbol(
     };
 
     return try client.sendRequest("textDocument/documentSymbol", params, callback, callback_ctx);
+}
+
+/// Request signature help at cursor position (Stream B)
+pub fn signatureHelp(
+    client: *Client,
+    uri: []const u8,
+    line: u32,
+    character: u32,
+    callback: *const fn (ctx: ?*anyopaque, result: []const u8) anyerror!void,
+    callback_ctx: ?*anyopaque,
+) !u32 {
+    if (!client.isReady()) {
+        return error.NotInitialized;
+    }
+
+    const params = .{
+        .textDocument = .{ .uri = uri },
+        .position = .{
+            .line = line,
+            .character = character,
+        },
+    };
+
+    return try client.sendRequest("textDocument/signatureHelp", params, callback, callback_ctx);
+}
+
+/// Prepare rename (check if rename is valid at position) (Stream A)
+pub fn prepareRename(
+    client: *Client,
+    uri: []const u8,
+    line: u32,
+    character: u32,
+    callback: *const fn (ctx: ?*anyopaque, result: []const u8) anyerror!void,
+    callback_ctx: ?*anyopaque,
+) !u32 {
+    if (!client.isReady()) {
+        return error.NotInitialized;
+    }
+
+    const params = .{
+        .textDocument = .{ .uri = uri },
+        .position = .{
+            .line = line,
+            .character = character,
+        },
+    };
+
+    return try client.sendRequest("textDocument/prepareRename", params, callback, callback_ctx);
+}
+
+/// Request rename with new name (Stream A)
+pub fn rename(
+    client: *Client,
+    uri: []const u8,
+    line: u32,
+    character: u32,
+    new_name: []const u8,
+    callback: *const fn (ctx: ?*anyopaque, result: []const u8) anyerror!void,
+    callback_ctx: ?*anyopaque,
+) !u32 {
+    if (!client.isReady()) {
+        return error.NotInitialized;
+    }
+
+    const params = .{
+        .textDocument = .{ .uri = uri },
+        .position = .{
+            .line = line,
+            .character = character,
+        },
+        .newName = new_name,
+    };
+
+    return try client.sendRequest("textDocument/rename", params, callback, callback_ctx);
 }
 
 /// Content change for didChange notification

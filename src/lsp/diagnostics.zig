@@ -92,6 +92,58 @@ pub const DiagnosticManager = struct {
         return severest;
     }
 
+    /// Get diagnostics at a specific position (line and character)
+    /// Allocates and returns a new array - caller must free
+    pub fn getAtPosition(
+        self: *const DiagnosticManager,
+        allocator: std.mem.Allocator,
+        uri: []const u8,
+        line: u32,
+        character: u32,
+    ) ![]Diagnostic {
+        const all_diagnostics = self.get(uri) orelse return &[_]Diagnostic{};
+
+        // Count diagnostics at position first
+        var count: usize = 0;
+        for (all_diagnostics) |diag| {
+            const start_line = diag.range.start.line;
+            const start_char = diag.range.start.character;
+            const end_line = diag.range.end.line;
+            const end_char = diag.range.end.character;
+
+            // Check if position is within diagnostic range
+            if ((line > start_line or (line == start_line and character >= start_char)) and
+                (line < end_line or (line == end_line and character <= end_char)))
+            {
+                count += 1;
+            }
+        }
+
+        if (count == 0) {
+            return &[_]Diagnostic{};
+        }
+
+        // Allocate and fill result array
+        var result = try allocator.alloc(Diagnostic, count);
+        var idx: usize = 0;
+
+        for (all_diagnostics) |diag| {
+            const start_line = diag.range.start.line;
+            const start_char = diag.range.start.character;
+            const end_line = diag.range.end.line;
+            const end_char = diag.range.end.character;
+
+            if ((line > start_line or (line == start_line and character >= start_char)) and
+                (line < end_line or (line == end_line and character <= end_char)))
+            {
+                result[idx] = diag;
+                idx += 1;
+            }
+        }
+
+        return result;
+    }
+
     /// Clear diagnostics for a URI
     pub fn clear(self: *DiagnosticManager, uri: []const u8) void {
         if (self.diagnostics_by_uri.fetchRemove(uri)) |entry| {
