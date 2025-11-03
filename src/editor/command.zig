@@ -1689,9 +1689,40 @@ fn listMarks(ctx: *Context) Result {
         return Result.ok();
     }
 
-    // Show first mark info (TODO: show in palette or buffer)
-    var buf: [64]u8 = undefined;
-    const msg = std.fmt.bufPrint(&buf, "{d} mark(s) set", .{marks.len}) catch "Marks exist";
+    // Build formatted list of all marks
+    var list = std.ArrayList(u8).empty;
+    defer list.deinit(ctx.editor.allocator);
+
+    // Header
+    const header = std.fmt.allocPrint(
+        ctx.editor.allocator,
+        "Marks ({d} set):\n",
+        .{marks.len},
+    ) catch return Result.err("Out of memory");
+    defer ctx.editor.allocator.free(header);
+    list.appendSlice(ctx.editor.allocator, header) catch return Result.err("Out of memory");
+
+    // List each mark with format: "  a: file.zig:10:5" or "  a: [No Name]:10:5"
+    for (marks) |mark| {
+        const buffer = ctx.editor.buffer_manager.getBuffer(mark.buffer_id);
+        const location_name = if (buffer) |buf|
+            buf.metadata.getName()
+        else
+            "[Unknown]";
+
+        const line = std.fmt.allocPrint(
+            ctx.editor.allocator,
+            "  {c}: {s}:{d}:{d}\n",
+            .{ mark.name, location_name, mark.position.line + 1, mark.position.col + 1 },
+        ) catch return Result.err("Out of memory");
+        defer ctx.editor.allocator.free(line);
+
+        list.appendSlice(ctx.editor.allocator, line) catch return Result.err("Out of memory");
+    }
+
+    // Show the complete list
+    const msg = list.toOwnedSlice(ctx.editor.allocator) catch return Result.err("Out of memory");
+    defer ctx.editor.allocator.free(msg);
     ctx.editor.messages.add(msg, .info) catch {};
 
     return Result.ok();
