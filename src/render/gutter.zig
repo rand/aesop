@@ -113,16 +113,12 @@ pub fn renderWithDiagnostics(
 
 /// Calculate gutter width based on configuration
 pub fn calculateWidth(config: GutterConfig, total_lines: usize) u16 {
+    _ = total_lines; // Unused - format string determines width
     if (!config.show_line_numbers) return 0;
 
-    // Calculate digits needed for line numbers
-    var width: u16 = 1;
-    var temp = total_lines;
-    while (temp >= 10) {
-        width += 1;
-        temp /= 10;
-    }
-
-    // Add padding
-    return width + 1; // +1 for space after number
+    // FIXED: Return the actual width used by the format string "{d:>4} " (5 characters)
+    // Previous bug: calculated dynamic width (e.g., 2 for <10 lines) but format always used 5 chars
+    // This caused text to start at column 2 while gutter occupied columns 0-4,
+    // resulting in 3 characters being overwritten by line numbers
+    return 5; // 4 digits + 1 space, matching the format string
 }
