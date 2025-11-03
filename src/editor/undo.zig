@@ -345,7 +345,7 @@ pub const UndoHistory = struct {
         }
 
         // Restore the selected branch
-        var removed_branch = self.branches.orderedRemove(branch_index);
+        const removed_branch = self.branches.orderedRemove(branch_index);
         for (removed_branch.groups.items) |group| {
             try self.groups.append(group);
         }
