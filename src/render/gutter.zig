@@ -11,8 +11,8 @@ const LspDiagnostics = @import("../lsp/diagnostics.zig");
 pub const GutterConfig = struct {
     show_line_numbers: bool = true,
     line_number_style: LineNumberStyle = .relative,
-    show_git_status: bool = false, // TODO: Future feature
-    show_diagnostics: bool = false, // TODO: Future feature
+    show_git_status: bool = false, // Git integration pending
+    show_diagnostics: bool = true, // LSP diagnostic indicators enabled
     width: u16 = 5, // Width of gutter in characters
 
     pub const LineNumberStyle = enum {
