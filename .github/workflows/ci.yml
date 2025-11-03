@@ -26,14 +26,50 @@ jobs:
     - name: Verify Zig installation
       run: zig version
 
+    - name: Install tree-sitter dependencies
+      run: |
+        mkdir -p $HOME/lib
+
+        # Install tree-sitter core library
+        git clone --depth 1 https://github.com/tree-sitter/tree-sitter.git /tmp/tree-sitter
+        cd /tmp/tree-sitter
+        make
+        sudo make install PREFIX=/usr/local || make install PREFIX=$HOME/.local
+
+        # Build grammar libraries
+        for lang in zig rust go python c; do
+          echo "Building tree-sitter-$lang..."
+          git clone --depth 1 https://github.com/tree-sitter/tree-sitter-$lang /tmp/ts-$lang
+          cd /tmp/ts-$lang
+
+          # Compile shared library
+          gcc -shared -fPIC -o $HOME/lib/libtree-sitter-$lang.so src/parser.c -I./src || \
+          clang -shared -fPIC -o $HOME/lib/libtree-sitter-$lang.dylib src/parser.c -I./src || \
+          echo "Warn: Could not build tree-sitter-$lang"
+
+          cd -
+        done
+
+        ls -lh $HOME/lib/ || true
+      shell: bash
+
     - name: Build aesop
       run: zig build
+      env:
+        LD_LIBRARY_PATH: $HOME/lib
+        DYLD_LIBRARY_PATH: $HOME/lib
 
     - name: Run tests
       run: zig build test
+      env:
+        LD_LIBRARY_PATH: $HOME/lib
+        DYLD_LIBRARY_PATH: $HOME/lib
 
     - name: Build release
       run: zig build -Doptimize=ReleaseSafe
+      env:
+        LD_LIBRARY_PATH: $HOME/lib
+        DYLD_LIBRARY_PATH: $HOME/lib
 
   lint:
     name: Code Quality

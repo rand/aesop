@@ -45,32 +45,32 @@ pub const ZigKeywords = [_][]const u8{
 };
 
 pub const RustKeywords = [_][]const u8{
-    "as",      "async",  "await",   "break",    "const",   "continue",
-    "crate",   "dyn",    "else",    "enum",     "extern",  "false",
-    "fn",      "for",    "if",      "impl",     "in",      "let",
-    "loop",    "match",  "mod",     "move",     "mut",     "pub",
-    "ref",     "return", "self",    "Self",     "static",  "struct",
-    "super",   "trait",  "true",    "type",     "unsafe",  "use",
-    "where",   "while",  "abstract", "become",  "box",     "do",
-    "final",   "macro",  "override", "priv",    "typeof",  "unsized",
+    "as",      "async",  "await",    "break",  "const",  "continue",
+    "crate",   "dyn",    "else",     "enum",   "extern", "false",
+    "fn",      "for",    "if",       "impl",   "in",     "let",
+    "loop",    "match",  "mod",      "move",   "mut",    "pub",
+    "ref",     "return", "self",     "Self",   "static", "struct",
+    "super",   "trait",  "true",     "type",   "unsafe", "use",
+    "where",   "while",  "abstract", "become", "box",    "do",
+    "final",   "macro",  "override", "priv",   "typeof", "unsized",
     "virtual", "yield",
 };
 
 pub const PythonKeywords = [_][]const u8{
-    "False",  "None",   "True",    "and",     "as",      "assert",
-    "async",  "await",  "break",   "class",   "continue", "def",
-    "del",    "elif",   "else",    "except",  "finally", "for",
-    "from",   "global", "if",      "import",  "in",      "is",
-    "lambda", "nonlocal", "not",   "or",      "pass",    "raise",
-    "return", "try",    "while",   "with",    "yield",
+    "False",  "None",     "True",  "and",    "as",       "assert",
+    "async",  "await",    "break", "class",  "continue", "def",
+    "del",    "elif",     "else",  "except", "finally",  "for",
+    "from",   "global",   "if",    "import", "in",       "is",
+    "lambda", "nonlocal", "not",   "or",     "pass",     "raise",
+    "return", "try",      "while", "with",   "yield",
 };
 
 pub const GoKeywords = [_][]const u8{
-    "break",    "case",     "chan",      "const",    "continue",
-    "default",  "defer",    "else",      "fallthrough", "for",
-    "func",     "go",       "goto",      "if",       "import",
-    "interface", "map",     "package",   "range",    "return",
-    "select",   "struct",   "switch",    "type",     "var",
+    "break",     "case",   "chan",    "const",       "continue",
+    "default",   "defer",  "else",    "fallthrough", "for",
+    "func",      "go",     "goto",    "if",          "import",
+    "interface", "map",    "package", "range",       "return",
+    "select",    "struct", "switch",  "type",        "var",
 };
 
 /// Check if a word is a keyword
