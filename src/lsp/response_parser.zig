@@ -369,6 +369,130 @@ pub fn parseDefinitionResponse(allocator: std.mem.Allocator, json_text: []const 
     return locations.toOwnedSlice(allocator);
 }
 
+/// Parse references response and extract locations
+/// Returns array of locations (can be empty if no references found)
+pub fn parseReferencesResponse(allocator: std.mem.Allocator, json_text: []const u8) ![]Location {
+    const parsed = try std.json.parseFromSlice(std.json.Value, allocator, json_text, .{});
+    defer parsed.deinit();
+
+    const root = parsed.value;
+
+    // References response is always an array of Location, or null
+    if (root == .null) {
+        return try allocator.alloc(Location, 0);
+    }
+
+    if (root != .array) {
+        return error.InvalidReferencesResponse;
+    }
+
+    var locations = std.ArrayList(Location).empty;
+    errdefer {
+        for (locations.items) |*loc| {
+            loc.deinit(allocator);
+        }
+        locations.deinit(allocator);
+    }
+
+    for (root.array.items) |item| {
+        if (item != .object) continue;
+        const loc = parseLocation(allocator, item) catch continue;
+        try locations.append(allocator, loc);
+    }
+
+    return locations.toOwnedSlice(allocator);
+}
+
+/// TextEdit from LSP - represents a text replacement
+pub const TextEdit = struct {
+    range: Range,
+    newText: []const u8, // Allocated, must free
+
+    pub fn deinit(self: *TextEdit, allocator: std.mem.Allocator) void {
+        allocator.free(self.newText);
+    }
+};
+
+/// Parse formatting response and extract text edits
+/// Returns array of text edits (can be empty)
+pub fn parseFormattingResponse(allocator: std.mem.Allocator, json_text: []const u8) ![]TextEdit {
+    const parsed = try std.json.parseFromSlice(std.json.Value, allocator, json_text, .{});
+    defer parsed.deinit();
+
+    const root = parsed.value;
+
+    // Formatting response is always an array of TextEdit, or null
+    if (root == .null) {
+        return try allocator.alloc(TextEdit, 0);
+    }
+
+    if (root != .array) {
+        return error.InvalidFormattingResponse;
+    }
+
+    var edits = std.ArrayList(TextEdit).empty;
+    errdefer {
+        for (edits.items) |*edit| {
+            edit.deinit(allocator);
+        }
+        edits.deinit(allocator);
+    }
+
+    for (root.array.items) |item| {
+        if (item != .object) continue;
+        const edit = parseTextEdit(allocator, item) catch continue;
+        try edits.append(allocator, edit);
+    }
+
+    return edits.toOwnedSlice(allocator);
+}
+
+/// Parse a single TextEdit from JSON
+fn parseTextEdit(allocator: std.mem.Allocator, value: std.json.Value) !TextEdit {
+    if (value != .object) return error.InvalidTextEdit;
+    const obj = value.object;
+
+    // Extract range
+    const range_value = obj.get("range") orelse return error.MissingRange;
+    if (range_value != .object) return error.InvalidRange;
+    const range_obj = range_value.object;
+
+    const start_value = range_obj.get("start") orelse return error.MissingStart;
+    const end_value = range_obj.get("end") orelse return error.MissingEnd;
+    if (start_value != .object or end_value != .object) return error.InvalidPosition;
+
+    const start_line = if (start_value.object.get("line")) |v| blk: {
+        if (v == .integer) break :blk @as(u32, @intCast(v.integer)) else return error.InvalidLine;
+    } else return error.MissingLine;
+
+    const start_char = if (start_value.object.get("character")) |v| blk: {
+        if (v == .integer) break :blk @as(u32, @intCast(v.integer)) else return error.InvalidCharacter;
+    } else return error.MissingCharacter;
+
+    const end_line = if (end_value.object.get("line")) |v| blk: {
+        if (v == .integer) break :blk @as(u32, @intCast(v.integer)) else return error.InvalidLine;
+    } else return error.MissingLine;
+
+    const end_char = if (end_value.object.get("character")) |v| blk: {
+        if (v == .integer) break :blk @as(u32, @intCast(v.integer)) else return error.InvalidCharacter;
+    } else return error.MissingCharacter;
+
+    const range = Range{
+        .start = .{ .line = start_line, .character = start_char },
+        .end = .{ .line = end_line, .character = end_char },
+    };
+
+    // Extract newText
+    const new_text_value = obj.get("newText") orelse return error.MissingNewText;
+    if (new_text_value != .string) return error.InvalidNewText;
+    const new_text = try allocator.dupe(u8, new_text_value.string);
+
+    return TextEdit{
+        .range = range,
+        .newText = new_text,
+    };
+}
+
 /// Parse a single Location from JSON
 fn parseLocation(allocator: std.mem.Allocator, value: std.json.Value) !Location {
     if (value != .object) return error.InvalidLocation;
@@ -706,4 +830,105 @@ test "parse definition response: null (no definition)" {
     defer allocator.free(locations);
 
     try std.testing.expectEqual(@as(usize, 0), locations.len);
+}
+
+test "parse references response: array of locations" {
+    const allocator = std.testing.allocator;
+
+    const json =
+        \\[
+        \\  {
+        \\    "uri": "file:///src/main.zig",
+        \\    "range": {
+        \\      "start": {"line": 10, "character": 5},
+        \\      "end": {"line": 10, "character": 15}
+        \\    }
+        \\  },
+        \\  {
+        \\    "uri": "file:///src/utils.zig",
+        \\    "range": {
+        \\      "start": {"line": 25, "character": 8},
+        \\      "end": {"line": 25, "character": 18}
+        \\    }
+        \\  }
+        \\]
+    ;
+
+    const locations = try parseReferencesResponse(allocator, json);
+    defer {
+        for (locations) |*loc| {
+            loc.deinit(allocator);
+        }
+        allocator.free(locations);
+    }
+
+    try std.testing.expectEqual(@as(usize, 2), locations.len);
+    try std.testing.expectEqualStrings("file:///src/main.zig", locations[0].uri);
+    try std.testing.expectEqual(@as(u32, 10), locations[0].range.start.line);
+    try std.testing.expectEqualStrings("file:///src/utils.zig", locations[1].uri);
+    try std.testing.expectEqual(@as(u32, 25), locations[1].range.start.line);
+}
+
+test "parse references response: null (no references)" {
+    const allocator = std.testing.allocator;
+
+    const json = "null";
+
+    const locations = try parseReferencesResponse(allocator, json);
+    defer allocator.free(locations);
+
+    try std.testing.expectEqual(@as(usize, 0), locations.len);
+}
+
+test "parse formatting response: text edits" {
+    const allocator = std.testing.allocator;
+
+    const json =
+        \\[
+        \\  {
+        \\    "range": {
+        \\      "start": {"line": 5, "character": 0},
+        \\      "end": {"line": 5, "character": 10}
+        \\    },
+        \\    "newText": "const foo = 42;"
+        \\  },
+        \\  {
+        \\    "range": {
+        \\      "start": {"line": 10, "character": 0},
+        \\      "end": {"line": 10, "character": 0}
+        \\    },
+        \\    "newText": "\n"
+        \\  }
+        \\]
+    ;
+
+    const edits = try parseFormattingResponse(allocator, json);
+    defer {
+        for (edits) |*edit| {
+            edit.deinit(allocator);
+        }
+        allocator.free(edits);
+    }
+
+    try std.testing.expectEqual(@as(usize, 2), edits.len);
+
+    // First edit
+    try std.testing.expectEqual(@as(u32, 5), edits[0].range.start.line);
+    try std.testing.expectEqual(@as(u32, 0), edits[0].range.start.character);
+    try std.testing.expectEqualStrings("const foo = 42;", edits[0].newText);
+
+    // Second edit
+    try std.testing.expectEqual(@as(u32, 10), edits[1].range.start.line);
+    try std.testing.expectEqualStrings("\n", edits[1].newText);
+}
+
+test "parse formatting response: null (no edits)" {
+    const allocator = std.testing.allocator;
+
+    const json = "null";
+
+    const edits = try parseFormattingResponse(allocator, json);
+    defer allocator.free(edits);
+
+    try std.testing.expectEqual(@as(usize, 0), edits.len);
 }

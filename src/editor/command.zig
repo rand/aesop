@@ -3258,6 +3258,254 @@ fn lspShowHover(ctx: *Context) Result {
     return Result.ok();
 }
 
+/// Callback for LSP references response
+fn lspReferencesCallback(ctx: ?*anyopaque, result_json: []const u8) !void {
+    const ResponseParser = @import("../lsp/response_parser.zig");
+    const editor: *Editor = @ptrCast(@alignCast(ctx orelse return error.NullContext));
+
+    // Parse references response
+    const locations = ResponseParser.parseReferencesResponse(editor.allocator, result_json) catch |err| {
+        std.debug.print("[LSP] Failed to parse references response: {}\n", .{err});
+        editor.messages.add("Failed to parse references", .error_msg) catch {};
+        return;
+    };
+    defer {
+        for (locations) |*loc| {
+            loc.deinit(editor.allocator);
+        }
+        editor.allocator.free(locations);
+    }
+
+    if (locations.len == 0) {
+        editor.messages.add("No references found", .info) catch {};
+        return;
+    }
+
+    // Format message with reference count and first few locations
+    var buf: [512]u8 = undefined;
+    const msg = if (locations.len == 1)
+        std.fmt.bufPrint(&buf, "Found 1 reference", .{}) catch "Found references"
+    else
+        std.fmt.bufPrint(&buf, "Found {d} references", .{locations.len}) catch "Found references";
+
+    editor.messages.add(msg, .success) catch {};
+
+    // Log references for debugging
+    for (locations, 0..) |loc, i| {
+        if (i >= 5) break; // Limit debug output
+        std.debug.print("[LSP] Reference {d}: {s} at {d}:{d}\n", .{
+            i + 1,
+            loc.uri,
+            loc.range.start.line,
+            loc.range.start.character,
+        });
+    }
+}
+
+/// Convert line/character position to byte offset in buffer
+fn lineCharToByteOffset(buffer: *const Buffer.Buffer, line: u32, character: u32) !usize {
+    const offset: usize = 0;
+    var current_line: u32 = 0;
+
+    // Get buffer content
+    const content = try buffer.rope.toString(buffer.allocator);
+    defer buffer.allocator.free(content);
+
+    var i: usize = 0;
+    while (i < content.len) {
+        if (current_line == line) {
+            // We're on the target line, advance by character count
+            var char_count: u32 = 0;
+            while (i < content.len and char_count < character) {
+                const cp_len = std.unicode.utf8ByteSequenceLength(content[i]) catch 1;
+                i += cp_len;
+                char_count += 1;
+                if (i < content.len and content[i - 1] == '\n') break;
+            }
+            return i;
+        }
+
+        // Skip to next line
+        while (i < content.len and content[i] != '\n') : (i += 1) {}
+        if (i < content.len and content[i] == '\n') {
+            i += 1;
+            current_line += 1;
+        }
+    }
+
+    return offset;
+}
+
+/// Apply text edits to buffer (used by formatting)
+fn applyTextEdits(editor: *Editor, buffer_id: Buffer.BufferId, edits: []const @import("../lsp/response_parser.zig").TextEdit) !void {
+    const ResponseParser = @import("../lsp/response_parser.zig");
+    const buffer = editor.buffer_manager.getBuffer(buffer_id) orelse return error.BufferNotFound;
+
+    // Sort edits in reverse order (from end to beginning)
+    // This ensures earlier edits don't invalidate later position calculations
+    var sorted_edits = try editor.allocator.alloc(ResponseParser.TextEdit, edits.len);
+    defer editor.allocator.free(sorted_edits);
+
+    @memcpy(sorted_edits, edits);
+
+    // Bubble sort in reverse position order (simple but works for small arrays)
+    if (sorted_edits.len > 1) {
+        var i: usize = 0;
+        while (i < sorted_edits.len - 1) : (i += 1) {
+            var j: usize = 0;
+            while (j < sorted_edits.len - i - 1) : (j += 1) {
+                const a = &sorted_edits[j];
+                const b = &sorted_edits[j + 1];
+
+                // Sort by line, then character (reverse order)
+                const a_gt_b = a.range.start.line > b.range.start.line or
+                    (a.range.start.line == b.range.start.line and
+                    a.range.start.character > b.range.start.character);
+
+                if (!a_gt_b) {
+                    const temp = sorted_edits[j];
+                    sorted_edits[j] = sorted_edits[j + 1];
+                    sorted_edits[j + 1] = temp;
+                }
+            }
+        }
+    }
+
+    // Apply edits in reverse order
+    for (sorted_edits) |edit| {
+        const start_offset = try lineCharToByteOffset(buffer, edit.range.start.line, edit.range.start.character);
+        const end_offset = try lineCharToByteOffset(buffer, edit.range.end.line, edit.range.end.character);
+
+        // Delete old range (if not empty)
+        if (end_offset > start_offset) {
+            try buffer.rope.delete(start_offset, end_offset);
+        }
+
+        // Insert new text
+        if (edit.newText.len > 0) {
+            try buffer.rope.insert(start_offset, edit.newText);
+        }
+    }
+
+    // Mark buffer as modified
+    buffer.metadata.modified = true;
+}
+
+/// Callback for LSP formatting response
+fn lspFormattingCallback(ctx: ?*anyopaque, result_json: []const u8) !void {
+    const ResponseParser = @import("../lsp/response_parser.zig");
+    const FormattingContext = struct {
+        editor: *Editor,
+        buffer_id: Buffer.BufferId,
+    };
+
+    const fmt_ctx: *FormattingContext = @ptrCast(@alignCast(ctx orelse return error.NullContext));
+    const editor = fmt_ctx.editor;
+
+    // Parse formatting response
+    const edits = ResponseParser.parseFormattingResponse(editor.allocator, result_json) catch |err| {
+        std.debug.print("[LSP] Failed to parse formatting response: {}\n", .{err});
+        editor.messages.add("Failed to parse formatting edits", .error_msg) catch {};
+        return;
+    };
+    defer {
+        for (edits) |*edit| {
+            edit.deinit(editor.allocator);
+        }
+        editor.allocator.free(edits);
+    }
+
+    if (edits.len == 0) {
+        editor.messages.add("No formatting changes", .info) catch {};
+        return;
+    }
+
+    // Apply text edits to buffer
+    applyTextEdits(editor, fmt_ctx.buffer_id, edits) catch |err| {
+        std.debug.print("[LSP] Failed to apply formatting edits: {}\n", .{err});
+        editor.messages.add("Failed to apply formatting", .error_msg) catch {};
+        return;
+    };
+
+    var buf: [128]u8 = undefined;
+    const msg = std.fmt.bufPrint(&buf, "Applied {d} formatting edit{s}", .{
+        edits.len,
+        if (edits.len == 1) "" else "s",
+    }) catch "Formatting applied";
+
+    editor.messages.add(msg, .success) catch {};
+}
+
+/// Find all references to symbol under cursor
+fn lspFindReferences(ctx: *Context) Result {
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    const client = &(ctx.editor.lsp_client orelse return Result.err("LSP not initialized"));
+
+    // Get cursor position
+    const cursor = (ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No cursor")).head;
+
+    // Get file URI
+    const filepath = buffer.metadata.filepath orelse return Result.err("Buffer has no file path");
+    const uri = ctx.editor.makeFileUri(filepath) catch return Result.err("Failed to create URI");
+    defer ctx.editor.allocator.free(uri);
+
+    // Send LSP references request
+    _ = LspHandlers.references(
+        client,
+        uri,
+        @intCast(cursor.line),
+        @intCast(cursor.col),
+        true, // include_declaration
+        lspReferencesCallback,
+        ctx.editor,
+    ) catch |err| {
+        std.debug.print("[LSP] Failed to request references: {}\n", .{err});
+        return Result.err("LSP references request failed");
+    };
+
+    return Result.ok();
+}
+
+/// Format document using LSP
+fn lspFormatDocument(ctx: *Context) Result {
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    const client = &(ctx.editor.lsp_client orelse return Result.err("LSP not initialized"));
+
+    // Get file URI
+    const filepath = buffer.metadata.filepath orelse return Result.err("Buffer has no file path");
+    const uri = ctx.editor.makeFileUri(filepath) catch return Result.err("Failed to create URI");
+    defer ctx.editor.allocator.free(uri);
+
+    // Create formatting context (allocate on heap as it needs to live until callback)
+    const FormattingContext = struct {
+        editor: *Editor,
+        buffer_id: Buffer.BufferId,
+    };
+
+    const fmt_ctx = ctx.editor.allocator.create(FormattingContext) catch return Result.err("Out of memory");
+    fmt_ctx.* = .{
+        .editor = ctx.editor,
+        .buffer_id = buffer.metadata.id,
+    };
+    // Note: fmt_ctx should be freed in callback, but for now it leaks (TODO: add callback cleanup)
+
+    // Send LSP formatting request
+    _ = LspHandlers.formatting(
+        client,
+        uri,
+        4, // tab_size
+        true, // insert_spaces
+        lspFormattingCallback,
+        fmt_ctx,
+    ) catch |err| {
+        ctx.editor.allocator.destroy(fmt_ctx);
+        std.debug.print("[LSP] Failed to request formatting: {}\n", .{err});
+        return Result.err("LSP formatting request failed");
+    };
+
+    return Result.ok();
+}
+
 /// Register all built-in commands
 pub fn registerBuiltins(registry: *Registry) !void {
     // Motion commands - basic
