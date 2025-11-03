@@ -68,6 +68,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Memory safety**: All allocations properly managed with defer
 - **Build verification**: Both debug and release builds successful
 
+## [0.9.1] - 2025-11-03
+
+### Fixed - CRITICAL BUGS
+
+- **First Render Not Displaying** (MOST CRITICAL)
+  - Fixed blank screen on startup by marking all lines dirty after OutputBuffer init
+  - Without this fix, damage tracking saw both buffers as identical zeros
+  - Result: Editor opened but showed nothing, making it completely unusable
+  - File: src/render/renderer.zig
+
+- **Text Rendering Broken**
+  - Enabled OPOST in raw mode for proper newline handling (\n -> \r\n)
+  - Previously disabled, causing staircase effect and misaligned text
+  - File: src/terminal/platform.zig
+
+- **Input Lag and Missed Keypresses**
+  - Improved read timeout from 0.1s to 0.3s for better responsiveness
+  - Reduces lag and improves input handling
+  - File: src/terminal/platform.zig
+
+- **Initial Screen State**
+  - Added explicit cursor home after clearing screen on startup
+  - Ensures clean initial render state
+  - File: src/render/renderer.zig
+
+These bugs explain why v0.9.0 appeared to work but had "zero functionality":
+editor opened to blank screen, text didn't render properly if visible, and
+input was laggy or missed entirely. All three issues are now resolved.
+
+### Testing
+
+- All 107 tests passing
+- Clean debug and release builds
+- Zero compiler warnings
+
 ## [Unreleased]
 
 ### Added
