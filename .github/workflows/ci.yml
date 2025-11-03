@@ -59,11 +59,40 @@ jobs:
         LD_LIBRARY_PATH: $HOME/lib
         DYLD_LIBRARY_PATH: $HOME/lib
 
-    - name: Run tests
-      run: zig build test
+    - name: Run unit tests
+      run: zig build test-unit
       env:
         LD_LIBRARY_PATH: $HOME/lib
         DYLD_LIBRARY_PATH: $HOME/lib
+
+    - name: Run integration tests
+      run: zig build test-integration
+      env:
+        LD_LIBRARY_PATH: $HOME/lib
+        DYLD_LIBRARY_PATH: $HOME/lib
+
+    - name: Install tmux for E2E tests
+      run: |
+        if [ "$RUNNER_OS" == "Linux" ]; then
+          sudo apt-get update && sudo apt-get install -y tmux
+        elif [ "$RUNNER_OS" == "macOS" ]; then
+          brew install tmux
+        fi
+      shell: bash
+
+    - name: Run E2E smoke tests
+      run: |
+        export LD_LIBRARY_PATH=$HOME/lib
+        export DYLD_LIBRARY_PATH=$HOME/lib
+        ./tests/e2e/smoke_test.sh
+      shell: bash
+
+    - name: Run E2E workflow tests
+      run: |
+        export LD_LIBRARY_PATH=$HOME/lib
+        export DYLD_LIBRARY_PATH=$HOME/lib
+        ./tests/e2e/workflow_test.sh
+      shell: bash
 
     - name: Build release
       run: zig build -Doptimize=ReleaseSafe
