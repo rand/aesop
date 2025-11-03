@@ -192,6 +192,99 @@ fn captureNameToHighlightGroup(capture_name: []const u8) HighlightGroup {
     return .variable;
 }
 
+/// Convert byte position to TSPoint (line, column)
+fn byteToPoint(text: []const u8, byte_pos: usize) ts.TSPoint {
+    var line: u32 = 0;
+    var col: u32 = 0;
+    var i: usize = 0;
+
+    while (i < byte_pos and i < text.len) : (i += 1) {
+        if (text[i] == '\n') {
+            line += 1;
+            col = 0;
+        } else {
+            col += 1;
+        }
+    }
+
+    return ts.TSPoint{ .row = line, .column = col };
+}
+
+/// Create TSInputEdit for an insertion
+pub fn createInsertEdit(text: []const u8, pos: usize, inserted_text: []const u8) ts.TSInputEdit {
+    const start_point = byteToPoint(text, pos);
+
+    // Calculate end point (after insertion)
+    var end_line = start_point.row;
+    var end_col = start_point.column;
+
+    for (inserted_text) |ch| {
+        if (ch == '\n') {
+            end_line += 1;
+            end_col = 0;
+        } else {
+            end_col += 1;
+        }
+    }
+
+    return ts.TSInputEdit{
+        .start_byte = @intCast(pos),
+        .old_end_byte = @intCast(pos), // Insertion: old_end == start
+        .new_end_byte = @intCast(pos + inserted_text.len),
+        .start_point = start_point,
+        .old_end_point = start_point, // Insertion: old_end_point == start_point
+        .new_end_point = ts.TSPoint{ .row = end_line, .column = end_col },
+    };
+}
+
+/// Create TSInputEdit for a deletion
+pub fn createDeleteEdit(text: []const u8, start: usize, end: usize) ts.TSInputEdit {
+    const start_point = byteToPoint(text, start);
+    const old_end_point = byteToPoint(text, end);
+
+    return ts.TSInputEdit{
+        .start_byte = @intCast(start),
+        .old_end_byte = @intCast(end),
+        .new_end_byte = @intCast(start), // Deletion: new_end == start
+        .start_point = start_point,
+        .old_end_point = old_end_point,
+        .new_end_point = start_point, // Deletion: new_end_point == start_point
+    };
+}
+
+/// Create TSInputEdit for a replacement
+pub fn createReplaceEdit(
+    text: []const u8,
+    start: usize,
+    end: usize,
+    new_text: []const u8,
+) ts.TSInputEdit {
+    const start_point = byteToPoint(text, start);
+    const old_end_point = byteToPoint(text, end);
+
+    // Calculate new end point
+    var new_end_line = start_point.row;
+    var new_end_col = start_point.column;
+
+    for (new_text) |ch| {
+        if (ch == '\n') {
+            new_end_line += 1;
+            new_end_col = 0;
+        } else {
+            new_end_col += 1;
+        }
+    }
+
+    return ts.TSInputEdit{
+        .start_byte = @intCast(start),
+        .old_end_byte = @intCast(end),
+        .new_end_byte = @intCast(start + new_text.len),
+        .start_point = start_point,
+        .old_end_point = old_end_point,
+        .new_end_point = ts.TSPoint{ .row = new_end_line, .column = new_end_col },
+    };
+}
+
 /// Get tree-sitter language grammar for a Language
 /// Returns null if the grammar is not available (not linked or not implemented)
 fn getTreeSitterLanguage(language: Language) ?*const ts.TSLanguage {
@@ -289,7 +382,7 @@ pub const Parser = struct {
     pub fn parse(self: *Parser, text: []const u8) !void {
         const parser = self.ts_parser orelse return error.NoParser;
 
-        // Parse the text
+        // Parse the text (uses old tree for incremental parsing)
         const new_tree = ts.ts_parser_parse_string(
             parser,
             self.ts_tree, // old tree for incremental parsing
@@ -303,6 +396,14 @@ pub const Parser = struct {
         }
 
         self.ts_tree = new_tree;
+    }
+
+    /// Apply an edit to the syntax tree for incremental parsing
+    /// Call this before re-parsing after a text change
+    pub fn applyEdit(self: *Parser, edit: ts.TSInputEdit) void {
+        if (self.ts_tree) |tree| {
+            ts.ts_tree_edit(tree, &edit);
+        }
     }
 
     /// Get highlights for a line range using tree-sitter queries
