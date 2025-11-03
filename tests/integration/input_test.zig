@@ -19,7 +19,7 @@ const MockTerminal = @import("../helpers.zig").MockTerminal;
 const Input = @import("../../src/terminal/input.zig");
 const Key = Input.Key;
 
-/// Test 1: Basic character input works
+// Test 1: Basic character input works
 test "input: basic character input" {
     const allocator = testing.allocator;
 
@@ -37,7 +37,7 @@ test "input: basic character input" {
     try testing.expectEqualStrings("abc", buffer[0..n]);
 }
 
-/// Test 2: Escape sequences parse correctly
+// Test 2: Escape sequences parse correctly
 test "input: escape sequences parse correctly" {
     const allocator = testing.allocator;
 
@@ -60,7 +60,7 @@ test "input: escape sequences parse correctly" {
     try testing.expect(std.mem.indexOf(u8, buffer[0..n], "\x1b[B") != null);
 }
 
-/// Test 3: Control characters handled
+// Test 3: Control characters handled
 test "input: control characters handled" {
     const allocator = testing.allocator;
 
@@ -82,7 +82,7 @@ test "input: control characters handled" {
     try testing.expectEqual(@as(u8, 0x1A), buffer[2]);
 }
 
-/// Test 4: UTF-8 multi-byte input works
+// Test 4: UTF-8 multi-byte input works
 test "input: utf-8 multibyte input" {
     const allocator = testing.allocator;
 
@@ -103,7 +103,7 @@ test "input: utf-8 multibyte input" {
     try testing.expect(std.mem.indexOf(u8, buffer[0..n], "café") != null);
 }
 
-/// Test 5: Input buffer handles partial reads
+// Test 5: Input buffer handles partial reads
 test "input: partial reads handled correctly" {
     const allocator = testing.allocator;
 
@@ -126,7 +126,7 @@ test "input: partial reads handled correctly" {
     try testing.expectEqual(@as(usize, 10), n2);
 }
 
-/// Test 6: Empty read returns zero
+// Test 6: Empty read returns zero
 test "input: empty read returns zero" {
     const allocator = testing.allocator;
 
@@ -140,7 +140,7 @@ test "input: empty read returns zero" {
     try testing.expectEqual(@as(usize, 0), n);
 }
 
-/// Test 7: Function keys parse correctly
+// Test 7: Function keys parse correctly
 test "input: function keys parse correctly" {
     const allocator = testing.allocator;
 
@@ -162,7 +162,7 @@ test "input: function keys parse correctly" {
     try testing.expect(std.mem.indexOf(u8, buffer[0..n], "\x1bOP") != null);
 }
 
-/// Test 8: Mixed input types handled
+// Test 8: Mixed input types handled
 test "input: mixed input types handled" {
     const allocator = testing.allocator;
 
@@ -180,7 +180,7 @@ test "input: mixed input types handled" {
     try testing.expect(std.mem.indexOf(u8, buffer[0..n], "def") != null);
 }
 
-/// Test 9: Backspace and delete handled
+// Test 9: Backspace and delete handled
 test "input: backspace and delete handled" {
     const allocator = testing.allocator;
 
@@ -198,7 +198,7 @@ test "input: backspace and delete handled" {
     try testing.expectEqual(@as(u8, 0x7F), buffer[3]); // Backspace
 }
 
-/// Test 10: Tab and Enter handled
+// Test 10: Tab and Enter handled
 test "input: tab and enter handled" {
     const allocator = testing.allocator;
 
