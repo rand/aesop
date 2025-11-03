@@ -656,13 +656,15 @@ pub fn parseCodeActionResponse(allocator: std.mem.Allocator, json_text: []const 
                     if (cmd_title == .string) {
                         if (cmd_obj.get("command")) |cmd_cmd| {
                             if (cmd_cmd == .string) {
-                                // Parse arguments if present (store as indicator for now)
-                                // TODO: Fully parse and store arguments when needed
-                                const has_arguments = cmd_obj.get("arguments") != null;
-                                const arguments = if (has_arguments)
-                                    try allocator.dupe(u8, "<args>")
-                                else
-                                    null;
+                                // Parse arguments if present and stringify them
+                                var arguments: ?[]const u8 = null;
+                                if (cmd_obj.get("arguments")) |args_value| {
+                                    var args_buf = std.ArrayList(u8).empty;
+                                    defer args_buf.deinit(allocator);
+
+                                    try std.json.stringify(args_value, .{}, args_buf.writer(allocator));
+                                    arguments = try args_buf.toOwnedSlice(allocator);
+                                }
 
                                 command = Command{
                                     .title = try allocator.dupe(u8, cmd_title.string),
