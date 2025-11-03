@@ -50,7 +50,7 @@ pub const Process = struct {
         var child = std.process.Child.init(argv.items, self.allocator);
         child.stdin_behavior = .Pipe;
         child.stdout_behavior = .Pipe;
-        child.stderr_behavior = .Ignore; // TODO: Log stderr to file
+        child.stderr_behavior = .Pipe; // Capture stderr for logging
 
         try child.spawn();
 
@@ -58,6 +58,13 @@ pub const Process = struct {
         self.stdin = child.stdin;
         self.stdout = child.stdout;
         self.running = true;
+
+        // Start background thread to log stderr
+        if (child.stderr) |stderr| {
+            _ = stderr; // stderr is available but we'll read it in background
+            // TODO: Spawn thread to read stderr and log to ~/.aesop/lsp-stderr.log
+            // For now, stderr is captured but not actively logged
+        }
     }
 
     /// Stop the language server process

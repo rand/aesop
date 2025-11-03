@@ -392,8 +392,13 @@ pub fn rename(
 
 /// Content change for didChange notification
 pub const ContentChange = struct {
-    text: []const u8,
+    range: ?Range, // null for full document sync, Range for incremental
+    rangeLength: ?u32, // Length of range being replaced (optional)
+    text: []const u8, // New text for the range (or full document if range is null)
 };
+
+/// Re-export Range for convenience
+pub const Range = @import("response_parser.zig").Range;
 
 // === Tests ===
 

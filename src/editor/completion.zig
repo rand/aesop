@@ -11,6 +11,8 @@ pub const CompletionItem = struct {
     documentation: ?[]const u8 = null, // Documentation string
     insert_text: ?[]const u8 = null, // Text to insert (defaults to label)
     sort_text: ?[]const u8 = null, // Text used for sorting
+    deprecated: bool = false, // Whether item is deprecated
+    preselect: bool = false, // Whether to preselect this item
 
     pub fn deinit(self: *CompletionItem, allocator: std.mem.Allocator) void {
         allocator.free(self.label);

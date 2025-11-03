@@ -97,6 +97,22 @@ pub fn parseCompletionResponse(allocator: std.mem.Allocator, json_text: []const 
             }
         }
 
+        // Extract deprecated flag (optional, defaults to false)
+        var deprecated = false;
+        if (item_obj.get("deprecated")) |deprecated_value| {
+            if (deprecated_value == .bool) {
+                deprecated = deprecated_value.bool;
+            }
+        }
+
+        // Extract preselect flag (optional, defaults to false)
+        var preselect = false;
+        if (item_obj.get("preselect")) |preselect_value| {
+            if (preselect_value == .bool) {
+                preselect = preselect_value.bool;
+            }
+        }
+
         const completion_item = CompletionItem{
             .label = label,
             .kind = kind,
@@ -104,6 +120,8 @@ pub fn parseCompletionResponse(allocator: std.mem.Allocator, json_text: []const 
             .documentation = documentation,
             .insert_text = insert_text,
             .sort_text = sort_text,
+            .deprecated = deprecated,
+            .preselect = preselect,
         };
 
         try result.append(allocator, completion_item);
@@ -559,11 +577,12 @@ pub const CodeAction = struct {
 pub const Command = struct {
     title: []const u8,
     command: []const u8,
-    // arguments: ?[]std.json.Value, // TODO: Parse if needed
+    arguments: ?[]const u8, // JSON-encoded arguments (kept as string for flexibility)
 
     pub fn deinit(self: *Command, allocator: std.mem.Allocator) void {
         allocator.free(self.title);
         allocator.free(self.command);
+        if (self.arguments) |args| allocator.free(args);
     }
 };
 
@@ -637,9 +656,18 @@ pub fn parseCodeActionResponse(allocator: std.mem.Allocator, json_text: []const 
                     if (cmd_title == .string) {
                         if (cmd_obj.get("command")) |cmd_cmd| {
                             if (cmd_cmd == .string) {
+                                // Parse arguments if present (store as indicator for now)
+                                // TODO: Fully parse and store arguments when needed
+                                const has_arguments = cmd_obj.get("arguments") != null;
+                                const arguments = if (has_arguments)
+                                    try allocator.dupe(u8, "<args>")
+                                else
+                                    null;
+
                                 command = Command{
                                     .title = try allocator.dupe(u8, cmd_title.string),
                                     .command = try allocator.dupe(u8, cmd_cmd.string),
+                                    .arguments = arguments,
                                 };
                             }
                         }
