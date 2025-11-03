@@ -118,10 +118,9 @@ pub fn build(b: *std.Build) void {
         exe.linkSystemLibrary("tree-sitter");
         exe.linkLibC();
 
-        // Add user lib directory to library search paths
-        const home_dir = std.posix.getenv("HOME") orelse "/Users/rand";
-        const user_lib_path = b.fmt("{s}/lib", .{home_dir});
-        exe.addLibraryPath(.{ .cwd_relative = user_lib_path });
+        // Note: Library paths need to be configured manually via DYLD_LIBRARY_PATH,
+        // LD_LIBRARY_PATH, or system installation. We don't set them here to avoid
+        // platform-specific code (Windows doesn't support std.posix.getenv).
 
         // Link language grammar libraries
         // Note: Each grammar must be built and installed separately
@@ -174,11 +173,8 @@ pub fn build(b: *std.Build) void {
     });
     // Optionally link tree-sitter for module tests
     if (enable_treesitter) {
-        const home_dir = std.posix.getenv("HOME") orelse "/Users/rand";
-        const user_lib_path = b.fmt("{s}/lib", .{home_dir});
         mod_tests.linkSystemLibrary("tree-sitter");
         mod_tests.linkLibC();
-        mod_tests.addLibraryPath(.{ .cwd_relative = user_lib_path });
         mod_tests.linkSystemLibrary("tree-sitter-zig");
         mod_tests.linkSystemLibrary("tree-sitter-rust");
         mod_tests.linkSystemLibrary("tree-sitter-go");
@@ -197,11 +193,8 @@ pub fn build(b: *std.Build) void {
     });
     // Optionally link tree-sitter for exe tests
     if (enable_treesitter) {
-        const home_dir = std.posix.getenv("HOME") orelse "/Users/rand";
-        const user_lib_path = b.fmt("{s}/lib", .{home_dir});
         exe_tests.linkSystemLibrary("tree-sitter");
         exe_tests.linkLibC();
-        exe_tests.addLibraryPath(.{ .cwd_relative = user_lib_path });
         exe_tests.linkSystemLibrary("tree-sitter-zig");
         exe_tests.linkSystemLibrary("tree-sitter-rust");
         exe_tests.linkSystemLibrary("tree-sitter-go");
@@ -228,11 +221,8 @@ pub fn build(b: *std.Build) void {
     });
     // Optionally link tree-sitter for integration tests
     if (enable_treesitter) {
-        const home_dir = std.posix.getenv("HOME") orelse "/Users/rand";
-        const user_lib_path = b.fmt("{s}/lib", .{home_dir});
         integration_tests.linkSystemLibrary("tree-sitter");
         integration_tests.linkLibC();
-        integration_tests.addLibraryPath(.{ .cwd_relative = user_lib_path });
         integration_tests.linkSystemLibrary("tree-sitter-zig");
         integration_tests.linkSystemLibrary("tree-sitter-rust");
         integration_tests.linkSystemLibrary("tree-sitter-go");
@@ -257,11 +247,8 @@ pub fn build(b: *std.Build) void {
     });
     // Optionally link tree-sitter for input integration tests
     if (enable_treesitter) {
-        const home_dir = std.posix.getenv("HOME") orelse "/Users/rand";
-        const user_lib_path = b.fmt("{s}/lib", .{home_dir});
         input_integration_tests.linkSystemLibrary("tree-sitter");
         input_integration_tests.linkLibC();
-        input_integration_tests.addLibraryPath(.{ .cwd_relative = user_lib_path });
         input_integration_tests.linkSystemLibrary("tree-sitter-zig");
         input_integration_tests.linkSystemLibrary("tree-sitter-rust");
         input_integration_tests.linkSystemLibrary("tree-sitter-go");
