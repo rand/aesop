@@ -696,11 +696,16 @@ pub const DocumentSymbol = struct {
     kind: SymbolKind,
     range: Range, // Full range including leading/trailing whitespace
     selection_range: Range, // Range of the symbol's identifier
-    // children: ?[]DocumentSymbol, // TODO: Support hierarchical symbols
+    children: []DocumentSymbol, // Nested symbols (e.g., methods in class)
 
     pub fn deinit(self: *DocumentSymbol, allocator: std.mem.Allocator) void {
         allocator.free(self.name);
         if (self.detail) |d| allocator.free(d);
+        // Recursively free children
+        for (self.children) |*child| {
+            child.deinit(allocator);
+        }
+        allocator.free(self.children);
     }
 };
 
@@ -780,16 +785,101 @@ pub fn parseDocumentSymbolResponse(allocator: std.mem.Allocator, json_text: []co
             continue;
         };
 
+        // Parse children (optional, recursive)
+        var children = std.ArrayList(DocumentSymbol).empty;
+        if (obj.get("children")) |children_value| {
+            if (children_value == .array) {
+                for (children_value.array.items) |child_item| {
+                    if (parseDocumentSymbolFromJson(allocator, child_item)) |child| {
+                        try children.append(allocator, child);
+                    } else |_| {
+                        // Skip malformed children
+                        continue;
+                    }
+                }
+            }
+        }
+        const children_slice = try children.toOwnedSlice(allocator);
+        errdefer {
+            for (children_slice) |*child| {
+                child.deinit(allocator);
+            }
+            allocator.free(children_slice);
+        }
+
         try symbols.append(allocator, DocumentSymbol{
             .name = name,
             .detail = detail,
             .kind = kind,
             .range = range,
             .selection_range = selection_range,
+            .children = children_slice,
         });
     }
 
     return symbols.toOwnedSlice(allocator);
+}
+
+/// Parse a single document symbol from JSON (helper for recursive parsing)
+fn parseDocumentSymbolFromJson(allocator: std.mem.Allocator, item: std.json.Value) !DocumentSymbol {
+    if (item != .object) return error.InvalidSymbol;
+    const obj = item.object;
+
+    // Extract name (required)
+    const name_value = obj.get("name") orelse return error.MissingName;
+    if (name_value != .string) return error.InvalidName;
+    const name = try allocator.dupe(u8, name_value.string);
+    errdefer allocator.free(name);
+
+    // Extract kind (required)
+    const kind_value = obj.get("kind") orelse return error.MissingKind;
+    if (kind_value != .integer) return error.InvalidKind;
+    const kind: SymbolKind = @enumFromInt(@as(u8, @intCast(kind_value.integer)));
+
+    // Extract detail (optional)
+    var detail: ?[]const u8 = null;
+    if (obj.get("detail")) |detail_value| {
+        if (detail_value == .string) {
+            detail = try allocator.dupe(u8, detail_value.string);
+        }
+    }
+    errdefer if (detail) |d| allocator.free(d);
+
+    // Extract range (required)
+    const range = try parseRange(obj.get("range") orelse return error.MissingRange);
+
+    // Extract selectionRange (required)
+    const selection_range = try parseRange(obj.get("selectionRange") orelse return error.MissingSelectionRange);
+
+    // Parse children recursively (optional)
+    var children = std.ArrayList(DocumentSymbol).empty;
+    if (obj.get("children")) |children_value| {
+        if (children_value == .array) {
+            for (children_value.array.items) |child_item| {
+                if (parseDocumentSymbolFromJson(allocator, child_item)) |child| {
+                    try children.append(allocator, child);
+                } else |_| {
+                    continue;
+                }
+            }
+        }
+    }
+    const children_slice = try children.toOwnedSlice(allocator);
+    errdefer {
+        for (children_slice) |*child| {
+            child.deinit(allocator);
+        }
+        allocator.free(children_slice);
+    }
+
+    return DocumentSymbol{
+        .name = name,
+        .detail = detail,
+        .kind = kind,
+        .range = range,
+        .selection_range = selection_range,
+        .children = children_slice,
+    };
 }
 
 /// Parse a Range from JSON value

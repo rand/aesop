@@ -212,12 +212,73 @@ pub const WindowManager = struct {
 
     /// Close window and merge with sibling
     fn closeWindow(self: *WindowManager, node: *WindowNode, target_id: WindowId) !void {
-        _ = self;
-        _ = node;
-        _ = target_id;
-        // TODO: Implement window closing with sibling merge
-        // This requires tracking parent-child relationships
-        return error.NotImplemented;
+        switch (node.*) {
+            .leaf => {
+                // Can't close if this is the only window
+                return error.CannotCloseOnlyWindow;
+            },
+            .split => |split| {
+                // Check if target is in left child
+                const target_in_left = self.containsWindow(split.left, target_id);
+                const target_in_right = self.containsWindow(split.right, target_id);
+
+                if (target_in_left and split.left.* == .leaf) {
+                    // Left child is the target leaf - replace this split with right child
+                    const sibling = split.right;
+                    const old_left = split.left;
+
+                    // Copy sibling contents to this node
+                    const sibling_copy = sibling.*;
+                    node.* = sibling_copy;
+
+                    // Free old nodes
+                    self.allocator.destroy(old_left);
+                    self.allocator.destroy(sibling);
+
+                    // Update active window if we closed it
+                    if (self.active_window_id == target_id) {
+                        self.active_window_id = node.getId();
+                    }
+                } else if (target_in_right and split.right.* == .leaf) {
+                    // Right child is the target leaf - replace this split with left child
+                    const sibling = split.left;
+                    const old_right = split.right;
+
+                    // Copy sibling contents to this node
+                    const sibling_copy = sibling.*;
+                    node.* = sibling_copy;
+
+                    // Free old nodes
+                    self.allocator.destroy(old_right);
+                    self.allocator.destroy(sibling);
+
+                    // Update active window if we closed it
+                    if (self.active_window_id == target_id) {
+                        self.active_window_id = node.getId();
+                    }
+                } else {
+                    // Target is deeper in tree - recurse
+                    if (target_in_left) {
+                        try self.closeWindow(split.left, target_id);
+                    } else if (target_in_right) {
+                        try self.closeWindow(split.right, target_id);
+                    }
+                }
+            },
+        }
+    }
+
+    /// Check if a window ID exists in the subtree
+    fn containsWindow(self: *WindowManager, node: *WindowNode, id: WindowId) bool {
+        return switch (node.*) {
+            .leaf => |leaf| leaf.id == id,
+            .split => |split| {
+                if (split.left.getId() == id or split.right.getId() == id) {
+                    return true;
+                }
+                return self.containsWindow(split.left, id) or self.containsWindow(split.right, id);
+            },
+        };
     }
 
     /// Navigate to next window (circular)
@@ -270,12 +331,89 @@ pub const WindowManager = struct {
         }
     }
 
-    /// Resize active split
+    /// Resize active split (adjust ratio of parent split containing active window)
     pub fn resizeSplit(self: *WindowManager, delta: f32) !void {
-        _ = self;
-        _ = delta;
-        // TODO: Implement split resizing
-        return error.NotImplemented;
+        const active_id = self.active_window_id;
+        try self.resizeSplitRecursive(self.root, active_id, delta);
+    }
+
+    /// Recursively find and resize the split containing the target window
+    fn resizeSplitRecursive(self: *WindowManager, node: *WindowNode, target_id: WindowId, delta: f32) !void {
+        switch (node.*) {
+            .leaf => {
+                // No split to resize at leaf level
+                return error.NoSplitToResize;
+            },
+            .split => |*split| {
+                const target_in_left = self.containsWindow(split.left, target_id);
+                const target_in_right = self.containsWindow(split.right, target_id);
+
+                // If target is direct child, resize this split
+                if ((split.left.* == .leaf and split.left.leaf.id == target_id) or
+                    (split.right.* == .leaf and split.right.leaf.id == target_id))
+                {
+                    // Adjust ratio
+                    const new_ratio = split.split_ratio + delta;
+                    split.split_ratio = @max(0.1, @min(0.9, new_ratio));
+
+                    // Recalculate dimensions for children
+                    const left_dims, const right_dims = calculateSplitDimensions(
+                        split.dimensions,
+                        split.direction,
+                        split.split_ratio,
+                    );
+
+                    // Update child dimensions
+                    switch (split.left.*) {
+                        .leaf => |*leaf| leaf.dimensions = left_dims,
+                        .split => |*s| {
+                            s.dimensions = left_dims;
+                            // Recursively update children's dimensions
+                            try self.updateDimensions(split.left, left_dims);
+                        },
+                    }
+
+                    switch (split.right.*) {
+                        .leaf => |*leaf| leaf.dimensions = right_dims,
+                        .split => |*s| {
+                            s.dimensions = right_dims;
+                            try self.updateDimensions(split.right, right_dims);
+                        },
+                    }
+                } else {
+                    // Recurse to find the split containing target
+                    if (target_in_left) {
+                        try self.resizeSplitRecursive(split.left, target_id, delta);
+                    } else if (target_in_right) {
+                        try self.resizeSplitRecursive(split.right, target_id, delta);
+                    } else {
+                        return error.WindowNotFound;
+                    }
+                }
+            },
+        }
+    }
+
+    /// Recursively update dimensions for all children after a resize
+    fn updateDimensions(self: *WindowManager, node: *WindowNode, new_dims: Dimensions) !void {
+        switch (node.*) {
+            .leaf => |*leaf| {
+                leaf.dimensions = new_dims;
+            },
+            .split => |*split| {
+                split.dimensions = new_dims;
+
+                // Recalculate children with current ratio
+                const left_dims, const right_dims = calculateSplitDimensions(
+                    new_dims,
+                    split.direction,
+                    split.split_ratio,
+                );
+
+                try self.updateDimensions(split.left, left_dims);
+                try self.updateDimensions(split.right, right_dims);
+            },
+        }
     }
 
     /// Get all visible windows (leaves)

@@ -2796,10 +2796,31 @@ fn closeWindow(ctx: *Context) Result {
     ctx.editor.window_manager.closeActive() catch |err| {
         return switch (err) {
             error.CannotCloseOnlyWindow => Result.err("Cannot close only window"),
-            else => Result.err("Failed to close window"),
         };
     };
     ctx.editor.messages.add("Window closed", .info) catch {};
+    return Result.ok();
+}
+
+/// Resize window split (increase)
+fn resizeSplitIncrease(ctx: *Context) Result {
+    ctx.editor.window_manager.resizeSplit(0.05) catch |err| {
+        return switch (err) {
+            error.NoSplitToResize => Result.err("No split to resize"),
+            error.WindowNotFound => Result.err("Window not found"),
+        };
+    };
+    return Result.ok();
+}
+
+/// Resize window split (decrease)
+fn resizeSplitDecrease(ctx: *Context) Result {
+    ctx.editor.window_manager.resizeSplit(-0.05) catch |err| {
+        return switch (err) {
+            error.NoSplitToResize => Result.err("No split to resize"),
+            error.WindowNotFound => Result.err("Window not found"),
+        };
+    };
     return Result.ok();
 }
 
@@ -4785,6 +4806,20 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .description = "Play macro from register (@)",
         .handler = playMacro,
         .category = .system,
+    });
+
+    try registry.register(.{
+        .name = "resize_split_increase",
+        .description = "Increase split size (Ctrl+w +)",
+        .handler = resizeSplitIncrease,
+        .category = .view,
+    });
+
+    try registry.register(.{
+        .name = "resize_split_decrease",
+        .description = "Decrease split size (Ctrl+w -)",
+        .handler = resizeSplitDecrease,
+        .category = .view,
     });
 
     // LSP commands
