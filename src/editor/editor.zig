@@ -55,6 +55,8 @@ pub const PendingCommand = union(enum) {
     replace_char,
     /// LSP rename symbol - awaiting new name input
     lsp_rename,
+    /// Jump to line number - awaiting line number input
+    goto_line,
 
     /// Check if a command is awaiting input
     pub fn isWaiting(self: PendingCommand) bool {
@@ -501,6 +503,33 @@ pub const Editor = struct {
             return;
         }
 
+        // Handle number prompts (goto line) - accumulate input until Enter
+        if (self.pending_command == .goto_line) {
+            switch (key) {
+                .char => |c| {
+                    const char_byte = @as(u8, @intCast(c));
+                    try self.prompt.addChar(char_byte);
+                },
+                .special => |special_key| {
+                    switch (special_key) {
+                        .enter => {
+                            self.pending_command = .none;
+                            self.prompt.hide();
+                            try self.completeGotoLine();
+                        },
+                        .backspace => self.prompt.backspace(),
+                        .delete => self.prompt.deleteChar(),
+                        .left => self.prompt.moveCursorLeft(),
+                        .right => self.prompt.moveCursorRight(),
+                        .home => self.prompt.moveCursorStart(),
+                        .end => self.prompt.moveCursorEnd(),
+                        else => {}, // Ignore other special keys
+                    }
+                },
+            }
+            return;
+        }
+
         // Extract character from key input
         const char_byte = switch (key) {
             .char => |c| @as(u8, @intCast(c)),
@@ -548,6 +577,8 @@ pub const Editor = struct {
             },
 
             .lsp_rename => unreachable, // Handled above before character extraction
+
+            .goto_line => unreachable, // Handled above before character extraction
         }
 
         self.ensureCursorVisible();
@@ -1032,6 +1063,30 @@ pub const Editor = struct {
             defer self.allocator.free(msg);
             self.messages.add(msg, .error_msg) catch {};
         };
+    }
+
+    /// Complete goto line operation with user-provided line number
+    fn completeGotoLine(self: *Editor) !void {
+        const line_number = self.prompt.parseNumber() catch {
+            self.messages.add("Invalid line number", .error_msg) catch {};
+            return;
+        };
+
+        if (line_number <= 0) {
+            self.messages.add("Line number must be >= 1", .error_msg) catch {};
+            return;
+        }
+
+        // Call the existing gotoLineNumber implementation from Command
+        var ctx = Command.Context{ .editor = self };
+        const result = Command.gotoLineNumber(&ctx, @intCast(line_number));
+
+        switch (result) {
+            .success => {},
+            .error_msg => |msg| {
+                self.messages.add(msg, .error_msg) catch {};
+            },
+        }
     }
 
     pub const StatusInfo = struct {

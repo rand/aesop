@@ -2389,30 +2389,20 @@ fn gotoEnd(ctx: *Context) Result {
 
 /// Jump to specific line number
 fn gotoLine(ctx: *Context) Result {
-    // This would typically get the line number from a prompt/input
-    // For now, this is a placeholder that would need UI integration
-    // A real implementation would:
-    // 1. Prompt user for line number
-    // 2. Parse the input
-    // 3. Jump to that line
-
-    // Placeholder: Jump to line 1 as demonstration
-    const buffer = ctx.editor.buffer_manager.getActiveBuffer() orelse {
+    // Validate precondition
+    _ = ctx.editor.buffer_manager.getActiveBuffer() orelse {
         return Result.err("No active buffer");
     };
 
-    const total_lines = buffer.lineCount();
+    // Show prompt for line number - actual jump happens in completeGotoLine
+    ctx.editor.pending_command = .goto_line;
+    ctx.editor.prompt.show("Go to line: ", .number);
 
-    // TODO: Get line number from user input
-    // For now this is just the function structure
-    _ = total_lines;
-
-    ctx.editor.messages.add("Goto line command (line number input needed)", .info) catch {};
     return Result.ok();
 }
 
 /// Jump to specific line number (with parameter)
-fn gotoLineNumber(ctx: *Context, line_number: usize) Result {
+pub fn gotoLineNumber(ctx: *Context, line_number: usize) Result {
     const buffer = ctx.editor.buffer_manager.getActiveBuffer() orelse {
         return Result.err("No active buffer");
     };
