@@ -264,10 +264,81 @@ pub const Rope = struct {
         }
     }
 
-    fn rebalance(_: *Rope) !void {
-        // TODO: Implement AVL-style rebalancing
-        // For now, we accept potentially unbalanced trees
-        // This will be optimized in later iterations
+    fn rebalance(self: *Rope) !void {
+        if (self.root) |root| {
+            self.root = try self.rebalanceNode(root);
+        }
+    }
+
+    /// Rebalance a single node and its subtrees
+    fn rebalanceNode(self: *Rope, node: *Node) error{OutOfMemory}!*Node {
+        switch (node.data) {
+            .leaf => return node, // Leaves are always balanced
+            .internal => |internal| {
+                // First, recursively rebalance children
+                const left = try self.rebalanceNode(internal.left);
+                const right = try self.rebalanceNode(internal.right);
+
+                // Check balance factor
+                const left_height: i64 = @intCast(left.height);
+                const right_height: i64 = @intCast(right.height);
+                const balance = left_height - right_height;
+
+                // If balanced, recreate node with potentially rebalanced children
+                if (@abs(balance) <= MAX_HEIGHT_DIFF) {
+                    if (left == internal.left and right == internal.right) {
+                        return node; // No changes needed
+                    }
+                    // Children changed, create new internal node
+                    return try self.concat(left, right);
+                }
+
+                // Tree is unbalanced, perform rotations
+                if (balance > MAX_HEIGHT_DIFF) {
+                    // Left-heavy
+                    const left_internal = left.data.internal;
+                    const left_left_height: i64 = @intCast(left_internal.left.height);
+                    const left_right_height: i64 = @intCast(left_internal.right.height);
+
+                    if (left_left_height >= left_right_height) {
+                        // Left-Left case: single right rotation
+                        return try self.rotateRight(left, right);
+                    } else {
+                        // Left-Right case: double rotation
+                        const rotated_left = try self.rotateLeft(left_internal.left, left_internal.right);
+                        return try self.rotateRight(rotated_left, right);
+                    }
+                } else {
+                    // Right-heavy
+                    const right_internal = right.data.internal;
+                    const right_left_height: i64 = @intCast(right_internal.left.height);
+                    const right_right_height: i64 = @intCast(right_internal.right.height);
+
+                    if (right_right_height >= right_left_height) {
+                        // Right-Right case: single left rotation
+                        return try self.rotateLeft(left, right);
+                    } else {
+                        // Right-Left case: double rotation
+                        const rotated_right = try self.rotateRight(right_internal.left, right_internal.right);
+                        return try self.rotateLeft(left, rotated_right);
+                    }
+                }
+            },
+        }
+    }
+
+    /// Rotate right: (A (B C D)) -> ((A B) C D)
+    fn rotateRight(self: *Rope, left: *Node, right: *Node) !*Node {
+        const left_internal = left.data.internal;
+        const new_right = try self.concat(left_internal.right, right);
+        return try self.concat(left_internal.left, new_right);
+    }
+
+    /// Rotate left: ((A B) C D) -> (A (B C D))
+    fn rotateLeft(self: *Rope, left: *Node, right: *Node) !*Node {
+        const right_internal = right.data.internal;
+        const new_left = try self.concat(left, right_internal.left);
+        return try self.concat(new_left, right_internal.right);
     }
 
     fn freeNode(self: *Rope, node: *Node) void {
