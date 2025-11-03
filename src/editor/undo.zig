@@ -55,8 +55,9 @@ pub const OperationGroup = struct {
     timestamp: i64,
 
     pub fn init(allocator: std.mem.Allocator, cursor: Cursor.Position) OperationGroup {
+        _ = allocator;
         return .{
-            .operations = std.ArrayList(Operation).init(allocator),
+            .operations = .{},  // Unmanaged ArrayList
             .cursor_before = cursor,
             .cursor_after = cursor,
             .timestamp = std.time.milliTimestamp(),
@@ -70,8 +71,8 @@ pub const OperationGroup = struct {
         self.operations.deinit(allocator);
     }
 
-    pub fn addOperation(self: *OperationGroup, op: Operation) !void {
-        try self.operations.append(op);
+    pub fn addOperation(self: *OperationGroup, allocator: std.mem.Allocator, op: Operation) !void {
+        try self.operations.append(allocator, op);
         self.cursor_after = op.position;
     }
 
@@ -146,8 +147,8 @@ pub const UndoHistory = struct {
             // Save the future as a branch before discarding
             var branch_groups = std.ArrayList(OperationGroup).empty;
             while (self.current_index < self.groups.items.len) {
-                const discarded = self.groups.pop();
-                try branch_groups.insert(0, discarded); // Insert at front to maintain order
+                const discarded = self.groups.pop().?; // Safe because we checked length
+                try branch_groups.insert(self.allocator, 0, discarded); // Insert at front to maintain order
             }
 
             if (branch_groups.items.len > 0) {
@@ -156,7 +157,7 @@ pub const UndoHistory = struct {
                     .groups = branch_groups,
                     .timestamp = std.time.milliTimestamp(),
                 };
-                try self.branches.append(branch);
+                try self.branches.append(self.allocator, branch);
 
                 // Limit number of saved branches
                 if (self.branches.items.len > MAX_BRANCHES) {
@@ -172,7 +173,7 @@ pub const UndoHistory = struct {
             if (last.canMerge(&group)) {
                 // Merge operations into last group
                 for (group.operations.items) |op| {
-                    try last.operations.append(op);
+                    try last.operations.append(self.allocator, op);
                 }
                 last.cursor_after = group.cursor_after;
                 last.timestamp = group.timestamp;
@@ -182,7 +183,7 @@ pub const UndoHistory = struct {
         }
 
         // Add new group
-        try self.groups.append(group);
+        try self.groups.append(self.allocator, group);
         self.current_index = self.groups.items.len;
 
         // Enforce max size
@@ -324,8 +325,8 @@ pub const UndoHistory = struct {
         if (self.current_index < self.groups.items.len) {
             var current_future = std.ArrayList(OperationGroup).empty;
             while (self.current_index < self.groups.items.len) {
-                const future_group = self.groups.pop();
-                try current_future.insert(0, future_group);
+                const future_group = self.groups.pop().?; // Safe because we checked length
+                try current_future.insert(self.allocator, 0, future_group);
             }
 
             if (current_future.items.len > 0) {
@@ -334,7 +335,7 @@ pub const UndoHistory = struct {
                     .groups = current_future,
                     .timestamp = std.time.milliTimestamp(),
                 };
-                try self.branches.insert(branch_index, new_branch);
+                try self.branches.insert(self.allocator, branch_index, new_branch);
 
                 // Limit branches
                 if (self.branches.items.len > MAX_BRANCHES) {
@@ -347,7 +348,7 @@ pub const UndoHistory = struct {
         // Restore the selected branch
         const removed_branch = self.branches.orderedRemove(branch_index);
         for (removed_branch.groups.items) |group| {
-            try self.groups.append(group);
+            try self.groups.append(self.allocator, group);
         }
         // Don't deinit removed_branch since we transferred ownership
     }

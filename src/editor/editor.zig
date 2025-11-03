@@ -656,6 +656,11 @@ pub const Editor = struct {
             // Get all selections
             const all_selections = self.selections.all(self.allocator);
 
+            // Create undo group for this edit operation
+            const cursor_before = if (all_selections.len > 0) all_selections[0].head else Cursor.Position{ .line = 0, .col = 0 };
+            var undo_group = Undo.OperationGroup.init(self.allocator, cursor_before);
+            errdefer undo_group.deinit(self.allocator);
+
             // Check for auto-pairing
             const autopair_config = AutoPair.AutoPairConfig{ .enabled = self.config.auto_pair_brackets };
             const should_pair = if (key == .char)
@@ -701,6 +706,29 @@ pub const Editor = struct {
                 i -= 1;
                 const sel = all_selections[i];
 
+                // Record operation for undo
+                if (text_to_insert) |txt| {
+                    const op = try Undo.Operation.init(
+                        self.allocator,
+                        .insert,
+                        sel.head,
+                        txt,
+                        null,
+                    );
+                    try undo_group.addOperation(self.allocator, op);
+                } else if (key == .special and key.special == .backspace) {
+                    // For backspace, we need to record what we're deleting
+                    // Get the character before cursor to record it
+                    const op = try Undo.Operation.init(
+                        self.allocator,
+                        .delete,
+                        sel.head,
+                        &[_]u8{}, // We're deleting, so text is empty
+                        null,
+                    );
+                    try undo_group.addOperation(self.allocator, op);
+                }
+
                 var new_sel = blk: {
                     if (text_to_insert) |txt| {
                         break :blk try Actions.insertText(buffer, sel, txt);
@@ -732,6 +760,14 @@ pub const Editor = struct {
                 try self.selections.add(self.allocator, sel);
             }
             self.selections.primary_index = if (new_selections.items.len > 0) new_selections.items.len - 1 else 0;
+
+            // Update cursor_after in undo group
+            if (new_selections.items.len > 0) {
+                undo_group.cursor_after = new_selections.items[0].head;
+            }
+
+            // Push undo group to history
+            try self.undo_history.push(undo_group);
 
             // Mark buffer as modified
             buffer.metadata.markModified();
