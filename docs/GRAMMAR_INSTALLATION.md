@@ -2,7 +2,9 @@
 
 **Purpose**: Step-by-step instructions for building and installing tree-sitter language grammars
 
-**Status**: Required for syntax highlighting to work
+**Status**: ✅ Grammars installed and verified working
+
+**Last Updated**: November 3, 2025
 
 ---
 
@@ -11,11 +13,64 @@
 Aesop uses tree-sitter for fast, accurate syntax highlighting. The core tree-sitter library is installed via package manager, but language-specific grammars must be built and installed separately.
 
 **Supported Languages**:
-- Zig
-- Rust
-- Go
-- Python
-- C
+- Zig ✅
+- Rust ✅
+- Go ✅
+- Python ✅
+- C ✅
+
+**Installation Method**: User-local installation in `~/lib` (no sudo required)
+
+---
+
+## Quick Install (Recommended)
+
+All 5 grammars can be installed quickly:
+
+```bash
+# Create user library directory
+mkdir -p ~/lib
+
+# Install all grammars
+cd /tmp
+
+# Zig
+git clone https://github.com/maxxnino/tree-sitter-zig && cd tree-sitter-zig
+clang -shared -o libtree-sitter-zig.dylib -fPIC src/parser.c -I./src
+cp libtree-sitter-zig.dylib ~/lib/ && cd ..
+
+# Rust (has scanner.c)
+git clone https://github.com/tree-sitter/tree-sitter-rust && cd tree-sitter-rust
+clang -shared -o libtree-sitter-rust.dylib -fPIC src/parser.c src/scanner.c -I./src
+cp libtree-sitter-rust.dylib ~/lib/ && cd ..
+
+# Go
+git clone https://github.com/tree-sitter/tree-sitter-go && cd tree-sitter-go
+clang -shared -o libtree-sitter-go.dylib -fPIC src/parser.c -I./src
+cp libtree-sitter-go.dylib ~/lib/ && cd ..
+
+# Python (has scanner.c)
+git clone https://github.com/tree-sitter/tree-sitter-python && cd tree-sitter-python
+clang -shared -o libtree-sitter-python.dylib -fPIC src/parser.c src/scanner.c -I./src
+cp libtree-sitter-python.dylib ~/lib/ && cd ..
+
+# C
+git clone https://github.com/tree-sitter/tree-sitter-c && cd tree-sitter-c
+clang -shared -o libtree-sitter-c.dylib -fPIC src/parser.c -I./src
+cp libtree-sitter-c.dylib ~/lib/ && cd ..
+
+# Verify installation
+ls -lh ~/lib/libtree-sitter-*.dylib
+
+# Build Aesop
+cd ~/src/aesop
+zig build
+
+# Run with library path
+DYLD_LIBRARY_PATH=~/lib ./zig-out/bin/aesop
+```
+
+**On Linux**, replace `.dylib` with `.so` throughout.
 
 ---
 
@@ -191,30 +246,20 @@ ls -la /usr/local/lib/libtree-sitter-c.so        # Linux
 
 ## Verification
 
-After installing all grammars, verify they're accessible:
+After installing all grammars, verify they're in your user library:
 
-**macOS**:
+**User-local installation** (Recommended):
 ```bash
-ls -la /opt/homebrew/lib/libtree-sitter-*.dylib
+ls -lh ~/lib/libtree-sitter-*.dylib  # macOS
+# OR
+ls -lh ~/lib/libtree-sitter-*.so     # Linux
 
 # Expected output:
-# -rw-r--r--  1 root  wheel  libtree-sitter-c.dylib
-# -rw-r--r--  1 root  wheel  libtree-sitter-go.dylib
-# -rw-r--r--  1 root  wheel  libtree-sitter-python.dylib
-# -rw-r--r--  1 root  wheel  libtree-sitter-rust.dylib
-# -rw-r--r--  1 root  wheel  libtree-sitter-zig.dylib
-```
-
-**Linux**:
-```bash
-ls -la /usr/local/lib/libtree-sitter-*.so
-
-# Expected output:
-# -rw-r--r--  1 root root libtree-sitter-c.so
-# -rw-r--r--  1 root root libtree-sitter-go.so
-# -rw-r--r--  1 root root libtree-sitter-python.so
-# -rw-r--r--  1 root root libtree-sitter-rust.so
-# -rw-r--r--  1 root root libtree-sitter-zig.so
+# -rwxr-xr-x  1 user  staff   647K libtree-sitter-c.dylib
+# -rwxr-xr-x  1 user  staff   243K libtree-sitter-go.dylib
+# -rwxr-xr-x  1 user  staff   502K libtree-sitter-python.dylib
+# -rwxr-xr-x  1 user  staff   1.1M libtree-sitter-rust.dylib
+# -rwxr-xr-x  1 user  staff   889K libtree-sitter-zig.dylib
 ```
 
 ---
@@ -227,11 +272,53 @@ Once all grammars are installed:
 cd ~/src/aesop
 zig build
 
-# If successful, syntax highlighting will work
-./zig-out/bin/aesop test.zig
+# Build should succeed (previously failed with "unable to find library" errors)
+```
+
+---
+
+## Running Aesop with Syntax Highlighting
+
+**Important**: Set library path when running:
+
+```bash
+# One-time run
+DYLD_LIBRARY_PATH=~/lib ./zig-out/bin/aesop test.zig  # macOS
+# OR
+LD_LIBRARY_PATH=~/lib ./zig-out/bin/aesop test.zig    # Linux
+
+# Add to shell profile for permanent setup (recommended)
+echo 'export DYLD_LIBRARY_PATH=$HOME/lib' >> ~/.zshrc   # macOS zsh
+echo 'export DYLD_LIBRARY_PATH=$HOME/lib' >> ~/.bashrc  # macOS bash
+echo 'export LD_LIBRARY_PATH=$HOME/lib' >> ~/.bashrc    # Linux
+
+# Reload shell
+source ~/.zshrc  # or ~/.bashrc
 ```
 
 **Expected behavior**: Syntax highlighting for supported languages will be colorized
+
+**Test it**:
+```bash
+# Create a test Zig file
+echo 'const std = @import("std");
+
+pub fn main() !void {
+    const x: i32 = 42;
+    std.debug.print("Hello: {}\n", .{x});
+}' > test.zig
+
+# Open with Aesop (syntax should be highlighted)
+DYLD_LIBRARY_PATH=~/lib ./zig-out/bin/aesop test.zig
+```
+
+**Running tests**:
+```bash
+# Tests also need library path
+DYLD_LIBRARY_PATH=~/lib zig build test
+
+# All 107 tests should pass ✅
+```
 
 ---
 
