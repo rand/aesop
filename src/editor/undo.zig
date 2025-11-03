@@ -93,19 +93,36 @@ pub const OperationGroup = struct {
     }
 };
 
+/// Saved branch when history diverges
+const Branch = struct {
+    branch_point: usize, // Index where this branch diverged
+    groups: std.ArrayList(OperationGroup), // The discarded future
+    timestamp: i64,
+
+    pub fn deinit(self: *Branch, allocator: std.mem.Allocator) void {
+        for (self.groups.items) |*group| {
+            group.deinit(allocator);
+        }
+        self.groups.deinit(allocator);
+    }
+};
+
 /// Undo history with branch support (vim-style undo tree)
 pub const UndoHistory = struct {
     groups: std.ArrayList(OperationGroup),
     current_index: usize, // Points to the operation we'd undo next
+    branches: std.ArrayList(Branch), // Saved alternate histories
     allocator: std.mem.Allocator,
 
     /// Max groups to keep (to prevent unbounded memory growth)
     const MAX_GROUPS = 1000;
+    const MAX_BRANCHES = 10;
 
     pub fn init(allocator: std.mem.Allocator) UndoHistory {
         return .{
             .groups = std.ArrayList(OperationGroup).empty,
             .current_index = 0,
+            .branches = std.ArrayList(Branch).empty,
             .allocator = allocator,
         };
     }
@@ -115,17 +132,37 @@ pub const UndoHistory = struct {
             group.deinit(self.allocator);
         }
         self.groups.deinit(self.allocator);
+
+        for (self.branches.items) |*branch| {
+            branch.deinit(self.allocator);
+        }
+        self.branches.deinit(self.allocator);
     }
 
     /// Add an operation group to history
     pub fn push(self: *UndoHistory, group: OperationGroup) !void {
-        // If we're not at the end, we're creating a new branch
-        // For simplicity, we'll discard the future for now (TODO: proper branching)
+        // If we're not at the end, we're creating a new branch - save the discarded future
         if (self.current_index < self.groups.items.len) {
-            // Free discarded groups
+            // Save the future as a branch before discarding
+            var branch_groups = std.ArrayList(OperationGroup).empty;
             while (self.current_index < self.groups.items.len) {
-                var discarded = self.groups.pop();
-                discarded.deinit(self.allocator);
+                const discarded = self.groups.pop();
+                try branch_groups.insert(0, discarded); // Insert at front to maintain order
+            }
+
+            if (branch_groups.items.len > 0) {
+                const branch = Branch{
+                    .branch_point = self.current_index,
+                    .groups = branch_groups,
+                    .timestamp = std.time.milliTimestamp(),
+                };
+                try self.branches.append(branch);
+
+                // Limit number of saved branches
+                if (self.branches.items.len > MAX_BRANCHES) {
+                    var oldest = self.branches.orderedRemove(0);
+                    oldest.deinit(self.allocator);
+                }
             }
         }
 
@@ -237,6 +274,82 @@ pub const UndoHistory = struct {
                 },
             }
         }
+    }
+
+    /// Get number of saved branches
+    pub fn branchCount(self: *const UndoHistory) usize {
+        return self.branches.items.len;
+    }
+
+    /// Get branch info for display
+    pub const BranchInfo = struct {
+        index: usize,
+        branch_point: usize,
+        operations_count: usize,
+        timestamp: i64,
+    };
+
+    /// List all available branches
+    pub fn listBranches(self: *const UndoHistory, allocator: std.mem.Allocator) ![]BranchInfo {
+        var list = std.ArrayList(BranchInfo).empty;
+        defer list.deinit(allocator);
+
+        for (self.branches.items, 0..) |branch, i| {
+            try list.append(allocator, BranchInfo{
+                .index = i,
+                .branch_point = branch.branch_point,
+                .operations_count = branch.groups.items.len,
+                .timestamp = branch.timestamp,
+            });
+        }
+
+        return list.toOwnedSlice(allocator);
+    }
+
+    /// Switch to a saved branch by index
+    /// Returns error if index invalid or branch point doesn't match current state
+    pub fn switchToBranch(self: *UndoHistory, branch_index: usize) !void {
+        if (branch_index >= self.branches.items.len) {
+            return error.InvalidBranchIndex;
+        }
+
+        const branch = &self.branches.items[branch_index];
+
+        // Can only switch if we're at the branch point
+        if (self.current_index != branch.branch_point) {
+            return error.NotAtBranchPoint;
+        }
+
+        // Save current future as a new branch before switching
+        if (self.current_index < self.groups.items.len) {
+            var current_future = std.ArrayList(OperationGroup).empty;
+            while (self.current_index < self.groups.items.len) {
+                const future_group = self.groups.pop();
+                try current_future.insert(0, future_group);
+            }
+
+            if (current_future.items.len > 0) {
+                const new_branch = Branch{
+                    .branch_point = self.current_index,
+                    .groups = current_future,
+                    .timestamp = std.time.milliTimestamp(),
+                };
+                try self.branches.insert(branch_index, new_branch);
+
+                // Limit branches
+                if (self.branches.items.len > MAX_BRANCHES) {
+                    var oldest = self.branches.orderedRemove(0);
+                    oldest.deinit(self.allocator);
+                }
+            }
+        }
+
+        // Restore the selected branch
+        var removed_branch = self.branches.orderedRemove(branch_index);
+        for (removed_branch.groups.items) |group| {
+            try self.groups.append(group);
+        }
+        // Don't deinit removed_branch since we transferred ownership
     }
 };
 
