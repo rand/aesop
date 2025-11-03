@@ -173,13 +173,33 @@ EOF
 test_editor_closes_cleanly() {
     log_info "Test: Editor closes cleanly"
 
-    # SKIPPED: Quit command testing has tmux interaction issues
-    # - Command mode (:q) not yet implemented (: key not bound in keymap)
-    # - Ctrl+Q parsing works in code but delivery via tmux send-keys unreliable
-    # - Manual testing confirms Ctrl+Q works when typed directly
-    # TODO: Implement :q command or resolve tmux Ctrl+Q delivery
+    local test_file="$TEST_DIR/quit_test.txt"
+    echo "Testing quit command" > "$test_file"
 
-    log_info "⊘ SKIPPED: Quit command testing pending implementation"
+    start_aesop "$test_file"
+    sleep 1
+
+    # Check editor is running
+    assert_screen_has_content "Editor should display content before quit" || return 1
+
+    # Enter command mode and type :q
+    send_keys ":"
+    sleep 0.2
+
+    # Type 'q' and press Enter
+    send_text "q"
+    send_keys "Enter"
+    sleep 0.5
+
+    # Verify editor has exited (tmux pane should be gone or show shell prompt)
+    # Check if aesop process is still running
+    if pgrep -f "$AESOP_BINARY" > /dev/null; then
+        log_error "Editor process still running after :q"
+        stop_aesop  # Force cleanup
+        return 1
+    fi
+
+    log_info "✓ Editor quit successfully with :q command"
     return 0
 }
 

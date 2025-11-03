@@ -19,6 +19,7 @@ const gutter = @import("render/gutter.zig");
 const input_mod = @import("terminal/input.zig");
 const Keymap = @import("editor/keymap.zig");
 const TreeSitter = @import("editor/treesitter.zig");
+const commandline = @import("editor/commandline.zig");
 
 /// Get configuration file path using XDG Base Directory specification
 /// Priority:
@@ -69,6 +70,7 @@ pub const EditorApp = struct {
     gutter_config: gutter.GutterConfig,
     mouse_drag_start: ?Cursor.Position,
     syntax_parser: ?TreeSitter.Parser,
+    command_buffer: std.ArrayList(u8), // Command line input buffer (for :q, :w, etc.)
 
     /// Initialize editor application
     pub fn init(allocator: std.mem.Allocator) !EditorApp {
@@ -117,6 +119,7 @@ pub const EditorApp = struct {
             .gutter_config = gutter_cfg,
             .mouse_drag_start = null,
             .syntax_parser = null,
+            .command_buffer = .{}, // Unmanaged ArrayList
         };
     }
 
@@ -125,6 +128,7 @@ pub const EditorApp = struct {
         if (self.syntax_parser) |*parser| {
             parser.deinit();
         }
+        self.command_buffer.deinit(self.allocator);
         self.editor.deinit();
         self.renderer.deinit();
     }
@@ -211,10 +215,25 @@ pub const EditorApp = struct {
             return;
         }
 
+        // Handle command mode input separately
+        if (self.editor.getMode() == .command) {
+            try self.handleCommandInput(event);
+            return;
+        }
+
         switch (event) {
             .char => |c| {
                 // Convert to keymap key
                 const key = Keymap.Key{ .char = c.codepoint };
+
+                // Check for command mode entry (: in normal mode)
+                if (c.codepoint == ':' and !c.mods.ctrl and !c.mods.alt and
+                    self.editor.getMode() == .normal)
+                {
+                    try self.editor.enterCommandMode();
+                    try self.command_buffer.resize(self.allocator, 0); // Clear buffer
+                    return;
+                }
 
                 // Check for quit command (Ctrl+Q in normal mode)
                 if (c.mods.ctrl and c.codepoint == 'q' and
@@ -437,6 +456,118 @@ pub const EditorApp = struct {
         try self.editor.buffer_manager.switchTo(buffer_id);
     }
 
+    /// Handle command mode input
+    fn handleCommandInput(self: *EditorApp, event: input_mod.Event) !void {
+        switch (event) {
+            .char => |c| {
+                // Ignore control characters except specific ones
+                if (c.mods.ctrl) return;
+
+                // Add character to command buffer
+                const char_bytes = &[_]u8{@intCast(c.codepoint)};
+                try self.command_buffer.appendSlice(self.allocator, char_bytes);
+            },
+
+            .key => |k| {
+                switch (k.key) {
+                    .escape => {
+                        // Cancel command and return to normal mode
+                        try self.command_buffer.resize(self.allocator, 0);
+                        try self.editor.enterNormalMode();
+                    },
+                    .backspace => {
+                        // Remove last character
+                        if (self.command_buffer.items.len > 0) {
+                            _ = self.command_buffer.pop();
+                        }
+                    },
+                    .enter => {
+                        // Execute command
+                        try self.executeCommand();
+                    },
+                    else => {},
+                }
+            },
+
+            else => {},
+        }
+    }
+
+    /// Execute the command in command_buffer
+    fn executeCommand(self: *EditorApp) !void {
+        const cmd_text = self.command_buffer.items;
+
+        // Parse command
+        const cmd = try commandline.parse(self.allocator, cmd_text);
+        defer commandline.deinit(cmd, self.allocator);
+
+        // Clear command buffer and return to normal mode
+        try self.command_buffer.resize(self.allocator, 0);
+        try self.editor.enterNormalMode();
+
+        // Execute command
+        if (cmd.shouldQuit()) {
+            if (cmd == .quit and cmd.quit.force) {
+                // Force quit
+                self.running = false;
+            } else {
+                // Check if buffer is modified
+                const buffer = self.editor.getActiveBuffer();
+                const is_modified = if (buffer) |buf| buf.metadata.modified else false;
+
+                if (is_modified and !cmd.quit.force) {
+                    const msg = "No write since last change (use :q! to force)";
+                    try self.editor.messages.add(msg, .error_msg);
+                } else {
+                    self.running = false;
+                }
+            }
+        }
+
+        if (cmd.shouldWrite()) {
+            // Save file - need mutable buffer
+            const active_id = self.editor.buffer_manager.active_buffer_id orelse return;
+            const buffer = self.editor.buffer_manager.getBufferMut(active_id) orelse return;
+
+            const save_path = switch (cmd) {
+                .write => |w| w.path,
+                .write_quit => |wq| wq.path,
+                else => null,
+            };
+
+            if (save_path) |path| {
+                // Save to specified path
+                try buffer.saveAs(path);
+            } else {
+                // Save to current file
+                if (buffer.metadata.filepath) |_| {
+                    try buffer.save();
+                } else {
+                    const msg = "No file name (use :w <filename>)";
+                    try self.editor.messages.add(msg, .error_msg);
+                    return;
+                }
+            }
+
+            const msg = try std.fmt.allocPrint(self.allocator, "Saved {s}", .{buffer.metadata.getName()});
+            defer self.allocator.free(msg);
+            try self.editor.messages.add(msg, .info);
+        }
+
+        if (cmd == .edit) {
+            // Open new file
+            try self.editor.openFile(cmd.edit.path);
+        }
+
+        if (cmd == .unknown) {
+            if (cmd.unknown.len > 0) {
+                const msg = try std.fmt.allocPrint(self.allocator, "Unknown command: {s}", .{cmd.unknown});
+                defer self.allocator.free(msg);
+                try self.editor.messages.add(msg, .error_msg);
+            }
+        }
+    }
+
     /// Handle mouse events
     fn handleMouse(self: *EditorApp, mouse: anytype) !void {
         switch (mouse.kind) {
@@ -614,16 +745,46 @@ pub const EditorApp = struct {
         // Render message line (if message exists)
         _ = try messageline.render(&self.renderer, &self.editor);
 
-        // Render status line
-        try statusline.render(&self.renderer, &self.editor);
+        // Render status line (or command line if in command mode)
+        if (self.editor.getMode() == .command) {
+            // Render command line
+            const status_row = size.height - 1;
 
-        // Render key hints (overlays on status line)
-        try keyhints.render(&self.renderer, &self.editor);
+            // Clear status line
+            var col: u16 = 0;
+            while (col < size.width) : (col += 1) {
+                self.renderer.output.setCell(status_row, col, .{
+                    .char = ' ',
+                    .fg = .default,
+                    .bg = .default,
+                    .attrs = .{},
+                });
+            }
 
-        // Render cursor (if not in overlay mode)
+            // Display command prompt with buffer contents
+            const cmd_line = try std.fmt.allocPrint(self.allocator, ":{s}", .{self.command_buffer.items});
+            defer self.allocator.free(cmd_line);
+
+            self.renderer.writeText(
+                status_row,
+                0,
+                cmd_line,
+                .default,
+                .default,
+                .{},
+            );
+        } else {
+            try statusline.render(&self.renderer, &self.editor);
+
+            // Render key hints (overlays on status line)
+            try keyhints.render(&self.renderer, &self.editor);
+        }
+
+        // Render cursor (if not in overlay mode or command mode)
         if (!self.editor.palette.visible and
             !self.editor.file_finder.visible and
-            !self.editor.buffer_switcher_visible)
+            !self.editor.buffer_switcher_visible and
+            self.editor.getMode() != .command)
         {
             try self.renderCursor(size.height - reserved_lines);
         }

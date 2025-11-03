@@ -766,6 +766,15 @@ pub const Editor = struct {
         self.plugin_manager.dispatchModeChange(@intFromEnum(old_mode), @intFromEnum(Mode.Mode.select)) catch {};
     }
 
+    pub fn enterCommandMode(self: *Editor) !void {
+        const old_mode = self.mode_manager.getMode();
+        try self.mode_manager.enterCommand();
+        self.keymap_manager.clearPending();
+
+        // Dispatch mode change to plugins
+        self.plugin_manager.dispatchModeChange(@intFromEnum(old_mode), @intFromEnum(Mode.Mode.command)) catch {};
+    }
+
     /// Get viewport info for rendering
     pub fn getViewport(self: *const Editor, screen_height: usize) struct {
         start_line: usize,
