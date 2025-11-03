@@ -105,6 +105,11 @@ pub fn build(b: *std.Build) void {
     exe.linkSystemLibrary("tree-sitter");
     exe.linkLibC();
 
+    // Add user lib directory to library search paths
+    const home_dir = std.posix.getenv("HOME") orelse "/Users/rand";
+    const user_lib_path = b.fmt("{s}/lib", .{home_dir});
+    exe.addLibraryPath(.{ .cwd_relative = user_lib_path });
+
     // Link language grammar libraries
     // Note: Each grammar must be built and installed separately
     // See docs/BUILDING_WITH_TREE_SITTER.md for per-language installation
@@ -156,6 +161,7 @@ pub fn build(b: *std.Build) void {
     // Link tree-sitter for module tests
     mod_tests.linkSystemLibrary("tree-sitter");
     mod_tests.linkLibC();
+    mod_tests.addLibraryPath(.{ .cwd_relative = user_lib_path });
     mod_tests.linkSystemLibrary("tree-sitter-zig");
     mod_tests.linkSystemLibrary("tree-sitter-rust");
     mod_tests.linkSystemLibrary("tree-sitter-go");
@@ -174,6 +180,7 @@ pub fn build(b: *std.Build) void {
     // Link tree-sitter for exe tests
     exe_tests.linkSystemLibrary("tree-sitter");
     exe_tests.linkLibC();
+    exe_tests.addLibraryPath(.{ .cwd_relative = user_lib_path });
     exe_tests.linkSystemLibrary("tree-sitter-zig");
     exe_tests.linkSystemLibrary("tree-sitter-rust");
     exe_tests.linkSystemLibrary("tree-sitter-go");
