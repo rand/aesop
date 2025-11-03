@@ -3440,6 +3440,9 @@ fn lspFormattingCallback(ctx: ?*anyopaque, result_json: []const u8) !void {
     const fmt_ctx: *FormattingContext = @ptrCast(@alignCast(ctx orelse return error.NullContext));
     const editor = fmt_ctx.editor;
 
+    // Ensure cleanup happens on all code paths (prevents memory leak)
+    defer editor.allocator.destroy(fmt_ctx);
+
     // Parse formatting response
     const edits = ResponseParser.parseFormattingResponse(editor.allocator, result_json) catch |err| {
         std.debug.print("[LSP] Failed to parse formatting response: {}\n", .{err});
@@ -3472,9 +3475,6 @@ fn lspFormattingCallback(ctx: ?*anyopaque, result_json: []const u8) !void {
     }) catch "Formatting applied";
 
     editor.messages.add(msg, .success) catch {};
-
-    // Free formatting context (prevents memory leak)
-    editor.allocator.destroy(fmt_ctx);
 }
 
 /// Find all references to symbol under cursor
@@ -3528,7 +3528,6 @@ fn lspFormatDocument(ctx: *Context) Result {
         .editor = ctx.editor,
         .buffer_id = buffer.metadata.id,
     };
-    // Note: fmt_ctx should be freed in callback, but for now it leaks (TODO: add callback cleanup)
 
     // Send LSP formatting request
     _ = LspHandlers.formatting(
