@@ -4,6 +4,7 @@
 const std = @import("std");
 const Buffer = @import("../buffer/manager.zig").Buffer;
 const Highlight = @import("highlight.zig");
+const ts = @import("../treesitter/bindings.zig");
 
 /// Syntax node type - represents a parsed syntax element
 pub const SyntaxNode = struct {
@@ -123,30 +124,92 @@ pub const Language = enum {
     }
 };
 
+/// Get tree-sitter language grammar for a Language
+/// Returns null if the grammar is not available (not linked or not implemented)
+fn getTreeSitterLanguage(language: Language) ?*const ts.TSLanguage {
+    return switch (language) {
+        // TODO: Install and link tree-sitter-zig grammar
+        // The grammar library must be installed and linked via build.zig
+        // For now, returning null to allow compilation without the grammar
+        .zig => null, // Will be: ts.tree_sitter_zig(),
+
+        // Other languages will be added in Phase 2.4
+        // For now, they return null and fall back to basic highlighting
+        .c => null, // ts.tree_sitter_c(),
+        .rust => null, // ts.tree_sitter_rust(),
+        .go => null, // ts.tree_sitter_go(),
+        .python => null, // ts.tree_sitter_python(),
+
+        // These don't have tree-sitter grammars in our bindings yet
+        .javascript,
+        .typescript,
+        .json,
+        .markdown,
+        .plain_text,
+        => null,
+    };
+}
+
 /// Parser state - manages syntax tree for a buffer
 pub const Parser = struct {
     language: Language,
     allocator: std.mem.Allocator,
-    // Tree-sitter state would go here
-    // For now, this is a placeholder for the actual tree-sitter integration
+    ts_parser: ?*ts.TSParser,
+    ts_tree: ?*ts.TSTree,
+    ts_language: ?*const ts.TSLanguage,
 
     pub fn init(allocator: std.mem.Allocator, language: Language) !Parser {
+        // Create tree-sitter parser
+        const ts_parser = ts.ts_parser_new() orelse return error.ParserCreationFailed;
+        errdefer ts.ts_parser_delete(ts_parser);
+
+        // Get language grammar
+        const ts_language = getTreeSitterLanguage(language);
+
+        // Set language (if available)
+        if (ts_language) |lang| {
+            if (!ts.ts_parser_set_language(ts_parser, lang)) {
+                ts.ts_parser_delete(ts_parser);
+                return error.LanguageSetFailed;
+            }
+        }
+
         return .{
             .language = language,
             .allocator = allocator,
+            .ts_parser = ts_parser,
+            .ts_tree = null,
+            .ts_language = ts_language,
         };
     }
 
     pub fn deinit(self: *Parser) void {
-        _ = self;
+        if (self.ts_tree) |tree| {
+            ts.ts_tree_delete(tree);
+        }
+        if (self.ts_parser) |parser| {
+            ts.ts_parser_delete(parser);
+        }
     }
 
-    /// Parse buffer and return syntax tree
+    /// Parse buffer and create/update syntax tree
     pub fn parse(self: *Parser, text: []const u8) !void {
-        _ = self;
-        _ = text;
-        // TODO: Call tree-sitter parser
-        // For now, this is a no-op
+        const parser = self.ts_parser orelse return error.NoParser;
+
+        // Parse the text
+        const new_tree = ts.ts_parser_parse_string(
+            parser,
+            self.ts_tree, // old tree for incremental parsing
+            text.ptr,
+            @intCast(text.len),
+        ) orelse return error.ParseFailed;
+
+        // Delete old tree if it exists
+        if (self.ts_tree) |old_tree| {
+            ts.ts_tree_delete(old_tree);
+        }
+
+        self.ts_tree = new_tree;
     }
 
     /// Get highlights for a line range
@@ -159,7 +222,13 @@ pub const Parser = struct {
         _ = start_line;
         _ = end_line;
 
-        // Temporary: Basic keyword-based highlighting
+        // If tree-sitter is not available for this language, fall back to basic highlighting
+        if (self.ts_language == null or self.ts_tree == null) {
+            return try basicHighlight(self.allocator, text, self.language);
+        }
+
+        // For now, still use basic highlighting until we implement query-based highlighting
+        // in Phase 2.3. This ensures the parser works without requiring highlight queries.
         return try basicHighlight(self.allocator, text, self.language);
     }
 };
