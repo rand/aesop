@@ -3339,7 +3339,7 @@ fn lineCharToByteOffset(buffer: *const Buffer.Buffer, line: u32, character: u32)
 /// Apply text edits to buffer (used by formatting)
 fn applyTextEdits(editor: *Editor, buffer_id: Buffer.BufferId, edits: []const @import("../lsp/response_parser.zig").TextEdit) !void {
     const ResponseParser = @import("../lsp/response_parser.zig");
-    const buffer = editor.buffer_manager.getBuffer(buffer_id) orelse return error.BufferNotFound;
+    const buffer = editor.buffer_manager.getBufferMut(buffer_id) orelse return error.BufferNotFound;
 
     // Sort edits in reverse order (from end to beginning)
     // This ensures earlier edits don't invalidate later position calculations
@@ -4448,6 +4448,20 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .name = "lsp_show_hover",
         .description = "Show hover information for symbol (K)",
         .handler = lspShowHover,
+        .category = .system,
+    });
+
+    try registry.register(.{
+        .name = "lsp_find_references",
+        .description = "Find all references to symbol (gr)",
+        .handler = lspFindReferences,
+        .category = .system,
+    });
+
+    try registry.register(.{
+        .name = "lsp_format_document",
+        .description = "Format current document (gq)",
+        .handler = lspFormatDocument,
         .category = .system,
     });
 }

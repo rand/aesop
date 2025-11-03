@@ -357,6 +357,8 @@ pub fn setupDefaults(manager: *KeymapManager) !void {
     // Ctrl+Space for completion (note: ctrl modifier doesn't work yet, needs terminal input support)
     try normal_map.bind(Binding.fromChord(.{ .char = 'g' }, .{ .char = 'd' }, "lsp_goto_definition"));
     try normal_map.bind(Binding.fromSingleKey(.{ .char = 'K' }, "lsp_show_hover"));
+    try normal_map.bind(Binding.fromChord(.{ .char = 'g' }, .{ .char = 'r' }, "lsp_find_references"));
+    try normal_map.bind(Binding.fromChord(.{ .char = 'g' }, .{ .char = 'q' }, "lsp_format_document"));
 }
 
 test "keymap: bind and lookup" {

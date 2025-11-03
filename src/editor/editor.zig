@@ -345,6 +345,21 @@ pub const Editor = struct {
 
     /// Process key input
     pub fn processKey(self: *Editor, key: Keymap.Key) !void {
+        // Dismiss hover popup on any key press (except the hover trigger itself)
+        if (self.hover_content != null) {
+            // Check if this is NOT the hover trigger key (K in normal mode)
+            const is_hover_trigger = switch (key) {
+                .char => |c| c == 'K',
+                .special => false,
+            };
+            if (!is_hover_trigger) {
+                if (self.hover_content) |content| {
+                    self.allocator.free(content);
+                    self.hover_content = null;
+                }
+            }
+        }
+
         const mode = self.getMode();
 
         // Priority 1: Incremental search mode
