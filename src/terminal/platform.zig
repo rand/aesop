@@ -44,16 +44,17 @@ pub const Terminal = struct {
                 raw.iflag.INPCK = false;
                 raw.iflag.ISTRIP = false;
 
-                // Disable output processing
-                raw.oflag.OPOST = false;
+                // CRITICAL FIX: Keep output processing enabled for proper newline handling
+                // OPOST must be true for \n -> \r\n conversion, otherwise text renders incorrectly
+                raw.oflag.OPOST = true;
 
                 // Set character size to 8 bits
                 raw.cflag.CSIZE = .CS8;
 
-                // Minimum characters for read
+                // Minimum characters for read (0 = non-blocking with timeout)
                 raw.cc[@intFromEnum(std.posix.V.MIN)] = 0;
-                // Timeout in deciseconds
-                raw.cc[@intFromEnum(std.posix.V.TIME)] = 1;
+                // Timeout in deciseconds (3 = 0.3s, better balance of responsiveness vs CPU usage)
+                raw.cc[@intFromEnum(std.posix.V.TIME)] = 3;
 
                 try std.posix.tcsetattr(std.posix.STDIN_FILENO, .FLUSH, raw);
                 self.raw_mode_enabled = true;

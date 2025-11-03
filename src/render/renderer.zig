@@ -31,9 +31,15 @@ pub const Renderer = struct {
 
         const stdout_file = std.fs.File.stdout();
 
+        var output_buf = try OutputBuffer.init(allocator, size.width, size.height);
+        // CRITICAL FIX: Mark all lines dirty on init to ensure first render displays
+        // Without this, computeDamage() sees both buffers as identical (all zeros)
+        // and renders nothing, resulting in a blank screen
+        output_buf.markAllDirty();
+
         return .{
             .terminal = term,
-            .output = try OutputBuffer.init(allocator, size.width, size.height),
+            .output = output_buf,
             .stdout = stdout_file,
             .write_buf = undefined,
             .write_pos = 0,
@@ -52,11 +58,13 @@ pub const Renderer = struct {
         // Enter alternate screen
         try self.write(vt100.Screen.alternate_enter);
 
-        // Hide cursor
-        try self.write(vt100.Cursor.hide);
-
-        // Clear screen
+        // Clear screen and home cursor
         try self.write(vt100.Screen.clear_all);
+        const home = vt100.Cursor.goto(1, 1);
+        try self.write(&home);
+
+        // Hide cursor (will be repositioned during render)
+        try self.write(vt100.Cursor.hide);
 
         try self.flush();
     }
