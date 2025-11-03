@@ -3065,10 +3065,8 @@ fn lspTriggerCompletion(ctx: *Context) Result {
         if (client.isReady()) {
             // Get file URI
             const filepath = buffer.metadata.filepath orelse return Result.err("Buffer has no filepath");
-
-            // TODO: Convert filepath to file:// URI
-            var uri_buf: [1024]u8 = undefined;
-            const uri = std.fmt.bufPrint(&uri_buf, "file://{s}", .{filepath}) catch return Result.err("URI too long");
+            const uri = ctx.editor.makeFileUri(filepath) catch return Result.err("Failed to create URI");
+            defer ctx.editor.allocator.free(uri);
 
             // Trigger completion request
             // Note: This is async - results will come via callback

@@ -333,7 +333,17 @@ pub const Editor = struct {
         }
     }
 
-    /// Create file:// URI from filepath
+    /// Helper to check if character needs percent-encoding in URI (RFC 3986)
+    fn needsPercentEncoding(c: u8) bool {
+        return switch (c) {
+            // Unreserved characters (RFC 3986)
+            'A'...'Z', 'a'...'z', '0'...'9', '-', '_', '.', '~', '/' => false,
+            else => true,
+        };
+    }
+
+    /// Create file:// URI from filepath with proper percent-encoding
+    /// Returns allocated string that must be freed by caller
     pub fn makeFileUri(self: *Editor, filepath: []const u8) ![]u8 {
         // Get absolute path if relative
         const abs_path = if (std.fs.path.isAbsolute(filepath))
@@ -342,8 +352,33 @@ pub const Editor = struct {
             try std.fs.cwd().realpathAlloc(self.allocator, filepath);
         defer if (!std.fs.path.isAbsolute(filepath)) self.allocator.free(abs_path);
 
-        // Create file:// URI
-        const uri = try std.fmt.allocPrint(self.allocator, "file://{s}", .{abs_path});
+        // Count characters that need encoding to calculate buffer size
+        var encoded_len: usize = 0;
+        for (abs_path) |c| {
+            encoded_len += if (needsPercentEncoding(c)) 3 else 1; // %XX = 3 chars
+        }
+
+        // Allocate buffer: "file://" + encoded path
+        const uri = try self.allocator.alloc(u8, 7 + encoded_len);
+        errdefer self.allocator.free(uri);
+
+        // Write "file://"
+        @memcpy(uri[0..7], "file://");
+
+        // Percent-encode the path
+        var pos: usize = 7;
+        for (abs_path) |c| {
+            if (needsPercentEncoding(c)) {
+                uri[pos] = '%';
+                uri[pos + 1] = "0123456789ABCDEF"[c >> 4];
+                uri[pos + 2] = "0123456789ABCDEF"[c & 0x0F];
+                pos += 3;
+            } else {
+                uri[pos] = c;
+                pos += 1;
+            }
+        }
+
         return uri;
     }
 
