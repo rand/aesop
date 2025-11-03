@@ -105,9 +105,15 @@ pub fn build(b: *std.Build) void {
     exe.linkSystemLibrary("tree-sitter");
     exe.linkLibC();
 
-    // Language grammar libraries will be added in Phase 2.2-2.4
-    // when the parser wrapper and language support is implemented.
-    // For now, we link only the core tree-sitter library.
+    // Link language grammar libraries
+    // Note: Each grammar must be built and installed separately
+    // See docs/BUILDING_WITH_TREE_SITTER.md for per-language installation
+    // If a grammar is not installed, linking will fail - install grammars first
+    exe.linkSystemLibrary("tree-sitter-zig");
+    exe.linkSystemLibrary("tree-sitter-rust");
+    exe.linkSystemLibrary("tree-sitter-go");
+    exe.linkSystemLibrary("tree-sitter-python");
+    exe.linkSystemLibrary("tree-sitter-c");
 
     // This declares intent for the executable to be installed into the
     // install prefix when running `zig build` (i.e. when executing the default
@@ -150,6 +156,11 @@ pub fn build(b: *std.Build) void {
     // Link tree-sitter for module tests
     mod_tests.linkSystemLibrary("tree-sitter");
     mod_tests.linkLibC();
+    mod_tests.linkSystemLibrary("tree-sitter-zig");
+    mod_tests.linkSystemLibrary("tree-sitter-rust");
+    mod_tests.linkSystemLibrary("tree-sitter-go");
+    mod_tests.linkSystemLibrary("tree-sitter-python");
+    mod_tests.linkSystemLibrary("tree-sitter-c");
 
     // A run step that will run the test executable.
     const run_mod_tests = b.addRunArtifact(mod_tests);
@@ -163,6 +174,11 @@ pub fn build(b: *std.Build) void {
     // Link tree-sitter for exe tests
     exe_tests.linkSystemLibrary("tree-sitter");
     exe_tests.linkLibC();
+    exe_tests.linkSystemLibrary("tree-sitter-zig");
+    exe_tests.linkSystemLibrary("tree-sitter-rust");
+    exe_tests.linkSystemLibrary("tree-sitter-go");
+    exe_tests.linkSystemLibrary("tree-sitter-python");
+    exe_tests.linkSystemLibrary("tree-sitter-c");
 
     // A run step that will run the second test executable.
     const run_exe_tests = b.addRunArtifact(exe_tests);

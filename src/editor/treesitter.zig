@@ -286,20 +286,17 @@ pub fn createReplaceEdit(
 }
 
 /// Get tree-sitter language grammar for a Language
-/// Returns null if the grammar is not available (not linked or not implemented)
+/// Returns the grammar function for supported languages
+/// Note: Requires language-specific grammar libraries to be installed and linked
+/// See build.zig and docs/BUILDING_WITH_TREE_SITTER.md for setup
 fn getTreeSitterLanguage(language: Language) ?*const ts.TSLanguage {
     return switch (language) {
-        // TODO: Install and link tree-sitter-zig grammar
-        // The grammar library must be installed and linked via build.zig
-        // For now, returning null to allow compilation without the grammar
-        .zig => null, // Will be: ts.tree_sitter_zig(),
-
-        // Other languages will be added in Phase 2.4
-        // For now, they return null and fall back to basic highlighting
-        .c => null, // ts.tree_sitter_c(),
-        .rust => null, // ts.tree_sitter_rust(),
-        .go => null, // ts.tree_sitter_go(),
-        .python => null, // ts.tree_sitter_python(),
+        // Supported languages with tree-sitter grammars
+        .zig => ts.tree_sitter_zig(),
+        .c => ts.tree_sitter_c(),
+        .rust => ts.tree_sitter_rust(),
+        .go => ts.tree_sitter_go(),
+        .python => ts.tree_sitter_python(),
 
         // These don't have tree-sitter grammars in our bindings yet
         .javascript,
