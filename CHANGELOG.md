@@ -70,6 +70,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Terminal Detection**: Proper TTY detection before terminal operations
+  - Checks if stdin is a TTY using `isatty()` before calling `tcgetattr()`
+  - Clear error message when run in non-TTY context (pipes, redirects, automation)
+  - Prevents cryptic "error: Unexpected" (errno 19 ENODEV on macOS)
+
 ### Planned Features
 
 - Git status display in gutter (editor_app.zig:107)
