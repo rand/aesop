@@ -10,6 +10,13 @@ pub const Terminal = struct {
     raw_mode_enabled: bool = false,
 
     pub fn init() !Terminal {
+        // Check if stdin is a TTY before attempting terminal operations
+        if (builtin.os.tag != .windows) {
+            if (!std.posix.isatty(std.posix.STDIN_FILENO)) {
+                return error.NotATerminal;
+            }
+        }
+
         return .{
             .original_termios = if (builtin.os.tag != .windows) try std.posix.tcgetattr(std.posix.STDIN_FILENO) else {},
             .raw_mode_enabled = false,

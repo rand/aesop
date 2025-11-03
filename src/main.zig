@@ -30,10 +30,24 @@ pub fn main() !void {
 
     if (run_demo) {
         // Run hello world demo
-        try demo.runDemo(allocator);
+        demo.runDemo(allocator) catch |err| {
+            if (err == error.NotATerminal) {
+                std.debug.print("error: Aesop requires a terminal (TTY) to run.\n", .{});
+                std.debug.print("Please run Aesop directly in a terminal, not through a pipe or redirect.\n", .{});
+                std.process.exit(1);
+            }
+            return err;
+        };
     } else {
         // Run the editor
-        try editor_app.runEditor(allocator, filepath);
+        editor_app.runEditor(allocator, filepath) catch |err| {
+            if (err == error.NotATerminal) {
+                std.debug.print("error: Aesop requires a terminal (TTY) to run.\n", .{});
+                std.debug.print("Please run Aesop directly in a terminal, not through a pipe or redirect.\n", .{});
+                std.process.exit(1);
+            }
+            return err;
+        };
     }
 }
 
