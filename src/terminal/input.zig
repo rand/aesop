@@ -165,6 +165,13 @@ pub const Parser = struct {
                     self.pos += 1;
                 }
 
+                // Check for SGR mouse tracking (ESC[<...)
+                if (self.pos == 1 and byte == '<') {
+                    self.state = .mouse;
+                    self.pos = 0;
+                    return null;
+                }
+
                 // Check for sequence terminator
                 if (byte >= 0x40 and byte <= 0x7e) {
                     const seq = self.buf[0..self.pos];
@@ -176,8 +183,18 @@ pub const Parser = struct {
 
             .mouse => {
                 // Mouse tracking parsing (SGR mode)
-                // TODO: Implement mouse event parsing
-                self.state = .normal;
+                // Accumulate bytes until we hit M or m (press/release)
+                if (self.pos < self.buf.len) {
+                    self.buf[self.pos] = byte;
+                    self.pos += 1;
+                }
+
+                // Check for sequence terminator (M=press, m=release)
+                if (byte == 'M' or byte == 'm') {
+                    const seq = self.buf[0..self.pos];
+                    self.state = .normal;
+                    return try self.parseMouseSgr(seq, byte == 'M');
+                }
                 return null;
             },
         }
@@ -230,6 +247,77 @@ pub const Parser = struct {
 
         return null;
     }
+
+    fn parseMouseSgr(_: *Parser, seq: []const u8, is_press: bool) !?Event {
+        // SGR mouse format: ESC[<button;col;rowM (press) or ...m (release)
+        // Example: ESC[<0;5;10M means left button press at col=5, row=10
+        // Example: ESC[<0;5;10m means button release at col=5, row=10
+        // Example: ESC[<64;5;10M means scroll up at col=5, row=10
+        // Example: ESC[<65;5;10M means scroll down at col=5, row=10
+
+        if (seq.len == 0) return null;
+
+        // Parse button;col;row
+        var parts: [3]u16 = undefined;
+        var part_idx: usize = 0;
+        var num_start: usize = 0;
+
+        for (seq, 0..) |byte, i| {
+            if (byte == ';' or i == seq.len - 1) {
+                const num_end = if (i == seq.len - 1) seq.len else i;
+                const num_str = seq[num_start..num_end];
+                if (num_str.len > 0 and (byte != 'M' and byte != 'm')) {
+                    parts[part_idx] = std.fmt.parseInt(u16, num_str, 10) catch return null;
+                    part_idx += 1;
+                    if (part_idx >= 3) break;
+                }
+                num_start = i + 1;
+            }
+        }
+
+        if (part_idx != 3) return null;
+
+        const button = parts[0];
+        const col = parts[1];
+        const row = parts[2];
+
+        // Decode button and modifiers
+        const button_base = button & 0x3; // Lower 2 bits are button
+        const modifiers_bits = button & 0x1c; // Bits 2-4 are modifiers
+        const scroll_bits = button & 0x40; // Bit 6 indicates scroll
+
+        // Build modifiers
+        var mods = Modifiers{};
+        if (modifiers_bits & 0x04 != 0) mods.shift = true;
+        if (modifiers_bits & 0x08 != 0) mods.alt = true;
+        if (modifiers_bits & 0x10 != 0) mods.ctrl = true;
+
+        // Determine mouse kind
+        const kind: MouseKind = if (scroll_bits != 0) blk: {
+            // Scroll events
+            if (button_base == 0) {
+                break :blk .scroll_up;
+            } else {
+                break :blk .scroll_down;
+            }
+        } else if (!is_press) blk: {
+            // Release event
+            break :blk .release;
+        } else switch (button_base) {
+            0 => .press_left,
+            1 => .press_middle,
+            2 => .press_right,
+            3 => .move, // Motion events when button is held
+            else => return null,
+        };
+
+        return Event{ .mouse = .{
+            .kind = kind,
+            .row = row,
+            .col = col,
+            .mods = mods,
+        } };
+    }
 };
 
 test "parse simple character" {
@@ -267,4 +355,106 @@ test "parse ctrl+key" {
     try std.testing.expectEqual(Event.char, std.meta.activeTag(events[0]));
     try std.testing.expectEqual(@as(u21, 'a'), events[0].char.codepoint);
     try std.testing.expect(events[0].char.mods.ctrl);
+}
+
+test "parse mouse left button press" {
+    var parser = Parser{};
+    const allocator = std.testing.allocator;
+
+    // ESC[<0;10;5M means left button press at col=10, row=5
+    const events = try parser.parse(allocator, "\x1b[<0;10;5M");
+    defer allocator.free(events);
+
+    try std.testing.expectEqual(@as(usize, 1), events.len);
+    try std.testing.expectEqual(Event.mouse, std.meta.activeTag(events[0]));
+    try std.testing.expectEqual(MouseKind.press_left, events[0].mouse.kind);
+    try std.testing.expectEqual(@as(u16, 10), events[0].mouse.col);
+    try std.testing.expectEqual(@as(u16, 5), events[0].mouse.row);
+}
+
+test "parse mouse button release" {
+    var parser = Parser{};
+    const allocator = std.testing.allocator;
+
+    // ESC[<0;10;5m (lowercase m) means button release
+    const events = try parser.parse(allocator, "\x1b[<0;10;5m");
+    defer allocator.free(events);
+
+    try std.testing.expectEqual(@as(usize, 1), events.len);
+    try std.testing.expectEqual(Event.mouse, std.meta.activeTag(events[0]));
+    try std.testing.expectEqual(MouseKind.release, events[0].mouse.kind);
+    try std.testing.expectEqual(@as(u16, 10), events[0].mouse.col);
+    try std.testing.expectEqual(@as(u16, 5), events[0].mouse.row);
+}
+
+test "parse mouse scroll up" {
+    var parser = Parser{};
+    const allocator = std.testing.allocator;
+
+    // ESC[<64;10;5M means scroll up at col=10, row=5
+    const events = try parser.parse(allocator, "\x1b[<64;10;5M");
+    defer allocator.free(events);
+
+    try std.testing.expectEqual(@as(usize, 1), events.len);
+    try std.testing.expectEqual(Event.mouse, std.meta.activeTag(events[0]));
+    try std.testing.expectEqual(MouseKind.scroll_up, events[0].mouse.kind);
+    try std.testing.expectEqual(@as(u16, 10), events[0].mouse.col);
+    try std.testing.expectEqual(@as(u16, 5), events[0].mouse.row);
+}
+
+test "parse mouse scroll down" {
+    var parser = Parser{};
+    const allocator = std.testing.allocator;
+
+    // ESC[<65;10;5M means scroll down at col=10, row=5
+    const events = try parser.parse(allocator, "\x1b[<65;10;5M");
+    defer allocator.free(events);
+
+    try std.testing.expectEqual(@as(usize, 1), events.len);
+    try std.testing.expectEqual(Event.mouse, std.meta.activeTag(events[0]));
+    try std.testing.expectEqual(MouseKind.scroll_down, events[0].mouse.kind);
+    try std.testing.expectEqual(@as(u16, 10), events[0].mouse.col);
+    try std.testing.expectEqual(@as(u16, 5), events[0].mouse.row);
+}
+
+test "parse mouse with shift modifier" {
+    var parser = Parser{};
+    const allocator = std.testing.allocator;
+
+    // ESC[<4;10;5M means left button (0) + shift (bit 2 = 4)
+    const events = try parser.parse(allocator, "\x1b[<4;10;5M");
+    defer allocator.free(events);
+
+    try std.testing.expectEqual(@as(usize, 1), events.len);
+    try std.testing.expectEqual(Event.mouse, std.meta.activeTag(events[0]));
+    try std.testing.expectEqual(MouseKind.press_left, events[0].mouse.kind);
+    try std.testing.expect(events[0].mouse.mods.shift);
+    try std.testing.expectEqual(@as(u16, 10), events[0].mouse.col);
+    try std.testing.expectEqual(@as(u16, 5), events[0].mouse.row);
+}
+
+test "parse mouse middle button" {
+    var parser = Parser{};
+    const allocator = std.testing.allocator;
+
+    // ESC[<1;10;5M means middle button press
+    const events = try parser.parse(allocator, "\x1b[<1;10;5M");
+    defer allocator.free(events);
+
+    try std.testing.expectEqual(@as(usize, 1), events.len);
+    try std.testing.expectEqual(Event.mouse, std.meta.activeTag(events[0]));
+    try std.testing.expectEqual(MouseKind.press_middle, events[0].mouse.kind);
+}
+
+test "parse mouse right button" {
+    var parser = Parser{};
+    const allocator = std.testing.allocator;
+
+    // ESC[<2;10;5M means right button press
+    const events = try parser.parse(allocator, "\x1b[<2;10;5M");
+    defer allocator.free(events);
+
+    try std.testing.expectEqual(@as(usize, 1), events.len);
+    try std.testing.expectEqual(Event.mouse, std.meta.activeTag(events[0]));
+    try std.testing.expectEqual(MouseKind.press_right, events[0].mouse.kind);
 }
