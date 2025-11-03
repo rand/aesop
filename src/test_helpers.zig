@@ -50,9 +50,8 @@ pub const MockTerminal = struct {
         @memcpy(buffer[0..to_read], self.input_buffer.items[0..to_read]);
 
         // Remove read bytes from input buffer
-        const remaining = self.input_buffer.items[to_read..];
-        try self.input_buffer.resize(self.allocator, remaining.len);
-        @memcpy(self.input_buffer.items, remaining);
+        // Use replaceRange to remove elements 0..to_read
+        try self.input_buffer.replaceRange(self.allocator, 0, to_read, &[_]u8{});
 
         return to_read;
     }
