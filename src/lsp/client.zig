@@ -260,13 +260,19 @@ pub const Client = struct {
         if (method_value != .string) return error.InvalidMethod;
         const method = method_value.string;
 
-        // Extract params (optional)
+        // Extract params (optional) and stringify just that portion
         var params_json: []const u8 = "null";
-        if (root.object.get("params")) |_| {
-            // Re-serialize params to JSON string
-            // For now, just pass the original JSON
-            // TODO: Better approach would be to extract just the params portion
-            params_json = json;
+        var params_owned: ?[]u8 = null;
+        defer if (params_owned) |owned| self.allocator.free(owned);
+
+        if (root.object.get("params")) |params_value| {
+            // Stringify just the params portion
+            var params_buf = std.ArrayList(u8).empty;
+            defer params_buf.deinit(self.allocator);
+
+            try std.json.stringify(params_value, .{}, params_buf.writer(self.allocator));
+            params_owned = try params_buf.toOwnedSlice(self.allocator);
+            params_json = params_owned.?;
         }
 
         // Invoke notification handler
