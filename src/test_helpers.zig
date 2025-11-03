@@ -148,10 +148,10 @@ pub const MockTerminal = struct {
 
         // Status line typically has mode indicator or filename
         return std.mem.indexOf(u8, last_row, "NORMAL") != null or
-               std.mem.indexOf(u8, last_row, "INSERT") != null or
-               std.mem.indexOf(u8, last_row, "SELECT") != null or
-               std.mem.indexOf(u8, last_row, ".zig") != null or
-               std.mem.indexOf(u8, last_row, ".rs") != null;
+            std.mem.indexOf(u8, last_row, "INSERT") != null or
+            std.mem.indexOf(u8, last_row, "SELECT") != null or
+            std.mem.indexOf(u8, last_row, ".zig") != null or
+            std.mem.indexOf(u8, last_row, ".rs") != null;
     }
 
     /// Check for proper line breaks (no staircase effect)
@@ -263,8 +263,7 @@ pub const Assertions = struct {
     /// Assert that cursor is at expected position
     pub fn expectCursorAt(cursor: anytype, line: usize, col: usize) !void {
         if (cursor.line != line or cursor.col != col) {
-            std.debug.print("\nExpected cursor at ({d}, {d}), got ({d}, {d})\n",
-                .{ line, col, cursor.line, cursor.col });
+            std.debug.print("\nExpected cursor at ({d}, {d}), got ({d}, {d})\n", .{ line, col, cursor.line, cursor.col });
             return error.TestExpectedEqual;
         }
     }
@@ -291,8 +290,7 @@ pub const MockLSP = struct {
     }
 
     /// Create a mock diagnostic notification
-    pub fn diagnosticNotification(allocator: std.mem.Allocator, uri: []const u8,
-                                   line: u32, message: []const u8, severity: u8) ![]u8 {
+    pub fn diagnosticNotification(allocator: std.mem.Allocator, uri: []const u8, line: u32, message: []const u8, severity: u8) ![]u8 {
         var response = std.ArrayList(u8){};
         errdefer response.deinit(allocator);
 
@@ -326,9 +324,9 @@ pub const MockLSP = struct {
 
 /// Test persona definitions
 pub const Persona = enum {
-    developer,  // Code-heavy workflow with LSP
-    writer,     // Prose editing with search/macros
-    sysadmin,   // Config file editing with splits
+    developer, // Code-heavy workflow with LSP
+    writer, // Prose editing with search/macros
+    sysadmin, // Config file editing with splits
 
     /// Get sample workflow for persona
     pub fn getWorkflow(self: Persona) []const u8 {

@@ -37,7 +37,7 @@ pub fn parse(allocator: std.mem.Allocator, input: []const u8) !Command {
     // Check for force modifier (!)
     const has_force = std.mem.endsWith(u8, trimmed, "!");
     const cmd_text = if (has_force)
-        trimmed[0..trimmed.len - 1]
+        trimmed[0 .. trimmed.len - 1]
     else
         trimmed;
 

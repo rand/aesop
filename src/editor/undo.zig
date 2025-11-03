@@ -57,7 +57,7 @@ pub const OperationGroup = struct {
     pub fn init(allocator: std.mem.Allocator, cursor: Cursor.Position) OperationGroup {
         _ = allocator;
         return .{
-            .operations = .{},  // Unmanaged ArrayList
+            .operations = .{}, // Unmanaged ArrayList
             .cursor_before = cursor,
             .cursor_after = cursor,
             .timestamp = std.time.milliTimestamp(),
