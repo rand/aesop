@@ -261,6 +261,57 @@ pub fn formatting(
     return try client.sendRequest("textDocument/formatting", params, callback, callback_ctx);
 }
 
+/// Request code actions at a given position
+pub fn codeAction(
+    client: *Client,
+    uri: []const u8,
+    line: u32,
+    character: u32,
+    callback: *const fn (ctx: ?*anyopaque, result: []const u8) anyerror!void,
+    callback_ctx: ?*anyopaque,
+) !u32 {
+    if (!client.isReady()) {
+        return error.NotInitialized;
+    }
+
+    const params = .{
+        .textDocument = .{ .uri = uri },
+        .range = .{
+            .start = .{
+                .line = line,
+                .character = character,
+            },
+            .end = .{
+                .line = line,
+                .character = character,
+            },
+        },
+        .context = .{
+            .diagnostics = .{}, // Empty for now, could include diagnostics at position
+        },
+    };
+
+    return try client.sendRequest("textDocument/codeAction", params, callback, callback_ctx);
+}
+
+/// Request document symbols (outline)
+pub fn documentSymbol(
+    client: *Client,
+    uri: []const u8,
+    callback: *const fn (ctx: ?*anyopaque, result: []const u8) anyerror!void,
+    callback_ctx: ?*anyopaque,
+) !u32 {
+    if (!client.isReady()) {
+        return error.NotInitialized;
+    }
+
+    const params = .{
+        .textDocument = .{ .uri = uri },
+    };
+
+    return try client.sendRequest("textDocument/documentSymbol", params, callback, callback_ctx);
+}
+
 /// Content change for didChange notification
 pub const ContentChange = struct {
     text: []const u8,

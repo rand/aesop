@@ -9,6 +9,7 @@ pub const Editor = EditorModule.Editor;
 const PendingCommand = EditorModule.PendingCommand;
 
 const LspHandlers = @import("../lsp/handlers.zig");
+const ResponseParser = @import("../lsp/response_parser.zig");
 
 /// Command context - passed to command handlers
 pub const Context = struct {
@@ -2999,7 +3000,6 @@ fn playMacro(ctx: *Context) Result {
 
 /// Completion callback handler (called when LSP returns results)
 fn lspCompletionCallback(ctx: ?*anyopaque, result_json: []const u8) !void {
-    const ResponseParser = @import("../lsp/response_parser.zig");
 
     // Extract editor from context
     const editor: *Editor = @ptrCast(@alignCast(ctx orelse return error.NullContext));
@@ -3132,7 +3132,6 @@ fn lspAcceptCompletion(ctx: *Context) Result {
 
 /// Callback for LSP hover response
 fn lspHoverCallback(ctx: ?*anyopaque, result_json: []const u8) !void {
-    const ResponseParser = @import("../lsp/response_parser.zig");
     const editor: *Editor = @ptrCast(@alignCast(ctx orelse return error.NullContext));
 
     // Parse hover response
@@ -3153,7 +3152,6 @@ fn lspHoverCallback(ctx: ?*anyopaque, result_json: []const u8) !void {
 
 /// Callback for LSP goto definition response
 fn lspDefinitionCallback(ctx: ?*anyopaque, result_json: []const u8) !void {
-    const ResponseParser = @import("../lsp/response_parser.zig");
     const editor: *Editor = @ptrCast(@alignCast(ctx orelse return error.NullContext));
 
     // Parse definition response
@@ -3260,7 +3258,6 @@ fn lspShowHover(ctx: *Context) Result {
 
 /// Callback for LSP references response
 fn lspReferencesCallback(ctx: ?*anyopaque, result_json: []const u8) !void {
-    const ResponseParser = @import("../lsp/response_parser.zig");
     const editor: *Editor = @ptrCast(@alignCast(ctx orelse return error.NullContext));
 
     // Parse references response
@@ -3338,7 +3335,6 @@ fn lineCharToByteOffset(buffer: *const Buffer.Buffer, line: u32, character: u32)
 
 /// Apply text edits to buffer (used by formatting)
 fn applyTextEdits(editor: *Editor, buffer_id: Buffer.BufferId, edits: []const @import("../lsp/response_parser.zig").TextEdit) !void {
-    const ResponseParser = @import("../lsp/response_parser.zig");
     const buffer = editor.buffer_manager.getBufferMut(buffer_id) orelse return error.BufferNotFound;
 
     // Sort edits in reverse order (from end to beginning)
@@ -3393,7 +3389,6 @@ fn applyTextEdits(editor: *Editor, buffer_id: Buffer.BufferId, edits: []const @i
 
 /// Callback for LSP formatting response
 fn lspFormattingCallback(ctx: ?*anyopaque, result_json: []const u8) !void {
-    const ResponseParser = @import("../lsp/response_parser.zig");
     const FormattingContext = struct {
         editor: *Editor,
         buffer_id: Buffer.BufferId,
@@ -3504,6 +3499,159 @@ fn lspFormatDocument(ctx: *Context) Result {
         ctx.editor.allocator.destroy(fmt_ctx);
         std.debug.print("[LSP] Failed to request formatting: {}\n", .{err});
         return Result.err("LSP formatting request failed");
+    };
+
+    return Result.ok();
+}
+
+/// Context for code actions callback
+const CodeActionsContext = struct {
+    editor: *Editor,
+    buffer_id: Buffer.BufferId,
+};
+
+/// Callback for LSP code actions response
+fn lspCodeActionsCallback(ctx: ?*anyopaque, result_json: []const u8) !void {
+    const code_ctx: *CodeActionsContext = @ptrCast(@alignCast(ctx.?));
+    const editor = code_ctx.editor;
+    const allocator = editor.allocator;
+
+    // Parse code actions
+    const actions = ResponseParser.parseCodeActionResponse(allocator, result_json) catch |err| {
+        std.debug.print("[LSP] Failed to parse code actions: {}\n", .{err});
+        allocator.destroy(code_ctx);
+        return error.ParseFailed;
+    };
+    defer {
+        for (actions) |*action| {
+            var mut_action = action;
+            mut_action.deinit(allocator);
+        }
+        allocator.free(actions);
+    }
+
+    // Display actions
+    if (actions.len == 0) {
+        editor.messages.add("No code actions available", .info) catch {};
+    } else {
+        const msg = std.fmt.allocPrint(allocator, "{d} code action(s) available: {s}", .{ actions.len, actions[0].title }) catch {
+            editor.messages.add("Code actions available", .info) catch {};
+            allocator.destroy(code_ctx);
+            return;
+        };
+        defer allocator.free(msg);
+        editor.messages.add(msg, .info) catch {};
+    }
+
+    allocator.destroy(code_ctx);
+}
+
+/// Request code actions at cursor position
+fn lspGetCodeActions(ctx: *Context) Result {
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    const client = &(ctx.editor.lsp_client orelse return Result.err("LSP not initialized"));
+
+    // Get cursor position
+    const cursor = (ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No cursor")).head;
+
+    // Get file URI
+    const filepath = buffer.metadata.filepath orelse return Result.err("Buffer has no file path");
+    const uri = ctx.editor.makeFileUri(filepath) catch return Result.err("Failed to create URI");
+    defer ctx.editor.allocator.free(uri);
+
+    // Create context for callback
+    const code_ctx = ctx.editor.allocator.create(CodeActionsContext) catch return Result.err("Out of memory");
+    code_ctx.* = .{
+        .editor = ctx.editor,
+        .buffer_id = buffer.metadata.id,
+    };
+
+    // Send LSP code action request
+    _ = LspHandlers.codeAction(
+        client,
+        uri,
+        @intCast(cursor.line),
+        @intCast(cursor.col),
+        lspCodeActionsCallback,
+        code_ctx,
+    ) catch |err| {
+        ctx.editor.allocator.destroy(code_ctx);
+        std.debug.print("[LSP] Failed to request code actions: {}\n", .{err});
+        return Result.err("LSP code action request failed");
+    };
+
+    return Result.ok();
+}
+
+/// Context for document symbols callback
+const DocumentSymbolsContext = struct {
+    editor: *Editor,
+    buffer_id: Buffer.BufferId,
+};
+
+/// Callback for LSP document symbols response
+fn lspDocumentSymbolsCallback(ctx: ?*anyopaque, result_json: []const u8) !void {
+    const sym_ctx: *DocumentSymbolsContext = @ptrCast(@alignCast(ctx.?));
+    const editor = sym_ctx.editor;
+    const allocator = editor.allocator;
+
+    // Parse document symbols
+    const symbols = ResponseParser.parseDocumentSymbolResponse(allocator, result_json) catch |err| {
+        std.debug.print("[LSP] Failed to parse document symbols: {}\n", .{err});
+        allocator.destroy(sym_ctx);
+        return error.ParseFailed;
+    };
+    defer {
+        for (symbols) |*symbol| {
+            var mut_symbol = symbol;
+            mut_symbol.deinit(allocator);
+        }
+        allocator.free(symbols);
+    }
+
+    // Display symbols
+    if (symbols.len == 0) {
+        editor.messages.add("No symbols found", .info) catch {};
+    } else {
+        const msg = std.fmt.allocPrint(allocator, "{d} symbol(s): {s}", .{ symbols.len, symbols[0].name }) catch {
+            editor.messages.add("Document symbols available", .info) catch {};
+            allocator.destroy(sym_ctx);
+            return;
+        };
+        defer allocator.free(msg);
+        editor.messages.add(msg, .info) catch {};
+    }
+
+    allocator.destroy(sym_ctx);
+}
+
+/// Request document symbols (outline)
+fn lspGetDocumentSymbols(ctx: *Context) Result {
+    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    const client = &(ctx.editor.lsp_client orelse return Result.err("LSP not initialized"));
+
+    // Get file URI
+    const filepath = buffer.metadata.filepath orelse return Result.err("Buffer has no file path");
+    const uri = ctx.editor.makeFileUri(filepath) catch return Result.err("Failed to create URI");
+    defer ctx.editor.allocator.free(uri);
+
+    // Create context for callback
+    const sym_ctx = ctx.editor.allocator.create(DocumentSymbolsContext) catch return Result.err("Out of memory");
+    sym_ctx.* = .{
+        .editor = ctx.editor,
+        .buffer_id = buffer.metadata.id,
+    };
+
+    // Send LSP document symbols request
+    _ = LspHandlers.documentSymbol(
+        client,
+        uri,
+        lspDocumentSymbolsCallback,
+        sym_ctx,
+    ) catch |err| {
+        ctx.editor.allocator.destroy(sym_ctx);
+        std.debug.print("[LSP] Failed to request document symbols: {}\n", .{err});
+        return Result.err("LSP document symbols request failed");
     };
 
     return Result.ok();
@@ -4465,6 +4613,20 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .name = "lsp_format_document",
         .description = "Format current document (gq)",
         .handler = lspFormatDocument,
+        .category = .system,
+    });
+
+    try registry.register(.{
+        .name = "lsp_code_actions",
+        .description = "Show code actions at cursor (ga)",
+        .handler = lspGetCodeActions,
+        .category = .system,
+    });
+
+    try registry.register(.{
+        .name = "lsp_document_symbols",
+        .description = "Show document symbols/outline (go)",
+        .handler = lspGetDocumentSymbols,
         .category = .system,
     });
 }

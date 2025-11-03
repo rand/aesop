@@ -359,6 +359,8 @@ pub fn setupDefaults(manager: *KeymapManager) !void {
     try normal_map.bind(Binding.fromSingleKey(.{ .char = 'K' }, "lsp_show_hover"));
     try normal_map.bind(Binding.fromChord(.{ .char = 'g' }, .{ .char = 'r' }, "lsp_find_references"));
     try normal_map.bind(Binding.fromChord(.{ .char = 'g' }, .{ .char = 'q' }, "lsp_format_document"));
+    try normal_map.bind(Binding.fromChord(.{ .char = 'g' }, .{ .char = 'a' }, "lsp_code_actions"));
+    try normal_map.bind(Binding.fromChord(.{ .char = 'g' }, .{ .char = 'o' }, "lsp_document_symbols"));
 }
 
 test "keymap: bind and lookup" {

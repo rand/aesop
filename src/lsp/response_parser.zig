@@ -540,6 +540,289 @@ fn parseLocation(allocator: std.mem.Allocator, value: std.json.Value) !Location 
     };
 }
 
+/// Code action from LSP - represents a quick fix or refactoring
+pub const CodeAction = struct {
+    title: []const u8, // Display name
+    kind: ?[]const u8, // e.g., "quickfix", "refactor"
+    edit: ?WorkspaceEdit, // Changes to apply
+    command: ?Command, // Command to execute
+
+    pub fn deinit(self: *CodeAction, allocator: std.mem.Allocator) void {
+        allocator.free(self.title);
+        if (self.kind) |k| allocator.free(k);
+        if (self.edit) |*e| e.deinit(allocator);
+        if (self.command) |*c| c.deinit(allocator);
+    }
+};
+
+/// LSP Command
+pub const Command = struct {
+    title: []const u8,
+    command: []const u8,
+    // arguments: ?[]std.json.Value, // TODO: Parse if needed
+
+    pub fn deinit(self: *Command, allocator: std.mem.Allocator) void {
+        allocator.free(self.title);
+        allocator.free(self.command);
+    }
+};
+
+/// Workspace edit (simplified - only document changes for now)
+pub const WorkspaceEdit = struct {
+    // For simplicity, we'll just track that an edit exists
+    // Full implementation would parse document changes
+    has_changes: bool,
+
+    pub fn deinit(self: *WorkspaceEdit, allocator: std.mem.Allocator) void {
+        _ = self;
+        _ = allocator;
+    }
+};
+
+/// Parse code action response and extract actions
+pub fn parseCodeActionResponse(allocator: std.mem.Allocator, json_text: []const u8) ![]CodeAction {
+    const parsed = try std.json.parseFromSlice(std.json.Value, allocator, json_text, .{});
+    defer parsed.deinit();
+
+    const root = parsed.value;
+
+    // Response is either null or array of CodeAction/Command
+    if (root == .null) {
+        return try allocator.alloc(CodeAction, 0);
+    }
+
+    if (root != .array) {
+        return error.InvalidCodeActionResponse;
+    }
+
+    var actions = std.ArrayList(CodeAction).empty;
+    errdefer {
+        for (actions.items) |*action| {
+            action.deinit(allocator);
+        }
+        actions.deinit(allocator);
+    }
+
+    for (root.array.items) |item| {
+        if (item != .object) continue;
+        const obj = item.object;
+
+        // Check if it's a Command (has "command" field) or CodeAction (has "title" field)
+        const title_value = obj.get("title") orelse continue;
+        if (title_value != .string) continue;
+        const title = try allocator.dupe(u8, title_value.string);
+        errdefer allocator.free(title);
+
+        // Extract kind (optional)
+        var kind: ?[]const u8 = null;
+        if (obj.get("kind")) |kind_value| {
+            if (kind_value == .string) {
+                kind = try allocator.dupe(u8, kind_value.string);
+            }
+        }
+        errdefer if (kind) |k| allocator.free(k);
+
+        // Extract edit (optional, simplified)
+        var edit: ?WorkspaceEdit = null;
+        if (obj.get("edit")) |_| {
+            edit = WorkspaceEdit{ .has_changes = true };
+        }
+
+        // Extract command (optional)
+        var command: ?Command = null;
+        if (obj.get("command")) |cmd_value| {
+            if (cmd_value == .object) {
+                const cmd_obj = cmd_value.object;
+                if (cmd_obj.get("title")) |cmd_title| {
+                    if (cmd_title == .string) {
+                        if (cmd_obj.get("command")) |cmd_cmd| {
+                            if (cmd_cmd == .string) {
+                                command = Command{
+                                    .title = try allocator.dupe(u8, cmd_title.string),
+                                    .command = try allocator.dupe(u8, cmd_cmd.string),
+                                };
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        try actions.append(allocator, CodeAction{
+            .title = title,
+            .kind = kind,
+            .edit = edit,
+            .command = command,
+        });
+    }
+
+    return actions.toOwnedSlice(allocator);
+}
+
+/// Symbol kind from LSP
+pub const SymbolKind = enum(u8) {
+    file = 1,
+    module = 2,
+    namespace = 3,
+    package = 4,
+    class = 5,
+    method = 6,
+    property = 7,
+    field = 8,
+    constructor = 9,
+    @"enum" = 10,
+    interface = 11,
+    function = 12,
+    variable = 13,
+    constant = 14,
+    string = 15,
+    number = 16,
+    boolean = 17,
+    array = 18,
+    object = 19,
+    key = 20,
+    null = 21,
+    enum_member = 22,
+    @"struct" = 23,
+    event = 24,
+    operator = 25,
+    type_parameter = 26,
+};
+
+/// Document symbol from LSP (hierarchical)
+pub const DocumentSymbol = struct {
+    name: []const u8,
+    detail: ?[]const u8,
+    kind: SymbolKind,
+    range: Range, // Full range including leading/trailing whitespace
+    selection_range: Range, // Range of the symbol's identifier
+    // children: ?[]DocumentSymbol, // TODO: Support hierarchical symbols
+
+    pub fn deinit(self: *DocumentSymbol, allocator: std.mem.Allocator) void {
+        allocator.free(self.name);
+        if (self.detail) |d| allocator.free(d);
+    }
+};
+
+/// Parse document symbol response and extract symbols
+pub fn parseDocumentSymbolResponse(allocator: std.mem.Allocator, json_text: []const u8) ![]DocumentSymbol {
+    const parsed = try std.json.parseFromSlice(std.json.Value, allocator, json_text, .{});
+    defer parsed.deinit();
+
+    const root = parsed.value;
+
+    // Response is either null or array of DocumentSymbol
+    if (root == .null) {
+        return try allocator.alloc(DocumentSymbol, 0);
+    }
+
+    if (root != .array) {
+        return error.InvalidDocumentSymbolResponse;
+    }
+
+    var symbols = std.ArrayList(DocumentSymbol).empty;
+    errdefer {
+        for (symbols.items) |*symbol| {
+            symbol.deinit(allocator);
+        }
+        symbols.deinit(allocator);
+    }
+
+    for (root.array.items) |item| {
+        if (item != .object) continue;
+        const obj = item.object;
+
+        // Extract name (required)
+        const name_value = obj.get("name") orelse continue;
+        if (name_value != .string) continue;
+        const name = try allocator.dupe(u8, name_value.string);
+        errdefer allocator.free(name);
+
+        // Extract kind (required)
+        const kind_value = obj.get("kind") orelse {
+            allocator.free(name);
+            continue;
+        };
+        if (kind_value != .integer) {
+            allocator.free(name);
+            continue;
+        }
+        const kind: SymbolKind = @enumFromInt(@as(u8, @intCast(kind_value.integer)));
+
+        // Extract detail (optional)
+        var detail: ?[]const u8 = null;
+        if (obj.get("detail")) |detail_value| {
+            if (detail_value == .string) {
+                detail = try allocator.dupe(u8, detail_value.string);
+            }
+        }
+        errdefer if (detail) |d| allocator.free(d);
+
+        // Extract range (required)
+        const range = parseRange(obj.get("range") orelse {
+            allocator.free(name);
+            if (detail) |d| allocator.free(d);
+            continue;
+        }) catch {
+            allocator.free(name);
+            if (detail) |d| allocator.free(d);
+            continue;
+        };
+
+        // Extract selectionRange (required)
+        const selection_range = parseRange(obj.get("selectionRange") orelse {
+            allocator.free(name);
+            if (detail) |d| allocator.free(d);
+            continue;
+        }) catch {
+            allocator.free(name);
+            if (detail) |d| allocator.free(d);
+            continue;
+        };
+
+        try symbols.append(allocator, DocumentSymbol{
+            .name = name,
+            .detail = detail,
+            .kind = kind,
+            .range = range,
+            .selection_range = selection_range,
+        });
+    }
+
+    return symbols.toOwnedSlice(allocator);
+}
+
+/// Parse a Range from JSON value
+fn parseRange(value: std.json.Value) !Range {
+    if (value != .object) return error.InvalidRange;
+    const range_obj = value.object;
+
+    const start_value = range_obj.get("start") orelse return error.MissingStart;
+    const end_value = range_obj.get("end") orelse return error.MissingEnd;
+    if (start_value != .object or end_value != .object) return error.InvalidPosition;
+
+    const start_line = if (start_value.object.get("line")) |v| blk: {
+        if (v == .integer) break :blk @as(u32, @intCast(v.integer)) else return error.InvalidLine;
+    } else return error.MissingLine;
+
+    const start_char = if (start_value.object.get("character")) |v| blk: {
+        if (v == .integer) break :blk @as(u32, @intCast(v.integer)) else return error.InvalidCharacter;
+    } else return error.MissingCharacter;
+
+    const end_line = if (end_value.object.get("line")) |v| blk: {
+        if (v == .integer) break :blk @as(u32, @intCast(v.integer)) else return error.InvalidLine;
+    } else return error.MissingLine;
+
+    const end_char = if (end_value.object.get("character")) |v| blk: {
+        if (v == .integer) break :blk @as(u32, @intCast(v.integer)) else return error.InvalidCharacter;
+    } else return error.MissingCharacter;
+
+    return Range{
+        .start = .{ .line = start_line, .character = start_char },
+        .end = .{ .line = end_line, .character = end_char },
+    };
+}
+
 // === Tests ===
 
 test "parse completion response: CompletionList format" {
