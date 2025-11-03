@@ -3145,6 +3145,52 @@ fn lspCompletionNext(ctx: *Context) Result {
     return Result.ok();
 }
 
+/// Convert cursor position (line, col in characters) to byte offset
+/// Handles UTF-8 multi-byte characters correctly
+fn positionToByteOffset(rope: *const Rope, pos: Cursor.Position, allocator: std.mem.Allocator) !usize {
+    const text = try rope.toString(allocator);
+    defer allocator.free(text);
+
+    var byte_offset: usize = 0;
+    var current_line: usize = 0;
+    var current_col: usize = 0;
+
+    while (byte_offset < text.len) {
+        if (current_line == pos.line and current_col == pos.col) {
+            return byte_offset;
+        }
+
+        const byte = text[byte_offset];
+        if (byte == '\n') {
+            current_line += 1;
+            current_col = 0;
+            byte_offset += 1;
+        } else {
+            // UTF-8: skip continuation bytes (10xxxxxx)
+            // Only increment column for character start bytes
+            if ((byte & 0b11000000) != 0b10000000) {
+                current_col += 1;
+            }
+            byte_offset += 1;
+        }
+    }
+
+    // Position at or beyond end of file
+    return byte_offset;
+}
+
+/// Count UTF-8 characters (codepoints) in a byte slice
+fn countUtf8Characters(bytes: []const u8) usize {
+    var count: usize = 0;
+    for (bytes) |byte| {
+        // Count only non-continuation bytes
+        if ((byte & 0b11000000) != 0b10000000) {
+            count += 1;
+        }
+    }
+    return count;
+}
+
 /// Accept selected completion item
 fn lspAcceptCompletion(ctx: *Context) Result {
     const item = ctx.editor.completion_list.getSelectedItem() orelse return Result.err("No completion selected");
@@ -3157,17 +3203,19 @@ fn lspAcceptCompletion(ctx: *Context) Result {
     const buffer = ctx.editor.buffer_manager.getBufferMut(buffer_id) orelse return Result.err("No active buffer");
     const cursor = (ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No cursor")).head;
 
-    // Convert cursor position to byte offset
-    // TODO: This is simplified - should handle multi-byte characters properly
-    const byte_offset = cursor.line * 80 + cursor.col; // Rough estimate
+    // Convert cursor position to byte offset (handles UTF-8 correctly)
+    const byte_offset = positionToByteOffset(&buffer.rope, cursor, ctx.editor.allocator) catch {
+        return Result.err("Failed to convert position to byte offset");
+    };
 
     // Insert completion text
     buffer.insert(byte_offset, text_to_insert) catch {
         return Result.err("Failed to insert completion");
     };
 
-    // Move cursor forward by inserted text length
-    const new_col = cursor.col + text_to_insert.len;
+    // Move cursor forward by character count (not byte length)
+    const char_count = countUtf8Characters(text_to_insert);
+    const new_col = cursor.col + char_count;
     ctx.editor.selections.setSingleCursor(ctx.editor.allocator, .{
         .line = cursor.line,
         .col = new_col,
