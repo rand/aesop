@@ -528,7 +528,7 @@ pub const Editor = struct {
         const total_lines = buffer.lineCount();
 
         // Assume standard terminal height for now (will be passed from renderer later)
-        const viewport_height: usize = 24;
+        const viewport_height: usize = 40;
         const visible_lines = viewport_height -| 2; // Reserve for status
 
         // Calculate desired viewport bounds

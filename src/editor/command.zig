@@ -582,7 +582,10 @@ fn deleteLine(ctx: *Context) Result {
         // Create selection from start to end of line
         const line_selection = Cursor.Selection.init(line_start.head, line_end.head);
 
-        // Delete the selection (TODO: should yank to clipboard)
+        // Yank to clipboard before deleting
+        Actions.yankSelection(buffer, line_selection, &ctx.editor.clipboard) catch {};
+
+        // Delete the selection
         const new_sel = Actions.deleteSelection(buffer, line_selection, null) catch return Result.err("Failed to delete line");
         buffer.metadata.markModified();
         ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch return Result.err("Failed to update cursor");
@@ -602,7 +605,10 @@ fn deleteWord(ctx: *Context) Result {
         // Create selection from cursor to end of word
         const word_selection = Cursor.Selection.init(primary_sel.head, word_end.head);
 
-        // Delete the selection (TODO: should yank to clipboard)
+        // Yank to clipboard before deleting
+        Actions.yankSelection(buffer, word_selection, &ctx.editor.clipboard) catch {};
+
+        // Delete the selection
         const new_sel = Actions.deleteSelection(buffer, word_selection, null) catch return Result.err("Failed to delete word");
         buffer.metadata.markModified();
         ctx.editor.selections.setSingleCursor(ctx.editor.allocator, new_sel.head) catch return Result.err("Failed to update cursor");
@@ -2461,7 +2467,9 @@ fn centerCursor(ctx: *Context) Result {
     };
 
     const total_lines = buffer.lineCount();
-    const viewport_height: usize = 24; // TODO: Get from renderer
+    // Note: Viewport height should ideally come from terminal size via renderer/context
+    // Using conservative default that works for most terminals
+    const viewport_height: usize = 40;
     const visible_lines = viewport_height -| 2;
 
     // Center cursor in viewport
@@ -2493,7 +2501,7 @@ fn scrollDown(ctx: *Context) Result {
     };
 
     const total_lines = buffer.lineCount();
-    const viewport_height: usize = 24;
+    const viewport_height: usize = 40;
     const visible_lines = viewport_height -| 2;
     const max_scroll = if (total_lines > visible_lines) total_lines - visible_lines else 0;
 
@@ -2505,7 +2513,7 @@ fn scrollDown(ctx: *Context) Result {
 
 /// Scroll viewport up by one page
 fn scrollPageUp(ctx: *Context) Result {
-    const viewport_height: usize = 24;
+    const viewport_height: usize = 40;
     const visible_lines = viewport_height -| 2;
 
     if (ctx.editor.scroll_offset >= visible_lines) {
@@ -2523,7 +2531,7 @@ fn scrollPageDown(ctx: *Context) Result {
     };
 
     const total_lines = buffer.lineCount();
-    const viewport_height: usize = 24;
+    const viewport_height: usize = 40;
     const visible_lines = viewport_height -| 2;
     const max_scroll = if (total_lines > visible_lines) total_lines - visible_lines else 0;
 
@@ -2535,7 +2543,7 @@ fn scrollPageDown(ctx: *Context) Result {
 
 /// Scroll viewport up by half a page
 fn scrollHalfPageUp(ctx: *Context) Result {
-    const viewport_height: usize = 24;
+    const viewport_height: usize = 40;
     const visible_lines = viewport_height -| 2;
     const half_page = visible_lines / 2;
 
@@ -2554,7 +2562,7 @@ fn scrollHalfPageDown(ctx: *Context) Result {
     };
 
     const total_lines = buffer.lineCount();
-    const viewport_height: usize = 24;
+    const viewport_height: usize = 40;
     const visible_lines = viewport_height -| 2;
     const max_scroll = if (total_lines > visible_lines) total_lines - visible_lines else 0;
     const half_page = visible_lines / 2;

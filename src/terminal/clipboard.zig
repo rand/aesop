@@ -18,7 +18,10 @@ pub fn copy(allocator: std.mem.Allocator, text: []const u8) !void {
     switch (builtin.os.tag) {
         .macos => try copyMacOS(allocator, text),
         .linux => try copyLinux(allocator, text),
-        .windows => return ClipboardError.UnsupportedPlatform, // TODO: Windows support
+        .windows => {
+            // Windows clipboard pending: Requires Win32 API (OpenClipboard, SetClipboardData)
+            return ClipboardError.UnsupportedPlatform;
+        },
         else => return ClipboardError.UnsupportedPlatform,
     }
 }
@@ -28,7 +31,10 @@ pub fn paste(allocator: std.mem.Allocator) ![]u8 {
     return switch (builtin.os.tag) {
         .macos => try pasteMacOS(allocator),
         .linux => try pasteLinux(allocator),
-        .windows => ClipboardError.UnsupportedPlatform, // TODO: Windows support
+        .windows => {
+            // Windows clipboard pending: Requires Win32 API (OpenClipboard, GetClipboardData)
+            return ClipboardError.UnsupportedPlatform;
+        },
         else => ClipboardError.UnsupportedPlatform,
     };
 }

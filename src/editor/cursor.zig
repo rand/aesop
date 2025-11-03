@@ -177,19 +177,17 @@ pub const SelectionSet = struct {
 
     /// Set selections (replaces all)
     pub fn setSelections(self: *SelectionSet, allocator: std.mem.Allocator, new_selections: []const Selection) !void {
-        _ = self;
-        _ = new_selections;
-        _ = allocator;
+        // Clear existing selections
+        self.selections.deinit(allocator);
+        self.selections = std.ArrayList(Selection).empty;
 
-        // TODO: Implement
-        // self.selections.deinit(allocator);
-        // self.selections = .empty;
+        // Add new selections
+        for (new_selections) |sel| {
+            try self.selections.append(allocator, sel);
+        }
 
-        // for (new_selections) |sel| {
-        //     try self.selections.append(allocator, sel);
-        // }
-
-        // self.primary_index = 0;
+        // Reset primary index
+        self.primary_index = 0;
     }
 
     /// Add a selection

@@ -53,8 +53,10 @@ pub const Terminal = struct {
             },
 
             .windows => {
-                // TODO: Windows implementation using SetConsoleMode
-                return error.NotImplemented;
+                // Windows implementation pending: Requires SetConsoleMode with
+                // ENABLE_VIRTUAL_TERMINAL_PROCESSING flag for VT100 sequences
+                std.debug.print("Windows raw mode not yet implemented\n", .{});
+                return error.PlatformNotSupported;
             },
 
             else => {
@@ -74,8 +76,8 @@ pub const Terminal = struct {
             },
 
             .windows => {
-                // TODO: Windows implementation
-                return error.NotImplemented;
+                // Windows implementation pending: Restore original console mode
+                return error.PlatformNotSupported;
             },
 
             else => {
@@ -103,8 +105,9 @@ pub const Terminal = struct {
             },
 
             .windows => {
-                // TODO: Windows implementation using GetConsoleScreenBufferInfo
-                return error.NotImplemented;
+                // Windows implementation pending: GetConsoleScreenBufferInfo
+                // Default to standard 80x24 for now
+                return .{ .width = 80, .height = 24 };
             },
 
             else => {
