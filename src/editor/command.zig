@@ -3789,13 +3789,13 @@ fn lspGetSignatureHelp(ctx: *Context) Result {
 }
 
 /// Context for rename callback (Stream A)
-const RenameContext = struct {
+pub const RenameContext = struct {
     editor: *Editor,
     new_name: []const u8,
 };
 
 /// Callback for LSP rename response (Stream A)
-fn lspRenameCallback(ctx: ?*anyopaque, result_json: []const u8) !void {
+pub fn lspRenameCallback(ctx: ?*anyopaque, result_json: []const u8) !void {
     const rename_ctx: *RenameContext = @ptrCast(@alignCast(ctx.?));
     const editor = rename_ctx.editor;
     const allocator = editor.allocator;
@@ -3881,41 +3881,13 @@ fn lspRenameCallback(ctx: ?*anyopaque, result_json: []const u8) !void {
 
 /// Request rename symbol (Stream A)
 fn lspRenameSymbol(ctx: *Context) Result {
-    const buffer = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
-    const client = &(ctx.editor.lsp_client orelse return Result.err("LSP not initialized"));
+    // Validate preconditions
+    _ = ctx.editor.getActiveBuffer() orelse return Result.err("No active buffer");
+    _ = ctx.editor.lsp_client orelse return Result.err("LSP not initialized");
 
-    const cursor = (ctx.editor.selections.primary(ctx.editor.allocator) orelse return Result.err("No cursor")).head;
-
-    const filepath = buffer.metadata.filepath orelse return Result.err("Buffer has no file path");
-    const uri = ctx.editor.makeFileUri(filepath) catch return Result.err("Failed to create URI");
-    defer ctx.editor.allocator.free(uri);
-
-    // TODO: Prompt user for new name (for now use placeholder)
-    const new_name = ctx.editor.allocator.dupe(u8, "renamed") catch return Result.err("Out of memory");
-
-    const rename_ctx = ctx.editor.allocator.create(RenameContext) catch {
-        ctx.editor.allocator.free(new_name);
-        return Result.err("Out of memory");
-    };
-    rename_ctx.* = .{
-        .editor = ctx.editor,
-        .new_name = new_name,
-    };
-
-    _ = LspHandlers.rename(
-        client,
-        uri,
-        @intCast(cursor.line),
-        @intCast(cursor.col),
-        new_name,
-        lspRenameCallback,
-        rename_ctx,
-    ) catch |err| {
-        ctx.editor.allocator.free(new_name);
-        ctx.editor.allocator.destroy(rename_ctx);
-        std.debug.print("[LSP] Failed to request rename: {}\n", .{err});
-        return Result.err("LSP rename request failed");
-    };
+    // Show prompt for new name - actual rename happens in completeLspRename
+    ctx.editor.pending_command = .lsp_rename;
+    ctx.editor.prompt.show("Rename to: ", .text);
 
     return Result.ok();
 }

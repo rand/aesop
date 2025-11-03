@@ -53,6 +53,8 @@ pub const PendingCommand = union(enum) {
     play_macro,
     /// Replace character at cursor (r command)
     replace_char,
+    /// LSP rename symbol - awaiting new name input
+    lsp_rename,
 
     /// Check if a command is awaiting input
     pub fn isWaiting(self: PendingCommand) bool {
@@ -471,6 +473,34 @@ pub const Editor = struct {
             return;
         }
 
+        // Handle text prompts (LSP rename) - accumulate input until Enter
+        if (self.pending_command == .lsp_rename) {
+            switch (key) {
+                .char => |c| {
+                    const char_byte = @as(u8, @intCast(c));
+                    try self.prompt.addChar(char_byte);
+                },
+                .special => |special_key| {
+                    switch (special_key) {
+                        .enter => {
+                            const new_name = self.prompt.getInput();
+                            self.pending_command = .none;
+                            self.prompt.hide();
+                            try self.completeLspRename(new_name);
+                        },
+                        .backspace => self.prompt.backspace(),
+                        .delete => self.prompt.deleteChar(),
+                        .left => self.prompt.moveCursorLeft(),
+                        .right => self.prompt.moveCursorRight(),
+                        .home => self.prompt.moveCursorStart(),
+                        .end => self.prompt.moveCursorEnd(),
+                        else => {}, // Ignore other special keys
+                    }
+                },
+            }
+            return;
+        }
+
         // Extract character from key input
         const char_byte = switch (key) {
             .char => |c| @as(u8, @intCast(c)),
@@ -516,6 +546,8 @@ pub const Editor = struct {
                 self.prompt.hide();
                 try self.completeReplaceChar(char_byte);
             },
+
+            .lsp_rename => unreachable, // Handled above before character extraction
         }
 
         self.ensureCursorVisible();
@@ -931,6 +963,75 @@ pub const Editor = struct {
 
         // In vim, 'r' command doesn't move the cursor
         // No cursor movement needed
+    }
+
+    /// Complete LSP rename operation with user-provided new name
+    fn completeLspRename(self: *Editor, new_name: []const u8) !void {
+        if (new_name.len == 0) {
+            self.messages.add("Rename cancelled: empty name", .info) catch {};
+            return;
+        }
+
+        const buffer = self.getActiveBuffer() orelse {
+            self.messages.add("No active buffer", .error_msg) catch {};
+            return;
+        };
+
+        const client = &(self.lsp_client orelse {
+            self.messages.add("LSP not initialized", .error_msg) catch {};
+            return;
+        });
+
+        const cursor = (self.selections.primary(self.allocator) orelse {
+            self.messages.add("No cursor", .error_msg) catch {};
+            return;
+        }).head;
+
+        const filepath = buffer.metadata.filepath orelse {
+            self.messages.add("Buffer has no file path", .error_msg) catch {};
+            return;
+        };
+
+        const uri = self.makeFileUri(filepath) catch {
+            self.messages.add("Failed to create URI", .error_msg) catch {};
+            return;
+        };
+        defer self.allocator.free(uri);
+
+        // Duplicate the new name for the LSP callback context
+        const new_name_copy = self.allocator.dupe(u8, new_name) catch {
+            self.messages.add("Out of memory", .error_msg) catch {};
+            return;
+        };
+
+        const rename_ctx = self.allocator.create(Command.RenameContext) catch {
+            self.allocator.free(new_name_copy);
+            self.messages.add("Out of memory", .error_msg) catch {};
+            return;
+        };
+        rename_ctx.* = .{
+            .editor = self,
+            .new_name = new_name_copy,
+        };
+
+        _ = LspHandlers.rename(
+            client,
+            uri,
+            @intCast(cursor.line),
+            @intCast(cursor.col),
+            new_name_copy,
+            Command.lspRenameCallback,
+            rename_ctx,
+        ) catch |err| {
+            self.allocator.free(new_name_copy);
+            self.allocator.destroy(rename_ctx);
+            const msg = std.fmt.allocPrint(self.allocator, "LSP rename request failed: {}", .{err}) catch {
+                self.messages.add("LSP rename request failed", .error_msg) catch {};
+                return;
+            };
+            defer self.allocator.free(msg);
+            self.messages.add(msg, .error_msg) catch {};
+        };
     }
 
     pub const StatusInfo = struct {
