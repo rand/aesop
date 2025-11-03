@@ -21,6 +21,11 @@ pub fn build(b: *std.Build) void {
     // target and optimize options) will be listed when running `zig build --help`
     // in this directory.
 
+    // Optional tree-sitter support (for syntax highlighting)
+    // Defaults to true for backward compatibility, but can be disabled for CI or
+    // environments where tree-sitter libraries are not available
+    const enable_treesitter = b.option(bool, "enable-treesitter", "Enable tree-sitter syntax highlighting support (default: true)") orelse true;
+
     // This creates a module, which represents a collection of source files alongside
     // some compilation options, such as optimization mode and linked system libraries.
     // Zig modules are the preferred way of making Zig code available to consumers.
@@ -28,6 +33,10 @@ pub fn build(b: *std.Build) void {
     // to our consumers. We must give it a name because a Zig package can expose
     // multiple modules and consumers will need to be able to specify which
     // module they want to access.
+    // Create build options that can be accessed from source code
+    const build_options = b.addOptions();
+    build_options.addOption(bool, "enable_treesitter", enable_treesitter);
+
     const mod = b.addModule("aesop", .{
         // The root source file is the "entry point" of this module. Users of
         // this module will only be able to access public declarations contained
@@ -40,6 +49,8 @@ pub fn build(b: *std.Build) void {
         // which requires us to specify a target.
         .target = target,
     });
+    // Add build options to module so source code can access them
+    mod.addImport("build_options", build_options.createModule());
 
     // Here we define an executable. An executable needs to have a root module
     // which needs to expose a `main` function. While we could add a main function
@@ -95,30 +106,33 @@ pub fn build(b: *std.Build) void {
                 .{ .name = "aesop", .module = mod },
                 .{ .name = "zio", .module = zio_module },
                 .{ .name = "zigjr", .module = zigjr_module },
+                .{ .name = "build_options", .module = build_options.createModule() },
             },
         }),
     });
 
-    // Link tree-sitter library for syntax highlighting
+    // Optionally link tree-sitter library for syntax highlighting
     // Note: tree-sitter must be installed on the system
     // See docs/BUILDING_WITH_TREE_SITTER.md for installation instructions
-    exe.linkSystemLibrary("tree-sitter");
-    exe.linkLibC();
+    if (enable_treesitter) {
+        exe.linkSystemLibrary("tree-sitter");
+        exe.linkLibC();
 
-    // Add user lib directory to library search paths
-    const home_dir = std.posix.getenv("HOME") orelse "/Users/rand";
-    const user_lib_path = b.fmt("{s}/lib", .{home_dir});
-    exe.addLibraryPath(.{ .cwd_relative = user_lib_path });
+        // Add user lib directory to library search paths
+        const home_dir = std.posix.getenv("HOME") orelse "/Users/rand";
+        const user_lib_path = b.fmt("{s}/lib", .{home_dir});
+        exe.addLibraryPath(.{ .cwd_relative = user_lib_path });
 
-    // Link language grammar libraries
-    // Note: Each grammar must be built and installed separately
-    // See docs/BUILDING_WITH_TREE_SITTER.md for per-language installation
-    // If a grammar is not installed, linking will fail - install grammars first
-    exe.linkSystemLibrary("tree-sitter-zig");
-    exe.linkSystemLibrary("tree-sitter-rust");
-    exe.linkSystemLibrary("tree-sitter-go");
-    exe.linkSystemLibrary("tree-sitter-python");
-    exe.linkSystemLibrary("tree-sitter-c");
+        // Link language grammar libraries
+        // Note: Each grammar must be built and installed separately
+        // See docs/BUILDING_WITH_TREE_SITTER.md for per-language installation
+        // If a grammar is not installed, linking will fail - install grammars first
+        exe.linkSystemLibrary("tree-sitter-zig");
+        exe.linkSystemLibrary("tree-sitter-rust");
+        exe.linkSystemLibrary("tree-sitter-go");
+        exe.linkSystemLibrary("tree-sitter-python");
+        exe.linkSystemLibrary("tree-sitter-c");
+    }
 
     // This declares intent for the executable to be installed into the
     // install prefix when running `zig build` (i.e. when executing the default
@@ -158,15 +172,19 @@ pub fn build(b: *std.Build) void {
     const mod_tests = b.addTest(.{
         .root_module = mod,
     });
-    // Link tree-sitter for module tests
-    mod_tests.linkSystemLibrary("tree-sitter");
-    mod_tests.linkLibC();
-    mod_tests.addLibraryPath(.{ .cwd_relative = user_lib_path });
-    mod_tests.linkSystemLibrary("tree-sitter-zig");
-    mod_tests.linkSystemLibrary("tree-sitter-rust");
-    mod_tests.linkSystemLibrary("tree-sitter-go");
-    mod_tests.linkSystemLibrary("tree-sitter-python");
-    mod_tests.linkSystemLibrary("tree-sitter-c");
+    // Optionally link tree-sitter for module tests
+    if (enable_treesitter) {
+        const home_dir = std.posix.getenv("HOME") orelse "/Users/rand";
+        const user_lib_path = b.fmt("{s}/lib", .{home_dir});
+        mod_tests.linkSystemLibrary("tree-sitter");
+        mod_tests.linkLibC();
+        mod_tests.addLibraryPath(.{ .cwd_relative = user_lib_path });
+        mod_tests.linkSystemLibrary("tree-sitter-zig");
+        mod_tests.linkSystemLibrary("tree-sitter-rust");
+        mod_tests.linkSystemLibrary("tree-sitter-go");
+        mod_tests.linkSystemLibrary("tree-sitter-python");
+        mod_tests.linkSystemLibrary("tree-sitter-c");
+    }
 
     // A run step that will run the test executable.
     const run_mod_tests = b.addRunArtifact(mod_tests);
@@ -177,15 +195,19 @@ pub fn build(b: *std.Build) void {
     const exe_tests = b.addTest(.{
         .root_module = exe.root_module,
     });
-    // Link tree-sitter for exe tests
-    exe_tests.linkSystemLibrary("tree-sitter");
-    exe_tests.linkLibC();
-    exe_tests.addLibraryPath(.{ .cwd_relative = user_lib_path });
-    exe_tests.linkSystemLibrary("tree-sitter-zig");
-    exe_tests.linkSystemLibrary("tree-sitter-rust");
-    exe_tests.linkSystemLibrary("tree-sitter-go");
-    exe_tests.linkSystemLibrary("tree-sitter-python");
-    exe_tests.linkSystemLibrary("tree-sitter-c");
+    // Optionally link tree-sitter for exe tests
+    if (enable_treesitter) {
+        const home_dir = std.posix.getenv("HOME") orelse "/Users/rand";
+        const user_lib_path = b.fmt("{s}/lib", .{home_dir});
+        exe_tests.linkSystemLibrary("tree-sitter");
+        exe_tests.linkLibC();
+        exe_tests.addLibraryPath(.{ .cwd_relative = user_lib_path });
+        exe_tests.linkSystemLibrary("tree-sitter-zig");
+        exe_tests.linkSystemLibrary("tree-sitter-rust");
+        exe_tests.linkSystemLibrary("tree-sitter-go");
+        exe_tests.linkSystemLibrary("tree-sitter-python");
+        exe_tests.linkSystemLibrary("tree-sitter-c");
+    }
 
     // A run step that will run the second test executable.
     const run_exe_tests = b.addRunArtifact(exe_tests);
@@ -204,14 +226,19 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    integration_tests.linkSystemLibrary("tree-sitter");
-    integration_tests.linkLibC();
-    integration_tests.addLibraryPath(.{ .cwd_relative = user_lib_path });
-    integration_tests.linkSystemLibrary("tree-sitter-zig");
-    integration_tests.linkSystemLibrary("tree-sitter-rust");
-    integration_tests.linkSystemLibrary("tree-sitter-go");
-    integration_tests.linkSystemLibrary("tree-sitter-python");
-    integration_tests.linkSystemLibrary("tree-sitter-c");
+    // Optionally link tree-sitter for integration tests
+    if (enable_treesitter) {
+        const home_dir = std.posix.getenv("HOME") orelse "/Users/rand";
+        const user_lib_path = b.fmt("{s}/lib", .{home_dir});
+        integration_tests.linkSystemLibrary("tree-sitter");
+        integration_tests.linkLibC();
+        integration_tests.addLibraryPath(.{ .cwd_relative = user_lib_path });
+        integration_tests.linkSystemLibrary("tree-sitter-zig");
+        integration_tests.linkSystemLibrary("tree-sitter-rust");
+        integration_tests.linkSystemLibrary("tree-sitter-go");
+        integration_tests.linkSystemLibrary("tree-sitter-python");
+        integration_tests.linkSystemLibrary("tree-sitter-c");
+    }
 
     const run_integration_tests = b.addRunArtifact(integration_tests);
 
@@ -228,14 +255,19 @@ pub fn build(b: *std.Build) void {
             },
         }),
     });
-    input_integration_tests.linkSystemLibrary("tree-sitter");
-    input_integration_tests.linkLibC();
-    input_integration_tests.addLibraryPath(.{ .cwd_relative = user_lib_path });
-    input_integration_tests.linkSystemLibrary("tree-sitter-zig");
-    input_integration_tests.linkSystemLibrary("tree-sitter-rust");
-    input_integration_tests.linkSystemLibrary("tree-sitter-go");
-    input_integration_tests.linkSystemLibrary("tree-sitter-python");
-    input_integration_tests.linkSystemLibrary("tree-sitter-c");
+    // Optionally link tree-sitter for input integration tests
+    if (enable_treesitter) {
+        const home_dir = std.posix.getenv("HOME") orelse "/Users/rand";
+        const user_lib_path = b.fmt("{s}/lib", .{home_dir});
+        input_integration_tests.linkSystemLibrary("tree-sitter");
+        input_integration_tests.linkLibC();
+        input_integration_tests.addLibraryPath(.{ .cwd_relative = user_lib_path });
+        input_integration_tests.linkSystemLibrary("tree-sitter-zig");
+        input_integration_tests.linkSystemLibrary("tree-sitter-rust");
+        input_integration_tests.linkSystemLibrary("tree-sitter-go");
+        input_integration_tests.linkSystemLibrary("tree-sitter-python");
+        input_integration_tests.linkSystemLibrary("tree-sitter-c");
+    }
 
     const run_input_integration_tests = b.addRunArtifact(input_integration_tests);
 

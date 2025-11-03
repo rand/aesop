@@ -2,6 +2,7 @@
 //! Integrates all components into a functional text editor
 
 const std = @import("std");
+const build_options = @import("build_options");
 const Editor = @import("editor/editor.zig").Editor;
 const Cursor = @import("editor/cursor.zig");
 const renderer_mod = @import("render/renderer.zig");
@@ -18,7 +19,11 @@ const bufferswitcher = @import("render/bufferswitcher.zig");
 const gutter = @import("render/gutter.zig");
 const input_mod = @import("terminal/input.zig");
 const Keymap = @import("editor/keymap.zig");
-const TreeSitter = @import("editor/treesitter.zig");
+// Conditionally import tree-sitter or stub based on build configuration
+const TreeSitter = if (build_options.enable_treesitter)
+    @import("editor/treesitter.zig")
+else
+    @import("editor/treesitter_stub.zig");
 const commandline = @import("editor/commandline.zig");
 
 /// Get configuration file path using XDG Base Directory specification
