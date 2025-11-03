@@ -3,12 +3,71 @@
 
 const std = @import("std");
 
+/// Context for stderr logging thread
+const StderrContext = struct {
+    file: std.fs.File,
+    running: *const std.atomic.Value(bool),
+};
+
+/// Background thread that logs LSP stderr to file
+fn stderrLogger(context: StderrContext) void {
+    // Get log file path: ~/.aesop/lsp-stderr.log
+    const home = std.posix.getenv("HOME") orelse {
+        return; // Can't determine home directory
+    };
+
+    // Create ~/.aesop directory if needed
+    var home_dir = std.fs.openDirAbsolute(home, .{}) catch return;
+    defer home_dir.close();
+
+    home_dir.makeDir(".aesop") catch |err| {
+        if (err != error.PathAlreadyExists) return;
+    };
+
+    var aesop_dir = home_dir.openDir(".aesop", .{}) catch return;
+    defer aesop_dir.close();
+
+    // Open log file for appending
+    const log_file = aesop_dir.createFile("lsp-stderr.log", .{
+        .truncate = false,
+        .read = false,
+    }) catch return;
+    defer log_file.close();
+
+    // Seek to end for appending
+    log_file.seekFromEnd(0) catch {};
+
+    // Add timestamp header
+    const timestamp = std.time.timestamp();
+    var header_buf: [256]u8 = undefined;
+    const header = std.fmt.bufPrint(&header_buf, "\n=== LSP session started at {d} ===\n", .{timestamp}) catch return;
+    log_file.writeAll(header) catch {};
+
+    // Read stderr and write to log
+    var buffer: [4096]u8 = undefined;
+    while (context.running.load(.seq_cst)) {
+        const n = context.file.read(&buffer) catch break;
+        if (n == 0) {
+            std.time.sleep(10 * std.time.ns_per_ms); // Sleep 10ms if no data
+            continue;
+        }
+
+        log_file.writeAll(buffer[0..n]) catch {};
+    }
+
+    // Write session end marker
+    const footer = "\n=== LSP session ended ===\n";
+    log_file.writeAll(footer) catch {};
+}
+
 /// Language server process manager
 pub const Process = struct {
     allocator: std.mem.Allocator,
     child: ?std.process.Child,
     stdin: ?std.fs.File,
     stdout: ?std.fs.File,
+    stderr_thread: ?std.Thread = null,
+    stderr_running: std.atomic.Value(bool) = std.atomic.Value(bool).init(false),
     command: []const u8,
     args: []const []const u8,
     running: bool,
@@ -61,15 +120,25 @@ pub const Process = struct {
 
         // Start background thread to log stderr
         if (child.stderr) |stderr| {
-            _ = stderr; // stderr is available but we'll read it in background
-            // TODO: Spawn thread to read stderr and log to ~/.aesop/lsp-stderr.log
-            // For now, stderr is captured but not actively logged
+            self.stderr_running.store(true, .seq_cst);
+            const context = StderrContext{
+                .file = stderr,
+                .running = &self.stderr_running,
+            };
+            self.stderr_thread = try std.Thread.spawn(.{}, stderrLogger, .{context});
         }
     }
 
     /// Stop the language server process
     pub fn stop(self: *Process) !void {
         if (!self.running) return;
+
+        // Signal stderr thread to stop
+        if (self.stderr_thread) |thread| {
+            self.stderr_running.store(false, .seq_cst);
+            thread.join();
+            self.stderr_thread = null;
+        }
 
         if (self.child) |*child| {
             // Send termination signal
