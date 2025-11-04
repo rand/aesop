@@ -6,6 +6,7 @@ const Renderer = @import("renderer.zig").Renderer;
 const Color = @import("buffer.zig").Color;
 const LspDiagnostics = @import("../lsp/diagnostics.zig");
 const DiagnosticSeverity = @import("../lsp/response_parser.zig").DiagnosticSeverity;
+const Theme = @import("../editor/theme.zig").Theme;
 
 /// Diagnostic icon configuration
 pub const DiagnosticIcons = struct {
@@ -16,12 +17,12 @@ pub const DiagnosticIcons = struct {
 };
 
 /// Get color for diagnostic severity
-pub fn getSeverityColor(severity: DiagnosticSeverity) Color {
+pub fn getSeverityColor(severity: DiagnosticSeverity, theme: *const Theme) Color {
     return switch (severity) {
-        .@"error" => Color.red,
-        .warning => Color.yellow,
-        .information => Color.blue,
-        .hint => Color.bright_black,
+        .@"error" => theme.ui.diagnostic_error,
+        .warning => theme.ui.diagnostic_warning,
+        .information => theme.ui.diagnostic_info,
+        .hint => theme.ui.diagnostic_hint,
     };
 }
 
@@ -42,9 +43,10 @@ pub fn renderGutterIcon(
     col: u16,
     severity: DiagnosticSeverity,
     icons: DiagnosticIcons,
+    theme: *const Theme,
 ) void {
     const icon = getSeverityIcon(severity, icons);
-    const color = getSeverityColor(severity);
+    const color = getSeverityColor(severity, theme);
 
     rend.writeText(row, col, icon, color, .default, .{});
 }

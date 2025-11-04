@@ -6,6 +6,7 @@ const Color = renderer.Color;
 const Attrs = renderer.Attrs;
 const diagnostics_render = @import("diagnostics.zig");
 const LspDiagnostics = @import("../lsp/diagnostics.zig");
+const Theme = @import("../editor/theme.zig").Theme;
 
 /// Gutter configuration
 pub const GutterConfig = struct {
@@ -28,8 +29,9 @@ pub fn render(
     start_line: usize,
     end_line: usize,
     cursor_line: usize,
+    theme: *const Theme,
 ) !void {
-    try renderWithDiagnostics(rend, config, start_line, end_line, cursor_line, null, null);
+    try renderWithDiagnostics(rend, config, start_line, end_line, cursor_line, null, null, theme);
 }
 
 /// Render gutter with diagnostic support
@@ -41,6 +43,7 @@ pub fn renderWithDiagnostics(
     cursor_line: usize,
     diagnostic_manager: ?*const LspDiagnostics.DiagnosticManager,
     file_uri: ?[]const u8,
+    theme: *const Theme,
 ) !void {
     if (!config.show_line_numbers) return;
 
@@ -71,9 +74,9 @@ pub fn renderWithDiagnostics(
 
         // Color: cursor line is highlighted
         const fg_color: Color = if (line == cursor_line)
-            .{ .standard = .bright_yellow }
+            theme.ui.gutter_line_number_active
         else
-            .{ .standard = .bright_black };
+            theme.ui.gutter_line_number;
 
         rend.writeText(
             row,
