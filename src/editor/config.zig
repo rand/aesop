@@ -18,6 +18,7 @@ pub const Config = struct {
     highlight_current_line: bool = true,
     show_indent_guides: bool = false,
     syntax_highlighting: bool = true,
+    theme_name: []const u8 = "yonce", // Theme name (default: "yonce")
 
     // Search settings
     search_case_sensitive: bool = false,
