@@ -118,9 +118,13 @@ pub fn build(b: *std.Build) void {
         exe.linkSystemLibrary("tree-sitter");
         exe.linkLibC();
 
-        // Note: Library paths need to be configured manually via DYLD_LIBRARY_PATH,
-        // LD_LIBRARY_PATH, or system installation. We don't set them here to avoid
-        // platform-specific code (Windows doesn't support std.posix.getenv).
+        // Add library search path for tree-sitter libraries in ~/lib
+        // This is needed for both linking and runtime loading
+        const home_dir = b.graph.env_map.get("HOME") orelse "";
+        if (home_dir.len > 0) {
+            const lib_path = b.fmt("{s}/lib", .{home_dir});
+            exe.addLibraryPath(.{ .cwd_relative = lib_path });
+        }
 
         // Link language grammar libraries
         // Note: Each grammar must be built and installed separately
@@ -175,6 +179,11 @@ pub fn build(b: *std.Build) void {
     if (enable_treesitter) {
         mod_tests.linkSystemLibrary("tree-sitter");
         mod_tests.linkLibC();
+        const home_dir = b.graph.env_map.get("HOME") orelse "";
+        if (home_dir.len > 0) {
+            const lib_path = b.fmt("{s}/lib", .{home_dir});
+            mod_tests.addLibraryPath(.{ .cwd_relative = lib_path });
+        }
         mod_tests.linkSystemLibrary("tree-sitter-zig");
         mod_tests.linkSystemLibrary("tree-sitter-rust");
         mod_tests.linkSystemLibrary("tree-sitter-go");
@@ -195,6 +204,11 @@ pub fn build(b: *std.Build) void {
     if (enable_treesitter) {
         exe_tests.linkSystemLibrary("tree-sitter");
         exe_tests.linkLibC();
+        const home_dir = b.graph.env_map.get("HOME") orelse "";
+        if (home_dir.len > 0) {
+            const lib_path = b.fmt("{s}/lib", .{home_dir});
+            exe_tests.addLibraryPath(.{ .cwd_relative = lib_path });
+        }
         exe_tests.linkSystemLibrary("tree-sitter-zig");
         exe_tests.linkSystemLibrary("tree-sitter-rust");
         exe_tests.linkSystemLibrary("tree-sitter-go");
@@ -223,6 +237,11 @@ pub fn build(b: *std.Build) void {
     if (enable_treesitter) {
         integration_tests.linkSystemLibrary("tree-sitter");
         integration_tests.linkLibC();
+        const home_dir = b.graph.env_map.get("HOME") orelse "";
+        if (home_dir.len > 0) {
+            const lib_path = b.fmt("{s}/lib", .{home_dir});
+            integration_tests.addLibraryPath(.{ .cwd_relative = lib_path });
+        }
         integration_tests.linkSystemLibrary("tree-sitter-zig");
         integration_tests.linkSystemLibrary("tree-sitter-rust");
         integration_tests.linkSystemLibrary("tree-sitter-go");
@@ -249,6 +268,11 @@ pub fn build(b: *std.Build) void {
     if (enable_treesitter) {
         input_integration_tests.linkSystemLibrary("tree-sitter");
         input_integration_tests.linkLibC();
+        const home_dir = b.graph.env_map.get("HOME") orelse "";
+        if (home_dir.len > 0) {
+            const lib_path = b.fmt("{s}/lib", .{home_dir});
+            input_integration_tests.addLibraryPath(.{ .cwd_relative = lib_path });
+        }
         input_integration_tests.linkSystemLibrary("tree-sitter-zig");
         input_integration_tests.linkSystemLibrary("tree-sitter-rust");
         input_integration_tests.linkSystemLibrary("tree-sitter-go");
