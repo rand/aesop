@@ -1,0 +1,159 @@
+# Aesop Editor Configuration
+#
+# This file contains all available configuration options with sensible defaults.
+# Copy this file to ~/.config/aesop/config.conf to customize your editor.
+#
+# Format: key=value (one per line)
+# Boolean values: true/false, 1/0, yes/no
+# Lines starting with # are comments
+
+# =============================================================================
+# EDITOR BEHAVIOR
+# =============================================================================
+
+# Tab width in spaces (valid range: 1-16)
+# Controls visual width of tab characters and indentation
+tab_width=4
+
+# Expand tabs to spaces when typing
+# true:  Pressing Tab inserts spaces
+# false: Pressing Tab inserts tab character
+expand_tabs=true
+
+# Show line numbers in gutter
+# Displays line numbers in the left margin
+line_numbers=true
+
+# Use relative line numbers
+# Shows distance from cursor line instead of absolute numbers
+# Useful for vim-style motion commands (e.g., "5j" to move 5 lines down)
+relative_line_numbers=false
+
+# Automatically indent new lines
+# Matches indentation of previous line when pressing Enter
+auto_indent=true
+
+# Wrap long lines at window edge
+# false: Lines extend beyond screen (scroll horizontally to see)
+# true:  Lines break at window boundary (visual wrapping only)
+wrap_lines=false
+
+# =============================================================================
+# VISUAL SETTINGS
+# =============================================================================
+
+# Show whitespace characters (spaces, tabs, newlines)
+# Displays · for spaces, → for tabs, ¬ for line endings
+show_whitespace=false
+
+# Highlight the current line
+# Adds subtle background color to line containing cursor
+highlight_current_line=true
+
+# Show indent guides
+# Displays vertical lines at each indentation level
+show_indent_guides=false
+
+# Enable syntax highlighting
+# Colors code based on language grammar
+syntax_highlighting=true
+
+# Theme name (currently available: "yonce")
+# Controls all colors in the editor (syntax, UI, status line, etc.)
+# The beautiful Yonce Dark theme is the default
+theme_name=yonce
+
+# =============================================================================
+# SEARCH SETTINGS
+# =============================================================================
+
+# Case-sensitive search
+# false: "foo" matches "foo", "Foo", "FOO"
+# true:  "foo" only matches "foo"
+search_case_sensitive=false
+
+# Wrap search around at file boundaries
+# true:  Search continues from top when reaching bottom (and vice versa)
+# false: Search stops at file ends
+search_wrap_around=true
+
+# =============================================================================
+# MULTI-CURSOR SETTINGS
+# =============================================================================
+
+# Enable multiple cursors
+# Allows editing at multiple positions simultaneously
+multi_cursor_enabled=true
+
+# Maximum number of cursors allowed (valid range: 1-1000)
+# Safety limit to prevent performance issues
+max_cursors=100
+
+# =============================================================================
+# AUTO-PAIRING SETTINGS
+# =============================================================================
+
+# Automatically insert closing brackets/quotes
+# Typing "(" inserts "()" and places cursor between them
+# Works for: () [] {} "" '' `` <>
+auto_pair_brackets=true
+
+# =============================================================================
+# PERFORMANCE SETTINGS
+# =============================================================================
+
+# Scroll offset in lines
+# Minimum number of lines to keep visible above/below cursor
+# Prevents cursor from touching screen edges
+# Example: scroll_offset=3 means cursor stays 3 lines from top/bottom
+scroll_offset=3
+
+# Maximum undo history entries
+# Higher values use more memory but preserve longer edit history
+# Minimum: 1 (must be non-zero)
+max_undo_history=1000
+
+# =============================================================================
+# FILE HANDLING
+# =============================================================================
+
+# Auto-save files after changes
+# Automatically writes buffer to disk after delay period
+auto_save=false
+
+# Auto-save delay in milliseconds
+# Time to wait after last edit before saving
+# Only applies when auto_save=true
+auto_save_delay_ms=1000
+
+# Remove trailing whitespace on save
+# Cleans up unnecessary spaces/tabs at end of lines
+trim_trailing_whitespace=false
+
+# Ensure newline at end of file
+# Adds final newline if missing (POSIX standard)
+# Many tools expect files to end with newline
+ensure_newline_at_eof=true
+
+# =============================================================================
+# NOTES
+# =============================================================================
+#
+# Color Customization:
+#   Currently theme_name is the only color setting.
+#   The Yonce Dark theme provides beautiful, vibrant colors out of the box.
+#   Custom theme support may be added in future versions.
+#
+# Validation:
+#   Invalid values will cause editor to fail at startup.
+#   Check ~/.config/aesop/config.conf if editor won't launch.
+#
+# Defaults:
+#   Omitting a setting uses the default value shown in this file.
+#   You only need to include settings you want to change.
+#
+# Reloading:
+#   Configuration is loaded once at editor startup.
+#   Restart aesop after making changes to this file.
+#
+# =============================================================================
