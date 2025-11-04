@@ -8,9 +8,11 @@ const Attrs = renderer.Attrs;
 
 const Editor = @import("../editor/editor.zig").Editor;
 const Message = @import("../editor/message.zig");
+const Theme = @import("../editor/theme.zig").Theme;
 
 /// Render message line above status line (if message exists)
 pub fn render(rend: *renderer.Renderer, editor: *const Editor) !bool {
+    const theme = editor.getTheme();
     const size = rend.getSize();
     const message_row = size.height - 2; // Above status line
 
@@ -29,8 +31,8 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor) !bool {
     while (col < size.width) : (col += 1) {
         rend.output.setCell(message_row, col, .{
             .char = ' ',
-            .fg = .{ .standard = .white },
-            .bg = getLevelBgColor(current_msg.level),
+            .fg = getLevelFgColor(current_msg.level, theme),
+            .bg = getLevelBgColor(current_msg.level, theme),
             .attrs = .{},
         });
     }
@@ -50,28 +52,28 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor) !bool {
         message_row,
         0,
         message_text[0..display_len],
-        getLevelFgColor(current_msg.level),
-        getLevelBgColor(current_msg.level),
+        getLevelFgColor(current_msg.level, theme),
+        getLevelBgColor(current_msg.level, theme),
         .{ .bold = true },
     );
 
     return true; // Message was displayed
 }
 
-fn getLevelFgColor(level: Message.Level) Color {
+fn getLevelFgColor(level: Message.Level, theme: *const Theme) Color {
     return switch (level) {
-        .info => .{ .standard = .white },
-        .warning => .{ .standard = .black },
-        .error_msg => .{ .standard = .white },
-        .success => .{ .standard = .black },
+        .info => theme.ui.message_info_fg,
+        .warning => theme.ui.message_warning_fg,
+        .error_msg => theme.ui.message_error_fg,
+        .success => theme.palette.success,
     };
 }
 
-fn getLevelBgColor(level: Message.Level) Color {
+fn getLevelBgColor(level: Message.Level, theme: *const Theme) Color {
     return switch (level) {
-        .info => .{ .standard = .blue },
-        .warning => .{ .standard = .yellow },
-        .error_msg => .{ .standard = .red },
-        .success => .{ .standard = .green },
+        .info => theme.ui.message_info_bg,
+        .warning => theme.ui.message_warning_bg,
+        .error_msg => theme.ui.message_error_bg,
+        .success => theme.palette.background_lighter,
     };
 }

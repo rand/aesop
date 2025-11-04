@@ -782,6 +782,7 @@ pub const EditorApp = struct {
             cursor_pos.line,
             &self.editor.diagnostic_manager,
             file_uri,
+            self.editor.getTheme(),
         );
 
         // Render message line (if message exists)
@@ -1136,7 +1137,7 @@ pub const EditorApp = struct {
                 );
             } else if (syntax_group) |group| {
                 // Syntax highlighting: use color from highlight group
-                const color = group.toColor();
+                const color = group.toColor(self.editor.getTheme());
                 self.renderer.writeText(
                     row,
                     screen_col,
