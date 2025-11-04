@@ -8,6 +8,7 @@ const Attrs = renderer.Attrs;
 
 const Editor = @import("../editor/editor.zig").Editor;
 const Mode = @import("../editor/mode.zig").Mode;
+const Theme = @import("../editor/theme.zig").Theme;
 
 /// Hint item - represents a single actionable hint
 const Hint = struct {
@@ -66,15 +67,21 @@ fn detectContext(editor: *const Editor, is_empty_buffer: bool) Context {
 }
 
 /// Get hints for a specific context
-fn getHintsForContext(context: Context, allocator: std.mem.Allocator) ![]const Hint {
+fn getHintsForContext(context: Context, theme: *const Theme, allocator: std.mem.Allocator) ![]const Hint {
+    const cyan = theme.palette.accent_cyan;
+    const teal = theme.palette.accent_teal;
+    const pink = theme.palette.accent_pink;
+    const purple = theme.palette.accent_purple;
+    const white = theme.palette.foreground;
+
     const hints = switch (context) {
         .empty_buffer_normal => &[_]Hint{
-            .{ .key = "i", .action = "insert", .color = .{ .standard = .cyan }, .priority = 9 },
-            .{ .key = ":", .action = "command", .color = .{ .standard = .cyan }, .priority = 8 },
-            .{ .key = "Space p", .action = "palette", .color = .{ .standard = .green }, .priority = 7 },
-            .{ .key = "Space f", .action = "files", .color = .{ .standard = .green }, .priority = 6 },
-            .{ .key = ":q", .action = "quit", .color = .{ .standard = .red }, .priority = 5 },
-            .{ .key = "?", .action = "help", .color = .{ .standard = .yellow }, .priority = 4 },
+            .{ .key = "i", .action = "insert", .color = cyan, .priority = 9 },
+            .{ .key = ":", .action = "command", .color = cyan, .priority = 8 },
+            .{ .key = "Space p", .action = "palette", .color = teal, .priority = 7 },
+            .{ .key = "Space f", .action = "files", .color = teal, .priority = 6 },
+            .{ .key = ":q", .action = "quit", .color = pink, .priority = 5 },
+            .{ .key = "?", .action = "help", .color = purple, .priority = 4 },
         },
 
         .normal_mode => &[_]Hint{
@@ -193,9 +200,10 @@ fn calculateHintWidth(hints: []const Hint) usize {
 
 /// Render context bar at bottom of screen (above status line)
 pub fn render(rend: *renderer.Renderer, editor: *const Editor, is_empty_buffer: bool, allocator: std.mem.Allocator) !void {
+    const theme = editor.getTheme();
     const size = rend.getSize();
     const context_row = size.height - 2; // One line above status line
-    const bg_color = Color{ .rgb = .{ .r = 30, .g = 30, .b = 40 } };
+    const bg_color = theme.ui.contextbar_bg;
 
     // Clear context bar line
     var col: u16 = 0;
@@ -212,7 +220,7 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor, is_empty_buffer: 
     const context = detectContext(editor, is_empty_buffer);
 
     // Get hints for context
-    const all_hints = try getHintsForContext(context, allocator);
+    const all_hints = try getHintsForContext(context, theme, allocator);
     defer allocator.free(all_hints);
 
     // Select hints based on width
@@ -246,7 +254,7 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor, is_empty_buffer: 
             context_row,
             current_col,
             ":",
-            .{ .standard = .white },
+            theme.ui.contextbar_fg,
             bg_color,
             .{},
         );
@@ -257,7 +265,7 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor, is_empty_buffer: 
             context_row,
             current_col,
             hint.action,
-            .{ .standard = .white },
+            theme.ui.contextbar_fg,
             bg_color,
             .{},
         );
@@ -269,7 +277,7 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor, is_empty_buffer: 
                 context_row,
                 current_col,
                 " | ",
-                .{ .rgb = .{ .r = 100, .g = 100, .b = 100 } },
+                theme.ui.contextbar_separator,
                 bg_color,
                 .{},
             );
@@ -284,7 +292,7 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor, is_empty_buffer: 
             context_row,
             2,
             welcome,
-            .{ .standard = .green },
+            theme.ui.contextbar_welcome,
             bg_color,
             .{ .bold = true },
         );

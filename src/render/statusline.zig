@@ -9,9 +9,11 @@ const diagnostics_render = @import("diagnostics.zig");
 
 const Editor = @import("../editor/editor.zig").Editor;
 const Mode = @import("../editor/mode.zig").Mode;
+const Theme = @import("../editor/theme.zig").Theme;
 
 /// Render status line at bottom of screen
 pub fn render(rend: *renderer.Renderer, editor: *const Editor) !void {
+    const theme = editor.getTheme();
     const size = rend.getSize();
     const status_row = size.height - 1;
 
@@ -23,22 +25,23 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor) !void {
     while (col < size.width) : (col += 1) {
         rend.output.setCell(status_row, col, .{
             .char = ' ',
-            .fg = .{ .standard = .white },
-            .bg = .{ .standard = .blue },
+            .fg = theme.ui.statusline_fg,
+            .bg = theme.ui.statusline_bg,
             .attrs = .{},
         });
     }
 
     // Left section: Mode
-    const mode_color = getModeColor(info.mode);
+    const mode_bg = getModeColor(info.mode, theme);
+    const mode_fg = getModeFgColor(info.mode, theme);
     const mode_text = info.mode.name();
 
     rend.writeText(
         status_row,
         1,
         mode_text,
-        .{ .standard = .black },
-        mode_color,
+        mode_fg,
+        mode_bg,
         .{ .bold = true },
     );
 
@@ -70,8 +73,8 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor) !void {
         status_row,
         col,
         buffer_info,
-        .{ .standard = .white },
-        .{ .standard = .blue },
+        theme.ui.statusline_fg,
+        theme.ui.statusline_bg,
         .{},
     );
 
@@ -87,8 +90,8 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor) !void {
         status_row,
         pos_col,
         pos_text,
-        .{ .standard = .white },
-        .{ .standard = .blue },
+        theme.ui.statusline_fg,
+        theme.ui.statusline_bg,
         .{},
     );
 
@@ -110,8 +113,8 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor) !void {
             status_row,
             diag_col,
             " ",
-            .{ .standard = .white },
-            .{ .standard = .blue },
+            theme.ui.statusline_fg,
+            theme.ui.statusline_bg,
             .{},
         );
         rend.writeText(
@@ -119,12 +122,12 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor) !void {
             diag_col + 1,
             diag_text,
             if (counts.errors > 0)
-                .{ .standard = .red }
+                theme.ui.diagnostic_error
             else if (counts.warnings > 0)
-                .{ .standard = .yellow }
+                theme.ui.diagnostic_warning
             else
-                .{ .standard = .cyan },
-            .{ .standard = .blue },
+                theme.ui.diagnostic_info,
+            theme.ui.statusline_bg,
             if (counts.errors > 0) .{ .bold = true } else .{},
         );
         next_col = diag_col;
@@ -147,8 +150,8 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor) !void {
             status_row,
             undo_col,
             undo_text,
-            .{ .standard = .cyan },
-            .{ .standard = .blue },
+            theme.palette.accent_cyan,
+            theme.ui.statusline_bg,
             .{},
         );
     }
@@ -166,18 +169,27 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor) !void {
             status_row,
             sel_col,
             sel_text,
-            .{ .standard = .black },
-            .{ .standard = .yellow },
+            theme.palette.foreground,
+            theme.palette.accent_purple,
             .{ .bold = true },
         );
     }
 }
 
-fn getModeColor(mode: Mode) Color {
+fn getModeColor(mode: Mode, theme: *const Theme) Color {
     return switch (mode) {
-        .normal => .{ .standard = .green },
-        .insert => .{ .standard = .blue },
-        .select => .{ .standard = .magenta },
-        .command => .{ .standard = .cyan },
+        .normal => theme.ui.statusline_mode_normal_bg,
+        .insert => theme.ui.statusline_mode_insert_bg,
+        .select => theme.ui.statusline_mode_select_bg,
+        .command => theme.ui.statusline_mode_command_bg,
+    };
+}
+
+fn getModeFgColor(mode: Mode, theme: *const Theme) Color {
+    return switch (mode) {
+        .normal => theme.ui.statusline_mode_normal_fg,
+        .insert => theme.ui.statusline_mode_insert_fg,
+        .select => theme.ui.statusline_mode_select_fg,
+        .command => theme.ui.statusline_mode_command_fg,
     };
 }

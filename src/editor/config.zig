@@ -120,6 +120,8 @@ pub const Config = struct {
             self.show_indent_guides = try parseBool(value);
         } else if (std.mem.eql(u8, key, "syntax_highlighting")) {
             self.syntax_highlighting = try parseBool(value);
+        } else if (std.mem.eql(u8, key, "theme_name")) {
+            self.theme_name = value; // Note: value lifetime tied to config file contents
         } else if (std.mem.eql(u8, key, "search_case_sensitive")) {
             self.search_case_sensitive = try parseBool(value);
         } else if (std.mem.eql(u8, key, "search_wrap_around")) {
@@ -170,7 +172,8 @@ pub const Config = struct {
         try writer.print("show_whitespace={s}\n", .{if (self.show_whitespace) "true" else "false"});
         try writer.print("highlight_current_line={s}\n", .{if (self.highlight_current_line) "true" else "false"});
         try writer.print("show_indent_guides={s}\n", .{if (self.show_indent_guides) "true" else "false"});
-        try writer.print("syntax_highlighting={s}\n\n", .{if (self.syntax_highlighting) "true" else "false"});
+        try writer.print("syntax_highlighting={s}\n", .{if (self.syntax_highlighting) "true" else "false"});
+        try writer.print("theme_name={s}\n\n", .{self.theme_name});
 
         try writer.writeAll("# Search settings\n");
         try writer.print("search_case_sensitive={s}\n", .{if (self.search_case_sensitive) "true" else "false"});

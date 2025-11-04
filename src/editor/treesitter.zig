@@ -37,22 +37,20 @@ pub const HighlightGroup = enum {
     punctuation, // Delimiters
     error_node, // Parse errors
 
-    /// Convert to renderer color (uses standard 16-color palette)
-    pub fn toColor(self: HighlightGroup) @import("../render/buffer.zig").Color {
-        const Color = @import("../render/buffer.zig").Color;
-
+    /// Convert to renderer color using theme
+    pub fn toColor(self: HighlightGroup, theme: *const @import("theme.zig").Theme) @import("../render/buffer.zig").Color {
         return switch (self) {
-            .keyword => Color.magenta,
-            .function_name => Color.yellow,
-            .type_name => Color.cyan,
-            .variable => Color.white,
-            .constant => Color.bright_magenta,
-            .string => Color.green,
-            .number => Color.bright_yellow,
-            .comment => Color.bright_black, // Gray
-            .operator => Color.white,
-            .punctuation => Color.white,
-            .error_node => Color.red,
+            .keyword => theme.syntax.keyword,
+            .function_name => theme.syntax.function_name,
+            .type_name => theme.syntax.type_name,
+            .variable => theme.syntax.variable,
+            .constant => theme.syntax.constant,
+            .string => theme.syntax.string,
+            .number => theme.syntax.number,
+            .comment => theme.syntax.comment,
+            .operator => theme.syntax.operator,
+            .punctuation => theme.syntax.punctuation,
+            .error_node => theme.syntax.error_node,
         };
     }
 

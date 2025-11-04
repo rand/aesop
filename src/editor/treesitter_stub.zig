@@ -38,8 +38,9 @@ pub const HighlightGroup = enum {
     punctuation,
     error_node,
 
-    pub fn toColor(self: HighlightGroup) @import("../render/buffer.zig").Color {
+    pub fn toColor(self: HighlightGroup, theme: *const @import("theme.zig").Theme) @import("../render/buffer.zig").Color {
         _ = self;
+        _ = theme;
         return @import("../render/buffer.zig").Color.white;
     }
 

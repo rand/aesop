@@ -20,6 +20,8 @@ const Registers = @import("registers.zig");
 const Macros = @import("macros.zig");
 const Config = @import("config.zig");
 const Window = @import("window.zig");
+const Theme = @import("theme.zig").Theme;
+const yonce_theme = @import("themes/yonce.zig").yonce_dark;
 const FileFinder = @import("file_finder.zig");
 const AutoPair = @import("autopair.zig");
 const PluginSystem = @import("../plugin/system.zig");
@@ -88,6 +90,7 @@ pub const Editor = struct {
     macro_recorder: Macros.MacroRecorder,
     pending_command: PendingCommand,
     config: Config.Config,
+    theme: *const Theme, // Current editor theme
     window_manager: Window.WindowManager,
     plugin_manager: PluginSystem.PluginManager,
     file_finder: FileFinder.FileFinder,
@@ -140,6 +143,7 @@ pub const Editor = struct {
             .macro_recorder = Macros.MacroRecorder.init(allocator),
             .pending_command = .none,
             .config = config,
+            .theme = &yonce_theme, // Default theme
             .window_manager = try Window.WindowManager.init(allocator, initial_dims),
             .plugin_manager = PluginSystem.PluginManager.init(allocator),
             .file_finder = FileFinder.FileFinder.init(allocator),
@@ -194,6 +198,11 @@ pub const Editor = struct {
     /// Get current mode
     pub fn getMode(self: *const Editor) Mode.Mode {
         return self.mode_manager.getMode();
+    }
+
+    /// Get current theme
+    pub fn getTheme(self: *const Editor) *const Theme {
+        return self.theme;
     }
 
     /// Get active buffer
