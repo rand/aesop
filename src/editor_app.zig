@@ -12,6 +12,7 @@ const Cell = renderer_mod.Cell;
 const statusline = @import("render/statusline.zig");
 const messageline = @import("render/messageline.zig");
 const keyhints = @import("render/keyhints.zig");
+const contextbar = @import("render/contextbar.zig");
 const paletteline = @import("render/paletteline.zig");
 const filefinderline = @import("render/filefinderline.zig");
 const completionline = @import("render/completion.zig");
@@ -709,6 +710,37 @@ pub const EditorApp = struct {
         self.mouse_drag_start = null;
     }
 
+    /// Check if context bar should be shown
+    fn shouldShowContextBar(self: *EditorApp) bool {
+        // Show context bar for:
+        // - Palette/file finder/buffer switcher open
+        // - Incremental search active
+        // - Pending command waiting for input
+        // - Empty buffers (welcome mode)
+
+        return self.editor.palette.visible or
+            self.editor.file_finder.visible or
+            self.editor.buffer_switcher_visible or
+            self.editor.search.incremental or
+            self.editor.pending_command.isWaiting() or
+            self.isEmptyBuffer();
+    }
+
+    /// Check if current buffer is empty
+    fn isEmptyBuffer(self: *EditorApp) bool {
+        const buffer = self.editor.getActiveBuffer() orelse return true;
+        const line_count = buffer.lineCount();
+
+        // Buffer is empty if it has 0 lines, or 1 line with no content
+        if (line_count == 0) return true;
+        if (line_count == 1) {
+            const text = buffer.getText() catch return false;
+            defer self.allocator.free(text);
+            return text.len == 0 or (text.len == 1 and text[0] == '\n');
+        }
+        return false;
+    }
+
     /// Render the editor
     fn render(self: *EditorApp) !void {
         // Clear screen
@@ -718,7 +750,12 @@ pub const EditorApp = struct {
 
         // Check if we have a message to display
         const has_message = self.editor.messages.current() != null;
-        const reserved_lines: usize = if (has_message) 2 else 1; // Message + status or just status
+
+        // Calculate footer lines (status line + optional context bar)
+        const needs_context_bar = self.shouldShowContextBar();
+        const footer_lines: usize = if (needs_context_bar) 2 else 1;
+        const message_lines: usize = if (has_message) 1 else 0;
+        const reserved_lines: usize = footer_lines + message_lines;
 
         // Render buffer content
         try self.renderBuffer(size.height -| reserved_lines);
@@ -783,6 +820,11 @@ pub const EditorApp = struct {
 
             // Render key hints (overlays on status line)
             try keyhints.render(&self.renderer, &self.editor);
+        }
+
+        // Render context bar (if needed)
+        if (needs_context_bar) {
+            try contextbar.render(&self.renderer, &self.editor, self.isEmptyBuffer(), self.allocator);
         }
 
         // Render cursor (if not in overlay mode or command mode)
