@@ -106,6 +106,7 @@ pub fn renderWithDiagnostics(
                             4, // Position after line number
                             sev,
                             icons,
+                            theme,
                         );
                     }
                 }

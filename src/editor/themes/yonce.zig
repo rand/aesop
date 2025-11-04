@@ -27,7 +27,7 @@ pub const yonce_dark = Theme{
         // Semantic colors
         .success = Color{ .rgb = .{ .r = 0x37, .g = 0xE5, .b = 0xE7 } }, // Cyan
         .warning = Color{ .rgb = .{ .r = 0xFC, .g = 0x43, .b = 0x84 } }, // Pink (bold choice!)
-        .error = Color{ .rgb = .{ .r = 0xFF, .g = 0x44, .b = 0x44 } }, // Bright red
+        .err = Color{ .rgb = .{ .r = 0xFF, .g = 0x44, .b = 0x44 } }, // Bright red
         .info = Color{ .rgb = .{ .r = 0xA0, .g = 0x6F, .b = 0xCA } }, // Purple
     },
 

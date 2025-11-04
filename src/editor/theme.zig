@@ -35,7 +35,7 @@ pub const ColorPalette = struct {
     // Semantic colors
     success: Color,
     warning: Color,
-    error: Color,
+    err: Color, // "error" is reserved keyword
     info: Color,
 };
 
