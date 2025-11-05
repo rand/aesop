@@ -245,8 +245,7 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor, is_empty_buffer: 
             hint.key,
             hint.color,
             bg_color,
-            .{ .bold = true },
-        );
+            .{ .bold = true }, null);
         current_col += @intCast(hint.key.len);
 
         // Render colon
@@ -256,8 +255,7 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor, is_empty_buffer: 
             ":",
             theme.ui.contextbar_fg,
             bg_color,
-            .{},
-        );
+            .{}, null);
         current_col += 1;
 
         // Render action
@@ -267,8 +265,7 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor, is_empty_buffer: 
             hint.action,
             theme.ui.contextbar_fg,
             bg_color,
-            .{},
-        );
+            .{}, null);
         current_col += @intCast(hint.action.len);
 
         // Render separator (except for last)
@@ -279,8 +276,7 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor, is_empty_buffer: 
                 " | ",
                 theme.ui.contextbar_separator,
                 bg_color,
-                .{},
-            );
+                .{}, null);
             current_col += 3;
         }
     }
@@ -294,7 +290,6 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor, is_empty_buffer: 
             welcome,
             theme.ui.contextbar_welcome,
             bg_color,
-            .{ .bold = true },
-        );
+            .{ .bold = true }, null);
     }
 }

@@ -127,8 +127,7 @@ fn renderBorder(
             " ",
             .{ .standard = .white },
             .{ .standard = .black },
-            .{},
-        );
+            .{}, null);
         col += 1;
 
         rend.writeText(
@@ -137,8 +136,7 @@ fn renderBorder(
             title_text,
             .{ .standard = .bright_white },
             .{ .standard = .black },
-            .{ .bold = true },
-        );
+            .{ .bold = true }, null);
         col += @intCast(title_text.len);
 
         rend.writeText(
@@ -147,8 +145,7 @@ fn renderBorder(
             " ",
             .{ .standard = .white },
             .{ .standard = .black },
-            .{},
-        );
+            .{}, null);
         col += 1;
     }
 
@@ -250,8 +247,7 @@ fn renderContent(
                     line[0..@min(line.len, width)],
                     .{ .standard = .bright_white },
                     .{ .standard = .black },
-                    .{},
-                );
+                    .{}, null);
             }
 
             row += 1;
@@ -282,8 +278,7 @@ fn renderContent(
                 line,
                 .{ .standard = .bright_white },
                 .{ .standard = .black },
-                .{},
-            );
+                .{}, null);
 
             row += 1;
             col = start_col;
@@ -304,8 +299,7 @@ fn renderContent(
             line[0..@min(line.len, width)],
             .{ .standard = .bright_white },
             .{ .standard = .black },
-            .{},
-        );
+            .{}, null);
     }
 }
 

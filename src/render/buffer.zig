@@ -188,8 +188,7 @@ pub const OutputBuffer = struct {
             num_str,
             Color.bright_black, // Gray for line numbers
             Color.default,
-            Attrs{},
-        );
+            Attrs{}, null);
 
         // Add separator after gutter
         if (gutter_width > 0 and gutter_width - 1 < self.width) {
@@ -203,11 +202,15 @@ pub const OutputBuffer = struct {
     }
 
     /// Write text at position with given style
-    pub fn writeText(self: *OutputBuffer, row: u16, col: u16, text: []const u8, fg: Color, bg: Color, attrs: Attrs) void {
+    /// max_width: Optional maximum column to stop rendering at (null = use terminal width)
+    pub fn writeText(self: *OutputBuffer, row: u16, col: u16, text: []const u8, fg: Color, bg: Color, attrs: Attrs, max_width: ?u16) void {
         var current_col = col;
         var i: usize = 0;
 
-        while (i < text.len and current_col < self.width) {
+        // Calculate effective max column: min of max_width (if provided) and terminal width
+        const effective_max = if (max_width) |max| @min(max, self.width) else self.width;
+
+        while (i < text.len and current_col < effective_max) {
             const cp_len = std.unicode.utf8ByteSequenceLength(text[i]) catch 1;
             if (i + cp_len > text.len) break;
 
@@ -333,7 +336,7 @@ test "output buffer: write text" {
     var buf = try OutputBuffer.init(allocator, 80, 24);
     defer buf.deinit();
 
-    buf.writeText(0, 0, "Hello", .default, .default, .{});
+    buf.writeText(0, 0, "Hello", .default, .default, .{}, null);
 
     try std.testing.expectEqual('H', buf.getCell(0, 0).?.char);
     try std.testing.expectEqual('e', buf.getCell(0, 1).?.char);
@@ -348,7 +351,7 @@ test "output buffer: damage tracking" {
     defer buf.deinit();
 
     // Write to back buffer
-    buf.writeText(5, 0, "Changed", .default, .default, .{});
+    buf.writeText(5, 0, "Changed", .default, .default, .{}, null);
 
     // Compute damage
     buf.computeDamage();

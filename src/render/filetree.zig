@@ -57,7 +57,7 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, visible_height: usize, 
             theme.ui.tree_title,
             theme.ui.tree_bg,
             .{ .bold = true },
-        );
+            null);
     }
 
     // Draw separator below title (Nerd Font box-drawing character)
@@ -113,7 +113,7 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, visible_height: usize, 
             theme.ui.tree_scrollbar,
             theme.ui.tree_bg,
             .{ .dim = true },
-        );
+            null);
     }
 }
 
@@ -149,21 +149,21 @@ fn renderNode(
     // Draw expand/collapse icon for directories (Nerd Font chevrons)
     if (node.is_dir) {
         const icon = if (node.is_expanded) " " else " "; // Chevron down/right
-        rend.writeText(row, col, icon, fg, bg, .{});
+        rend.writeText(row, col, icon, fg, bg, .{}, null);
         col += @intCast(icon.len);
     } else {
         // Space for non-directories to align with files
-        rend.writeText(row, col, "  ", fg, bg, .{});
+        rend.writeText(row, col, "  ", fg, bg, .{}, null);
         col += 2;
     }
 
     // Draw file/folder icon
     const file_icon = getIcon(node);
-    rend.writeText(row, col, file_icon, getIconColor(node, theme), bg, .{});
+    rend.writeText(row, col, file_icon, getIconColor(node, theme), bg, .{}, null);
     col += @intCast(file_icon.len);
 
     // Space after icon
-    rend.writeText(row, col, " ", fg, bg, .{});
+    rend.writeText(row, col, " ", fg, bg, .{}, null);
     col += 1;
 
     // Draw name (truncate if needed)
@@ -180,7 +180,7 @@ fn renderNode(
         if (node.is_dir) theme.ui.tree_dir_fg else theme.ui.tree_file_fg,
         bg,
         if (is_selected) .{ .bold = true } else .{},
-    );
+        null);
 }
 
 /// Icon style configuration

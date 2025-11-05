@@ -214,8 +214,9 @@ pub const Renderer = struct {
     }
 
     /// Write text to the output buffer
-    pub fn writeText(self: *Renderer, row: u16, col: u16, text: []const u8, fg: Color, bg: Color, attrs: Attrs) void {
-        self.output.writeText(row, col, text, fg, bg, attrs);
+    /// max_width: Optional maximum column to stop rendering at (null = use terminal width)
+    pub fn writeText(self: *Renderer, row: u16, col: u16, text: []const u8, fg: Color, bg: Color, attrs: Attrs, max_width: ?u16) void {
+        self.output.writeText(row, col, text, fg, bg, attrs, max_width);
     }
 
     /// Get terminal size

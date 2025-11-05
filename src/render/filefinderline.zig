@@ -53,8 +53,7 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, allocator: std.mem.Allo
         title,
         .{ .standard = .green },
         .{ .standard = .black },
-        .{ .bold = true },
-    );
+        .{ .bold = true }, null);
 
     // Draw query line
     var query_buf: [128]u8 = undefined;
@@ -70,8 +69,7 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, allocator: std.mem.Allo
         query_text,
         .{ .standard = .yellow },
         .{ .standard = .black },
-        .{},
-    );
+        .{}, null);
 
     // Draw separator
     var sep_col: u16 = 1;
@@ -126,8 +124,7 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, allocator: std.mem.Allo
             item_text[0..@min(item_text.len, finder_width - 2)],
             fg,
             bg,
-            if (is_selected) .{ .bold = true } else .{},
-        );
+            if (is_selected) .{ .bold = true } else .{}, null);
     }
 
     // Show count
@@ -146,8 +143,7 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, allocator: std.mem.Allo
             count_text,
             .{ .standard = .green },
             .{ .standard = .black },
-            .{},
-        );
+            .{}, null);
     } else if (editor.file_finder.getQuery().len > 0) {
         // Show "no matches" message
         const no_match = " No matches ";
@@ -158,8 +154,7 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, allocator: std.mem.Allo
             no_match,
             .{ .standard = .bright_black },
             .{ .standard = .black },
-            .{},
-        );
+            .{}, null);
     }
 }
 

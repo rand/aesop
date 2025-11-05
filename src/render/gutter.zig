@@ -85,8 +85,7 @@ pub fn renderWithDiagnostics(
             text,
             fg_color,
             .default,
-            if (line == cursor_line) .{ .bold = true } else .{},
-        );
+            if (line == cursor_line) .{ .bold = true } else .{}, null);
 
         // Render diagnostic icon if present
         if (config.show_diagnostics) {

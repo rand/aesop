@@ -48,7 +48,7 @@ pub fn renderGutterIcon(
     const icon = getSeverityIcon(severity, icons);
     const color = getSeverityColor(severity, theme);
 
-    rend.writeText(row, col, icon, color, .default, .{});
+    rend.writeText(row, col, icon, color, .default, .{}, null);
 }
 
 /// Render diagnostic counts in statusline format

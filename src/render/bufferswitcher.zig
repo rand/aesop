@@ -65,8 +65,7 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, allocator: std.mem.Allo
         title,
         .{ .standard = .blue },
         .{ .standard = .black },
-        .{ .bold = true },
-    );
+        .{ .bold = true }, null);
 
     // Draw buffer list
     const max_items: u16 = switcher_height -| 2; // Subtract border and title
@@ -112,8 +111,7 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, allocator: std.mem.Allo
             item_text[0..@min(item_text.len, switcher_width - 2)],
             fg,
             bg,
-            if (is_selected) .{ .bold = true } else .{},
-        );
+            if (is_selected) .{ .bold = true } else .{}, null);
     }
 
     // Show count
@@ -132,8 +130,7 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, allocator: std.mem.Allo
             count_text,
             .{ .standard = .blue },
             .{ .standard = .black },
-            .{},
-        );
+            .{}, null);
     }
 }
 

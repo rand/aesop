@@ -818,7 +818,11 @@ pub const EditorApp = struct {
         const message_lines: usize = if (has_message) 1 else 0;
         const reserved_lines: usize = footer_lines + message_lines;
 
-        // Render buffer content
+        // Render file tree FIRST (acts as background layer)
+        // This prevents buffer text from rendering into file tree space
+        try filetree.render(&self.renderer, &self.editor, size.height - reserved_lines, self.allocator);
+
+        // Render buffer content (on top of file tree, within proper bounds)
         try self.renderBuffer(size.height -| reserved_lines);
 
         // Render gutter with diagnostics
@@ -883,6 +887,7 @@ pub const EditorApp = struct {
                 .default,
                 .default,
                 .{},
+                null, // Use full width for command line
             );
         } else {
             try statusline.render(&self.renderer, &self.editor);
@@ -895,9 +900,6 @@ pub const EditorApp = struct {
         if (needs_context_bar) {
             try contextbar.render(&self.renderer, &self.editor, self.isEmptyBuffer(), self.allocator);
         }
-
-        // Render file tree (sidebar, not an overlay)
-        try filetree.render(&self.renderer, &self.editor, size.height - reserved_lines, self.allocator);
 
         // Render cursor (if not in overlay mode or command mode)
         if (!self.editor.palette.visible and
@@ -1007,6 +1009,7 @@ pub const EditorApp = struct {
     /// Render buffer content
     fn renderBuffer(self: *EditorApp, visible_lines: usize) !void {
         const buffer = self.editor.getActiveBuffer() orelse return;
+        const size = self.renderer.getSize();
 
         const viewport = self.editor.getViewport(visible_lines);
         const gutter_width = gutter.calculateWidth(self.gutter_config, buffer.lineCount());
@@ -1016,6 +1019,9 @@ pub const EditorApp = struct {
             gutter_width + self.editor.file_tree.width + 1 // +1 for separator
         else
             gutter_width;
+
+        // Calculate available viewport width for text (terminal width - start column)
+        const text_max_width: u16 = size.width;
 
         // Get selection (for highlighting)
         const primary_sel = self.editor.selections.primary(self.allocator) orelse return;
@@ -1103,9 +1109,10 @@ pub const EditorApp = struct {
                     sel_range,
                     search_matches,
                     syntax_highlights,
+                    text_max_width,
                 );
             } else {
-                // Render line normally
+                // Render line normally (with max width constraint)
                 self.renderer.writeText(
                     row,
                     buffer_start_col,
@@ -1113,6 +1120,7 @@ pub const EditorApp = struct {
                     .default,
                     .default,
                     .{},
+                    text_max_width,
                 );
             }
 
@@ -1135,11 +1143,13 @@ pub const EditorApp = struct {
         opt_sel_range: anytype,
         search_matches: []const @import("editor/search.zig").Search.Match,
         syntax_highlights: []const TreeSitter.HighlightToken,
+        max_width: u16,
     ) !void {
         var col: usize = 0;
         var screen_col = start_col;
 
-        while (col < line_text.len) : (col += 1) {
+        // Stop rendering if we reach the max width
+        while (col < line_text.len and screen_col < max_width) : (col += 1) {
             // Check if character is in selection
             const is_selected = if (opt_sel_range) |range| blk: {
                 if (line_num == range.start.line and line_num == range.end.line) {
@@ -1201,6 +1211,7 @@ pub const EditorApp = struct {
                     .default,
                     .default,
                     Attrs{ .reverse = true },
+                    null, // max_width handled by loop
                 );
             } else if (is_search_match) {
                 // Search match: underline
@@ -1211,6 +1222,7 @@ pub const EditorApp = struct {
                     .default,
                     .default,
                     Attrs{ .underline = true },
+                    null, // max_width handled by loop
                 );
             } else if (syntax_group) |group| {
                 // Syntax highlighting: use color from highlight group
@@ -1222,6 +1234,7 @@ pub const EditorApp = struct {
                     color,
                     .default,
                     Attrs{},
+                    null, // max_width handled by loop
                 );
             } else {
                 // Normal text
@@ -1232,6 +1245,7 @@ pub const EditorApp = struct {
                     .default,
                     .default,
                     Attrs{},
+                    null, // max_width handled by loop
                 );
             }
 

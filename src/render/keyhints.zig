@@ -60,6 +60,5 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor) !void {
         hint_text,
         .{ .standard = .yellow },
         .{ .standard = .blue },
-        .{ .italic = true },
-    );
+        .{ .italic = true }, null);
 }

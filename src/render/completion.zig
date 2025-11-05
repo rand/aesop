@@ -82,8 +82,7 @@ pub fn render(rend: *renderer.Renderer, _: *Editor, completion_list: *const Comp
             icon,
             if (is_selected) .{ .standard = .black } else .{ .standard = .cyan },
             if (is_selected) .{ .standard = .cyan } else .{ .standard = .black },
-            .{ .bold = true },
-        );
+            .{ .bold = true }, null);
 
         // Draw label
         const max_label_len = popup_width -| 5; // Reserve space for icon and padding
@@ -98,8 +97,7 @@ pub fn render(rend: *renderer.Renderer, _: *Editor, completion_list: *const Comp
             label,
             if (is_selected) .{ .standard = .black } else .{ .standard = .white },
             if (is_selected) .{ .standard = .cyan } else .{ .standard = .black },
-            .{},
-        );
+            .{}, null);
 
         // Draw type hint if available and space permits
         if (item.detail) |detail| {
@@ -117,8 +115,7 @@ pub fn render(rend: *renderer.Renderer, _: *Editor, completion_list: *const Comp
                     detail_text,
                     if (is_selected) .{ .standard = .black } else .{ .standard = .bright_black },
                     if (is_selected) .{ .standard = .cyan } else .{ .standard = .black },
-                    .{},
-                );
+                    .{}, null);
             }
         }
     }
@@ -140,8 +137,7 @@ pub fn render(rend: *renderer.Renderer, _: *Editor, completion_list: *const Comp
             scroll_text,
             .{ .standard = .bright_black },
             .{ .standard = .black },
-            .{},
-        );
+            .{}, null);
     }
 }
 

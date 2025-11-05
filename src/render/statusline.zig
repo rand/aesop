@@ -42,8 +42,7 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor) !void {
         mode_text,
         mode_fg,
         mode_bg,
-        .{ .bold = true },
-    );
+        .{ .bold = true }, null);
 
     col = @intCast(mode_text.len + 2);
 
@@ -75,8 +74,7 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor) !void {
         buffer_info,
         theme.ui.statusline_fg,
         theme.ui.statusline_bg,
-        .{},
-    );
+        .{}, null);
 
     // Right section: Cursor position, percentage, and line count
     const pos_text = std.fmt.bufPrint(
@@ -92,8 +90,7 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor) !void {
         pos_text,
         theme.ui.statusline_fg,
         theme.ui.statusline_bg,
-        .{},
-    );
+        .{}, null);
 
     // Diagnostic counts (before position)
     const counts = editor.diagnostic_manager.getCountsBySeverity();
@@ -115,8 +112,7 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor) !void {
             " ",
             theme.ui.statusline_fg,
             theme.ui.statusline_bg,
-            .{},
-        );
+            .{}, null);
         rend.writeText(
             status_row,
             diag_col + 1,
@@ -128,8 +124,7 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor) !void {
             else
                 theme.ui.diagnostic_info,
             theme.ui.statusline_bg,
-            if (counts.errors > 0) .{ .bold = true } else .{},
-        );
+            if (counts.errors > 0) .{ .bold = true } else .{}, null);
         next_col = diag_col;
     }
 
@@ -152,8 +147,7 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor) !void {
             undo_text,
             theme.palette.accent_cyan,
             theme.ui.statusline_bg,
-            .{},
-        );
+            .{}, null);
     }
 
     // Selection count if multiple
@@ -171,8 +165,7 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor) !void {
             sel_text,
             theme.palette.foreground,
             theme.palette.accent_purple,
-            .{ .bold = true },
-        );
+            .{ .bold = true }, null);
     }
 }
 

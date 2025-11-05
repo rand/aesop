@@ -53,8 +53,7 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, allocator: std.mem.Allo
         title,
         .{ .standard = .cyan },
         .{ .standard = .black },
-        .{ .bold = true },
-    );
+        .{ .bold = true }, null);
 
     // Draw query line
     var query_buf: [64]u8 = undefined;
@@ -70,8 +69,7 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, allocator: std.mem.Allo
         query_text,
         .{ .standard = .yellow },
         .{ .standard = .black },
-        .{},
-    );
+        .{}, null);
 
     // Draw separator
     var sep_col: u16 = 1;
@@ -125,8 +123,7 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, allocator: std.mem.Allo
             item_text[0..@min(item_text.len, palette_width - 2)],
             fg,
             bg,
-            if (is_selected) .{ .bold = true } else .{},
-        );
+            if (is_selected) .{ .bold = true } else .{}, null);
     }
 
     // Show count
@@ -145,8 +142,7 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, allocator: std.mem.Allo
             count_text,
             .{ .standard = .cyan },
             .{ .standard = .black },
-            .{},
-        );
+            .{}, null);
     }
 }
 

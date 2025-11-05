@@ -73,17 +73,17 @@ fn drawWelcome(renderer: *Renderer, width: u16, height: u16) !void {
     // Center title
     const title_row = height / 2 - 5;
     const title_col = (width - title.len) / 2;
-    renderer.writeText(@intCast(title_row), @intCast(title_col), title, title_fg, .default, .{ .bold = true });
+    renderer.writeText(@intCast(title_row), @intCast(title_col), title, title_fg, .default, .{ .bold = true }, null);
 
     // Center subtitle
     const subtitle_row = title_row + 2;
     const subtitle_col = (width - subtitle.len) / 2;
-    renderer.writeText(@intCast(subtitle_row), @intCast(subtitle_col), subtitle, subtitle_fg, .default, .{});
+    renderer.writeText(@intCast(subtitle_row), @intCast(subtitle_col), subtitle, subtitle_fg, .default, .{}, null);
 
     // Center version
     const version_row = subtitle_row + 1;
     const version_col = (width - version.len) / 2;
-    renderer.writeText(@intCast(version_row), @intCast(version_col), version, info_fg, .default, .{});
+    renderer.writeText(@intCast(version_row), @intCast(version_col), version, info_fg, .default, .{}, null);
 
     // Feature list
     const features = [_][]const u8{
@@ -100,7 +100,7 @@ fn drawWelcome(renderer: *Renderer, width: u16, height: u16) !void {
         const row = feature_start_row + i;
         const col = (width - feature.len) / 2;
         const fg = Color{ .standard = .bright_green };
-        renderer.writeText(@intCast(row), @intCast(col), feature, fg, .default, .{});
+        renderer.writeText(@intCast(row), @intCast(col), feature, fg, .default, .{}, null);
     }
 
     // Instructions
@@ -113,12 +113,12 @@ fn drawWelcome(renderer: *Renderer, width: u16, height: u16) !void {
     for (instructions, 0..) |instr, i| {
         const row = instr_row + i;
         const col = (width - instr.len) / 2;
-        renderer.writeText(@intCast(row), @intCast(col), instr, info_fg, .default, .{ .dim = true });
+        renderer.writeText(@intCast(row), @intCast(col), instr, info_fg, .default, .{ .dim = true }, null);
     }
 
     // Footer
     const footer = "🤖 Built with Zig 0.15.1 | Powered by zio v0.4.0";
     const footer_row = height - 2;
     const footer_col = (width - footer.len) / 2;
-    renderer.writeText(@intCast(footer_row), @intCast(footer_col), footer, info_fg, .default, .{ .dim = true });
+    renderer.writeText(@intCast(footer_row), @intCast(footer_col), footer, info_fg, .default, .{ .dim = true }, null);
 }

@@ -54,8 +54,7 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor) !bool {
         message_text[0..display_len],
         getLevelFgColor(current_msg.level, theme),
         getLevelBgColor(current_msg.level, theme),
-        .{ .bold = true },
-    );
+        .{ .bold = true }, null);
 
     return true; // Message was displayed
 }
