@@ -124,6 +124,8 @@ pub fn build(b: *std.Build) void {
         if (home_dir.len > 0) {
             const lib_path = b.fmt("{s}/lib", .{home_dir});
             exe.addLibraryPath(.{ .cwd_relative = lib_path });
+            // Add rpath so libraries can be found at runtime without DYLD_LIBRARY_PATH
+            exe.addRPath(.{ .cwd_relative = lib_path });
         }
 
         // Link language grammar libraries
@@ -187,6 +189,7 @@ pub fn build(b: *std.Build) void {
         if (home_dir.len > 0) {
             const lib_path = b.fmt("{s}/lib", .{home_dir});
             mod_tests.addLibraryPath(.{ .cwd_relative = lib_path });
+            mod_tests.addRPath(.{ .cwd_relative = lib_path });
         }
         mod_tests.linkSystemLibrary("tree-sitter-zig");
         mod_tests.linkSystemLibrary("tree-sitter-rust");
@@ -216,6 +219,7 @@ pub fn build(b: *std.Build) void {
         if (home_dir.len > 0) {
             const lib_path = b.fmt("{s}/lib", .{home_dir});
             exe_tests.addLibraryPath(.{ .cwd_relative = lib_path });
+            exe_tests.addRPath(.{ .cwd_relative = lib_path });
         }
         exe_tests.linkSystemLibrary("tree-sitter-zig");
         exe_tests.linkSystemLibrary("tree-sitter-rust");
@@ -253,6 +257,7 @@ pub fn build(b: *std.Build) void {
         if (home_dir.len > 0) {
             const lib_path = b.fmt("{s}/lib", .{home_dir});
             integration_tests.addLibraryPath(.{ .cwd_relative = lib_path });
+            integration_tests.addRPath(.{ .cwd_relative = lib_path });
         }
         integration_tests.linkSystemLibrary("tree-sitter-zig");
         integration_tests.linkSystemLibrary("tree-sitter-rust");
@@ -302,6 +307,7 @@ pub fn build(b: *std.Build) void {
         if (home_dir.len > 0) {
             const lib_path = b.fmt("{s}/lib", .{home_dir});
             input_integration_tests.addLibraryPath(.{ .cwd_relative = lib_path });
+            input_integration_tests.addRPath(.{ .cwd_relative = lib_path });
         }
         input_integration_tests.linkSystemLibrary("tree-sitter-zig");
         input_integration_tests.linkSystemLibrary("tree-sitter-rust");
