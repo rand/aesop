@@ -59,13 +59,7 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, allocator: std.mem.Allo
     // Draw title
     const title = " Open Buffers ";
     const title_col = start_col + (switcher_width -| @as(u16, @intCast(title.len))) / 2;
-    rend.writeText(
-        start_row,
-        title_col,
-        title,
-        .{ .standard = .blue },
-        .{ .standard = .black },
-        .{ .bold = true }, null);
+    rend.writeText(start_row, title_col, title, .{ .standard = .blue }, .{ .standard = .black }, .{ .bold = true }, null);
 
     // Draw buffer list
     const max_items: u16 = switcher_height -| 2; // Subtract border and title
@@ -105,13 +99,7 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, allocator: std.mem.Allo
         const fg = if (is_selected) Color{ .standard = .black } else Color{ .standard = .white };
         const bg = if (is_selected) Color{ .standard = .blue } else Color{ .standard = .black };
 
-        rend.writeText(
-            item_row,
-            start_col + 1,
-            item_text[0..@min(item_text.len, switcher_width - 2)],
-            fg,
-            bg,
-            if (is_selected) .{ .bold = true } else .{}, null);
+        rend.writeText(item_row, start_col + 1, item_text[0..@min(item_text.len, switcher_width - 2)], fg, bg, if (is_selected) .{ .bold = true } else .{}, null);
     }
 
     // Show count
@@ -124,13 +112,7 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, allocator: std.mem.Allo
         ) catch "";
 
         const count_col = start_col + switcher_width -| @as(u16, @intCast(count_text.len)) - 1;
-        rend.writeText(
-            start_row + switcher_height - 1,
-            count_col,
-            count_text,
-            .{ .standard = .blue },
-            .{ .standard = .black },
-            .{}, null);
+        rend.writeText(start_row + switcher_height - 1, count_col, count_text, .{ .standard = .blue }, .{ .standard = .black }, .{}, null);
     }
 }
 

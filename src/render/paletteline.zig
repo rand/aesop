@@ -47,13 +47,7 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, allocator: std.mem.Allo
     // Draw title
     const title = " Command Palette ";
     const title_col = start_col + (palette_width -| @as(u16, @intCast(title.len))) / 2;
-    rend.writeText(
-        start_row,
-        title_col,
-        title,
-        .{ .standard = .cyan },
-        .{ .standard = .black },
-        .{ .bold = true }, null);
+    rend.writeText(start_row, title_col, title, .{ .standard = .cyan }, .{ .standard = .black }, .{ .bold = true }, null);
 
     // Draw query line
     var query_buf: [64]u8 = undefined;
@@ -63,13 +57,7 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, allocator: std.mem.Allo
         .{editor.palette.getQuery()},
     ) catch " > ";
 
-    rend.writeText(
-        start_row + 1,
-        start_col + 1,
-        query_text,
-        .{ .standard = .yellow },
-        .{ .standard = .black },
-        .{}, null);
+    rend.writeText(start_row + 1, start_col + 1, query_text, .{ .standard = .yellow }, .{ .standard = .black }, .{}, null);
 
     // Draw separator
     var sep_col: u16 = 1;
@@ -117,13 +105,7 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, allocator: std.mem.Allo
         const fg = if (is_selected) Color{ .standard = .black } else Color{ .standard = .white };
         const bg = if (is_selected) Color{ .standard = .cyan } else Color{ .standard = .black };
 
-        rend.writeText(
-            item_row,
-            start_col + 1,
-            item_text[0..@min(item_text.len, palette_width - 2)],
-            fg,
-            bg,
-            if (is_selected) .{ .bold = true } else .{}, null);
+        rend.writeText(item_row, start_col + 1, item_text[0..@min(item_text.len, palette_width - 2)], fg, bg, if (is_selected) .{ .bold = true } else .{}, null);
     }
 
     // Show count
@@ -136,13 +118,7 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, allocator: std.mem.Allo
         ) catch "";
 
         const count_col = start_col + palette_width -| @as(u16, @intCast(count_text.len)) - 1;
-        rend.writeText(
-            start_row + palette_height - 1,
-            count_col,
-            count_text,
-            .{ .standard = .cyan },
-            .{ .standard = .black },
-            .{}, null);
+        rend.writeText(start_row + palette_height - 1, count_col, count_text, .{ .standard = .cyan }, .{ .standard = .black }, .{}, null);
     }
 }
 

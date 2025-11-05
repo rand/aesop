@@ -36,13 +36,7 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor) !void {
     const mode_fg = getModeFgColor(info.mode, theme);
     const mode_text = info.mode.name();
 
-    rend.writeText(
-        status_row,
-        1,
-        mode_text,
-        mode_fg,
-        mode_bg,
-        .{ .bold = true }, null);
+    rend.writeText(status_row, 1, mode_text, mode_fg, mode_bg, .{ .bold = true }, null);
 
     col = @intCast(mode_text.len + 2);
 
@@ -68,13 +62,7 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor) !void {
         },
     ) catch "";
 
-    rend.writeText(
-        status_row,
-        col,
-        buffer_info,
-        theme.ui.statusline_fg,
-        theme.ui.statusline_bg,
-        .{}, null);
+    rend.writeText(status_row, col, buffer_info, theme.ui.statusline_fg, theme.ui.statusline_bg, .{}, null);
 
     // Right section: Cursor position, percentage, and line count
     const pos_text = std.fmt.bufPrint(
@@ -84,13 +72,7 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor) !void {
     ) catch "";
 
     const pos_col = size.width -| @as(u16, @intCast(pos_text.len));
-    rend.writeText(
-        status_row,
-        pos_col,
-        pos_text,
-        theme.ui.statusline_fg,
-        theme.ui.statusline_bg,
-        .{}, null);
+    rend.writeText(status_row, pos_col, pos_text, theme.ui.statusline_fg, theme.ui.statusline_bg, .{}, null);
 
     // Diagnostic counts (before position)
     const counts = editor.diagnostic_manager.getCountsBySeverity();
@@ -106,25 +88,13 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor) !void {
     var next_col = pos_col;
     if (diag_text.len > 0) {
         const diag_col = pos_col -| @as(u16, @intCast(diag_text.len + 2));
-        rend.writeText(
-            status_row,
-            diag_col,
-            " ",
-            theme.ui.statusline_fg,
-            theme.ui.statusline_bg,
-            .{}, null);
-        rend.writeText(
-            status_row,
-            diag_col + 1,
-            diag_text,
-            if (counts.errors > 0)
-                theme.ui.diagnostic_error
-            else if (counts.warnings > 0)
-                theme.ui.diagnostic_warning
-            else
-                theme.ui.diagnostic_info,
-            theme.ui.statusline_bg,
-            if (counts.errors > 0) .{ .bold = true } else .{}, null);
+        rend.writeText(status_row, diag_col, " ", theme.ui.statusline_fg, theme.ui.statusline_bg, .{}, null);
+        rend.writeText(status_row, diag_col + 1, diag_text, if (counts.errors > 0)
+            theme.ui.diagnostic_error
+        else if (counts.warnings > 0)
+            theme.ui.diagnostic_warning
+        else
+            theme.ui.diagnostic_info, theme.ui.statusline_bg, if (counts.errors > 0) .{ .bold = true } else .{}, null);
         next_col = diag_col;
     }
 
@@ -141,13 +111,7 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor) !void {
 
     if (undo_text.len > 0) {
         const undo_col = next_col -| @as(u16, @intCast(undo_text.len + 1));
-        rend.writeText(
-            status_row,
-            undo_col,
-            undo_text,
-            theme.palette.accent_cyan,
-            theme.ui.statusline_bg,
-            .{}, null);
+        rend.writeText(status_row, undo_col, undo_text, theme.palette.accent_cyan, theme.ui.statusline_bg, .{}, null);
     }
 
     // Selection count if multiple
@@ -159,13 +123,7 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor) !void {
         ) catch "";
 
         const sel_col = pos_col -| @as(u16, @intCast(sel_text.len));
-        rend.writeText(
-            status_row,
-            sel_col,
-            sel_text,
-            theme.palette.foreground,
-            theme.palette.accent_purple,
-            .{ .bold = true }, null);
+        rend.writeText(status_row, sel_col, sel_text, theme.palette.foreground, theme.palette.accent_purple, .{ .bold = true }, null);
     }
 }
 

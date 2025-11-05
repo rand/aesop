@@ -47,13 +47,7 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, allocator: std.mem.Allo
     // Draw title
     const title = " Find Files ";
     const title_col = start_col + (finder_width -| @as(u16, @intCast(title.len))) / 2;
-    rend.writeText(
-        start_row,
-        title_col,
-        title,
-        .{ .standard = .green },
-        .{ .standard = .black },
-        .{ .bold = true }, null);
+    rend.writeText(start_row, title_col, title, .{ .standard = .green }, .{ .standard = .black }, .{ .bold = true }, null);
 
     // Draw query line
     var query_buf: [128]u8 = undefined;
@@ -63,13 +57,7 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, allocator: std.mem.Allo
         .{editor.file_finder.getQuery()},
     ) catch " > ";
 
-    rend.writeText(
-        start_row + 1,
-        start_col + 1,
-        query_text,
-        .{ .standard = .yellow },
-        .{ .standard = .black },
-        .{}, null);
+    rend.writeText(start_row + 1, start_col + 1, query_text, .{ .standard = .yellow }, .{ .standard = .black }, .{}, null);
 
     // Draw separator
     var sep_col: u16 = 1;
@@ -118,13 +106,7 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, allocator: std.mem.Allo
         const fg = if (is_selected) Color{ .standard = .black } else Color{ .standard = .white };
         const bg = if (is_selected) Color{ .standard = .green } else Color{ .standard = .black };
 
-        rend.writeText(
-            item_row,
-            start_col + 1,
-            item_text[0..@min(item_text.len, finder_width - 2)],
-            fg,
-            bg,
-            if (is_selected) .{ .bold = true } else .{}, null);
+        rend.writeText(item_row, start_col + 1, item_text[0..@min(item_text.len, finder_width - 2)], fg, bg, if (is_selected) .{ .bold = true } else .{}, null);
     }
 
     // Show count
@@ -137,24 +119,12 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, allocator: std.mem.Allo
         ) catch "";
 
         const count_col = start_col + finder_width -| @as(u16, @intCast(count_text.len)) - 1;
-        rend.writeText(
-            start_row + finder_height - 1,
-            count_col,
-            count_text,
-            .{ .standard = .green },
-            .{ .standard = .black },
-            .{}, null);
+        rend.writeText(start_row + finder_height - 1, count_col, count_text, .{ .standard = .green }, .{ .standard = .black }, .{}, null);
     } else if (editor.file_finder.getQuery().len > 0) {
         // Show "no matches" message
         const no_match = " No matches ";
         const no_match_col = start_col + (finder_width -| @as(u16, @intCast(no_match.len))) / 2;
-        rend.writeText(
-            start_row + 3,
-            no_match_col,
-            no_match,
-            .{ .standard = .bright_black },
-            .{ .standard = .black },
-            .{}, null);
+        rend.writeText(start_row + 3, no_match_col, no_match, .{ .standard = .bright_black }, .{ .standard = .black }, .{}, null);
     }
 }
 

@@ -48,13 +48,7 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor) !bool {
     // Truncate if too long
     const display_len = @min(message_text.len, size.width);
 
-    rend.writeText(
-        message_row,
-        0,
-        message_text[0..display_len],
-        getLevelFgColor(current_msg.level, theme),
-        getLevelBgColor(current_msg.level, theme),
-        .{ .bold = true }, null);
+    rend.writeText(message_row, 0, message_text[0..display_len], getLevelFgColor(current_msg.level, theme), getLevelBgColor(current_msg.level, theme), .{ .bold = true }, null);
 
     return true; // Message was displayed
 }

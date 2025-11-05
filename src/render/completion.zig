@@ -76,13 +76,7 @@ pub fn render(rend: *renderer.Renderer, _: *Editor, completion_list: *const Comp
 
         // Draw icon based on completion kind
         const icon = item.kind.icon();
-        rend.writeText(
-            item_row,
-            start_col + 1,
-            icon,
-            if (is_selected) .{ .standard = .black } else .{ .standard = .cyan },
-            if (is_selected) .{ .standard = .cyan } else .{ .standard = .black },
-            .{ .bold = true }, null);
+        rend.writeText(item_row, start_col + 1, icon, if (is_selected) .{ .standard = .black } else .{ .standard = .cyan }, if (is_selected) .{ .standard = .cyan } else .{ .standard = .black }, .{ .bold = true }, null);
 
         // Draw label
         const max_label_len = popup_width -| 5; // Reserve space for icon and padding
@@ -91,13 +85,7 @@ pub fn render(rend: *renderer.Renderer, _: *Editor, completion_list: *const Comp
         else
             item.label;
 
-        rend.writeText(
-            item_row,
-            start_col + 3,
-            label,
-            if (is_selected) .{ .standard = .black } else .{ .standard = .white },
-            if (is_selected) .{ .standard = .cyan } else .{ .standard = .black },
-            .{}, null);
+        rend.writeText(item_row, start_col + 3, label, if (is_selected) .{ .standard = .black } else .{ .standard = .white }, if (is_selected) .{ .standard = .cyan } else .{ .standard = .black }, .{}, null);
 
         // Draw type hint if available and space permits
         if (item.detail) |detail| {
@@ -109,13 +97,7 @@ pub fn render(rend: *renderer.Renderer, _: *Editor, completion_list: *const Comp
                 else
                     detail;
 
-                rend.writeText(
-                    item_row,
-                    type_col,
-                    detail_text,
-                    if (is_selected) .{ .standard = .black } else .{ .standard = .bright_black },
-                    if (is_selected) .{ .standard = .cyan } else .{ .standard = .black },
-                    .{}, null);
+                rend.writeText(item_row, type_col, detail_text, if (is_selected) .{ .standard = .black } else .{ .standard = .bright_black }, if (is_selected) .{ .standard = .cyan } else .{ .standard = .black }, .{}, null);
             }
         }
     }
@@ -131,13 +113,7 @@ pub fn render(rend: *renderer.Renderer, _: *Editor, completion_list: *const Comp
         ) catch " ... ";
 
         const scroll_col = start_col + popup_width - @as(u16, @intCast(scroll_text.len)) - 1;
-        rend.writeText(
-            scroll_row,
-            scroll_col,
-            scroll_text,
-            .{ .standard = .bright_black },
-            .{ .standard = .black },
-            .{}, null);
+        rend.writeText(scroll_row, scroll_col, scroll_text, .{ .standard = .bright_black }, .{ .standard = .black }, .{}, null);
     }
 }
 

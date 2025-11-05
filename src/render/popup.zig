@@ -121,31 +121,13 @@ fn renderBorder(
     // Title or horizontal line
     if (config.title) |title| {
         const title_text = if (title.len + 4 > width) title[0..width -| 4] else title;
-        rend.writeText(
-            position.row,
-            col,
-            " ",
-            .{ .standard = .white },
-            .{ .standard = .black },
-            .{}, null);
+        rend.writeText(position.row, col, " ", .{ .standard = .white }, .{ .standard = .black }, .{}, null);
         col += 1;
 
-        rend.writeText(
-            position.row,
-            col,
-            title_text,
-            .{ .standard = .bright_white },
-            .{ .standard = .black },
-            .{ .bold = true }, null);
+        rend.writeText(position.row, col, title_text, .{ .standard = .bright_white }, .{ .standard = .black }, .{ .bold = true }, null);
         col += @intCast(title_text.len);
 
-        rend.writeText(
-            position.row,
-            col,
-            " ",
-            .{ .standard = .white },
-            .{ .standard = .black },
-            .{}, null);
+        rend.writeText(position.row, col, " ", .{ .standard = .white }, .{ .standard = .black }, .{}, null);
         col += 1;
     }
 
@@ -241,13 +223,7 @@ fn renderContent(
             // Render current line
             if (line_start < i) {
                 const line = content[line_start..i];
-                rend.writeText(
-                    row,
-                    start_col,
-                    line[0..@min(line.len, width)],
-                    .{ .standard = .bright_white },
-                    .{ .standard = .black },
-                    .{}, null);
+                rend.writeText(row, start_col, line[0..@min(line.len, width)], .{ .standard = .bright_white }, .{ .standard = .black }, .{}, null);
             }
 
             row += 1;
@@ -272,13 +248,7 @@ fn renderContent(
 
             // Render line up to wrap point
             const line = content[line_start..wrap_point];
-            rend.writeText(
-                row,
-                start_col,
-                line,
-                .{ .standard = .bright_white },
-                .{ .standard = .black },
-                .{}, null);
+            rend.writeText(row, start_col, line, .{ .standard = .bright_white }, .{ .standard = .black }, .{}, null);
 
             row += 1;
             col = start_col;
@@ -293,13 +263,7 @@ fn renderContent(
     // Render final line
     if (line_start < content.len and row < start_row + height) {
         const line = content[line_start..];
-        rend.writeText(
-            row,
-            start_col,
-            line[0..@min(line.len, width)],
-            .{ .standard = .bright_white },
-            .{ .standard = .black },
-            .{}, null);
+        rend.writeText(row, start_col, line[0..@min(line.len, width)], .{ .standard = .bright_white }, .{ .standard = .black }, .{}, null);
     }
 }
 

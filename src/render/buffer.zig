@@ -182,13 +182,8 @@ pub const OutputBuffer = struct {
             0;
 
         // Write line number with dimmed color
-        self.writeText(
-            row,
-            padding,
-            num_str,
-            Color.bright_black, // Gray for line numbers
-            Color.default,
-            Attrs{}, null);
+        self.writeText(row, padding, num_str, Color.bright_black, // Gray for line numbers
+            Color.default, Attrs{}, null);
 
         // Add separator after gutter
         if (gutter_width > 0 and gutter_width - 1 < self.width) {

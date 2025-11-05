@@ -239,44 +239,20 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor, is_empty_buffer: 
     var current_col = start_col;
     for (hints, 0..) |hint, i| {
         // Render key (bold, colored)
-        rend.writeText(
-            context_row,
-            current_col,
-            hint.key,
-            hint.color,
-            bg_color,
-            .{ .bold = true }, null);
+        rend.writeText(context_row, current_col, hint.key, hint.color, bg_color, .{ .bold = true }, null);
         current_col += @intCast(hint.key.len);
 
         // Render colon
-        rend.writeText(
-            context_row,
-            current_col,
-            ":",
-            theme.ui.contextbar_fg,
-            bg_color,
-            .{}, null);
+        rend.writeText(context_row, current_col, ":", theme.ui.contextbar_fg, bg_color, .{}, null);
         current_col += 1;
 
         // Render action
-        rend.writeText(
-            context_row,
-            current_col,
-            hint.action,
-            theme.ui.contextbar_fg,
-            bg_color,
-            .{}, null);
+        rend.writeText(context_row, current_col, hint.action, theme.ui.contextbar_fg, bg_color, .{}, null);
         current_col += @intCast(hint.action.len);
 
         // Render separator (except for last)
         if (i < hints.len - 1) {
-            rend.writeText(
-                context_row,
-                current_col,
-                " | ",
-                theme.ui.contextbar_separator,
-                bg_color,
-                .{}, null);
+            rend.writeText(context_row, current_col, " | ", theme.ui.contextbar_separator, bg_color, .{}, null);
             current_col += 3;
         }
     }
@@ -284,12 +260,6 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor, is_empty_buffer: 
     // Special case: empty buffer - add welcome message on left
     if (context == .empty_buffer_normal) {
         const welcome = "Welcome to Aesop!";
-        rend.writeText(
-            context_row,
-            2,
-            welcome,
-            theme.ui.contextbar_welcome,
-            bg_color,
-            .{ .bold = true }, null);
+        rend.writeText(context_row, 2, welcome, theme.ui.contextbar_welcome, bg_color, .{ .bold = true }, null);
     }
 }

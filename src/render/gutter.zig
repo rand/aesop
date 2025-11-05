@@ -79,13 +79,7 @@ pub fn renderWithDiagnostics(
         else
             theme.ui.gutter_line_number;
 
-        rend.writeText(
-            row,
-            col_offset,
-            text,
-            fg_color,
-            .default,
-            if (line == cursor_line) .{ .bold = true } else .{}, null);
+        rend.writeText(row, col_offset, text, fg_color, .default, if (line == cursor_line) .{ .bold = true } else .{}, null);
 
         // Render diagnostic icon if present
         if (config.show_diagnostics) {

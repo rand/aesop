@@ -54,11 +54,5 @@ pub fn render(rend: *renderer.Renderer, editor: *const Editor) !void {
     const hint_col = size.width -| @as(u16, @intCast(hint_text.len));
 
     // Render hints
-    rend.writeText(
-        status_row,
-        hint_col,
-        hint_text,
-        .{ .standard = .yellow },
-        .{ .standard = .blue },
-        .{ .italic = true }, null);
+    rend.writeText(status_row, hint_col, hint_text, .{ .standard = .yellow }, .{ .standard = .blue }, .{ .italic = true }, null);
 }

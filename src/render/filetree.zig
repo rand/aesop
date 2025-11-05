@@ -39,14 +39,7 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, visible_height: usize, 
     const title = " File Explorer ";
     if (title.len < tree_width) {
         const title_col = (tree_width - @as(u16, @intCast(title.len))) / 2;
-        rend.writeText(
-            0,
-            title_col,
-            title,
-            theme.ui.tree_title,
-            theme.ui.tree_bg,
-            .{ .bold = true },
-            null);
+        rend.writeText(0, title_col, title, theme.ui.tree_title, theme.ui.tree_bg, .{ .bold = true }, null);
     }
 
     // Draw separator below title (Nerd Font box-drawing character)
@@ -110,7 +103,7 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, visible_height: usize, 
 
         // Render node
         renderNode(rend, node, node_row, tree_width, is_selected, theme) catch |err| {
-            std.log.warn("Failed to render node '{}': {}", .{std.zig.fmtEscapes(node.name), err});
+            std.log.warn("Failed to render node '{}': {}", .{ std.zig.fmtEscapes(node.name), err });
             continue;
         };
     }
@@ -220,14 +213,7 @@ fn renderNode(
 
     const name = truncateWithEllipsis(node.name, max_name_len, node.is_dir);
 
-    rend.writeText(
-        row,
-        col,
-        name,
-        if (node.is_dir) theme.ui.tree_dir_fg else theme.ui.tree_file_fg,
-        bg,
-        if (is_selected) .{ .bold = true } else .{},
-        null);
+    rend.writeText(row, col, name, if (node.is_dir) theme.ui.tree_dir_fg else theme.ui.tree_file_fg, bg, if (is_selected) .{ .bold = true } else .{}, null);
 }
 
 /// Icon style configuration
