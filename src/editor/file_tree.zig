@@ -138,7 +138,10 @@ pub const FileTree = struct {
         defer entries.deinit(self.allocator);
 
         var iter = dir.iterate();
-        while (try iter.next()) |entry| {
+        while (iter.next() catch null) |entry| {
+            // Skip entries with empty names (safety check)
+            if (entry.name.len == 0) continue;
+
             // Skip hidden files/dirs
             if (entry.name[0] == '.') continue;
 
@@ -170,7 +173,13 @@ pub const FileTree = struct {
 
         // Create child nodes
         for (entries.items) |entry| {
-            const child_path = try std.fs.path.join(self.allocator, &[_][]const u8{ node.path, entry.name });
+            // Build proper relative path
+            // If parent is ".", child is just the name
+            // Otherwise join parent path with child name
+            const child_path = if (std.mem.eql(u8, node.path, "."))
+                try self.allocator.dupe(u8, entry.name)
+            else
+                try std.fs.path.join(self.allocator, &[_][]const u8{ node.path, entry.name });
             defer self.allocator.free(child_path);
 
             const is_dir = entry.kind == .directory;
@@ -232,7 +241,12 @@ pub const FileTree = struct {
         } else {
             // Expand - load children if not loaded
             if (node.children.items.len == 0) {
-                try self.loadNodeChildren(node);
+                // Load children with error handling
+                self.loadNodeChildren(node) catch |err| {
+                    // If loading fails, don't expand the node
+                    std.log.warn("Failed to load directory children: {}", .{err});
+                    return;
+                };
             }
             node.is_expanded = true;
         }
