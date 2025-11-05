@@ -671,13 +671,20 @@ pub const EditorApp = struct {
 
     /// Handle mouse events
     fn handleMouse(self: *EditorApp, mouse: anytype) !void {
+        // SGR mouse coordinates are 1-indexed, convert to 0-indexed
+        // Clamp to 0 to prevent underflow
+        const row = if (mouse.row > 0) mouse.row - 1 else 0;
+        const col = if (mouse.col > 0) mouse.col - 1 else 0;
+
+        std.debug.print("After conversion: row={}, col={}\n", .{ row, col });
+
         switch (mouse.kind) {
             .press_left => {
-                try self.handleMousePress(mouse.row, mouse.col);
+                try self.handleMousePress(row, col);
             },
             .move => {
                 // Treat move as drag if we have a drag start position
-                try self.handleMouseDrag(mouse.row, mouse.col);
+                try self.handleMouseDrag(row, col);
             },
             .release => {
                 self.handleMouseRelease();
