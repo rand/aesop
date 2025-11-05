@@ -174,6 +174,7 @@ pub const Parser = struct {
 
                 // Check for SGR mouse tracking (ESC[<...)
                 if (self.pos == 1 and byte == '<') {
+                    std.debug.print("DEBUG: Detected mouse SGR sequence start\n", .{});
                     self.state = .mouse;
                     self.pos = 0;
                     return null;
@@ -199,6 +200,7 @@ pub const Parser = struct {
                 // Check for sequence terminator (M=press, m=release)
                 if (byte == 'M' or byte == 'm') {
                     const seq = self.buf[0..self.pos];
+                    std.debug.print("DEBUG: Mouse sequence complete: {s}{c}\n", .{ seq, byte });
                     self.state = .normal;
                     return try self.parseMouseSgr(seq, byte == 'M');
                 }
