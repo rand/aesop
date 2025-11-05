@@ -79,10 +79,15 @@ pub const OutputBuffer = struct {
         const size = @as(usize, width) * @as(usize, height);
 
         const screen_buf = try allocator.alloc(Cell, size);
-        @memset(screen_buf, Cell{});
+        // Explicitly initialize each cell to avoid potential @memset issues
+        for (screen_buf) |*cell| {
+            cell.* = Cell{};
+        }
 
         const back_buf = try allocator.alloc(Cell, size);
-        @memset(back_buf, Cell{});
+        for (back_buf) |*cell| {
+            cell.* = Cell{};
+        }
 
         const dirty_lines = try allocator.alloc(bool, height);
         @memset(dirty_lines, true); // Initially all dirty
@@ -110,10 +115,14 @@ pub const OutputBuffer = struct {
 
         // Allocate new buffers
         const new_screen = try self.allocator.alloc(Cell, new_size);
-        @memset(new_screen, Cell{});
+        for (new_screen) |*cell| {
+            cell.* = Cell{};
+        }
 
         const new_back = try self.allocator.alloc(Cell, new_size);
-        @memset(new_back, Cell{});
+        for (new_back) |*cell| {
+            cell.* = Cell{};
+        }
 
         const new_dirty = try self.allocator.alloc(bool, new_height);
         @memset(new_dirty, true);
@@ -218,7 +227,9 @@ pub const OutputBuffer = struct {
 
     /// Clear the back buffer
     pub fn clear(self: *OutputBuffer) void {
-        @memset(self.back_buf, Cell{});
+        for (self.back_buf) |*cell| {
+            cell.* = Cell{};
+        }
         @memset(self.dirty_lines, true);
     }
 

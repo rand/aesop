@@ -58,13 +58,8 @@ pub const Renderer = struct {
         // Enter alternate screen
         try self.write(vt100.Screen.alternate_enter);
 
-        // CRITICAL: Force ASCII mode and prevent line-drawing glyphs
-        // Designate G0 as ASCII
-        try self.write("\x1b(B");
-        // Designate G1 as ASCII (prevents SO from switching to line drawing)
-        try self.write("\x1b)B");
-        // Activate G0 explicitly with SI (Shift In)
-        try self.write("\x0f");
+        // Set UTF-8 mode explicitly
+        try self.write("\x1b%G");
 
         // Clear screen and home cursor
         try self.write(vt100.Screen.clear_all);
@@ -81,11 +76,6 @@ pub const Renderer = struct {
     pub fn exitRawMode(self: *Renderer) !void {
         // Show cursor
         try self.write(vt100.Cursor.show);
-
-        // Reset to ASCII character set
-        try self.write("\x1b(B");
-        try self.write("\x1b)B");
-        try self.write("\x0f");
 
         // Exit alternate screen
         try self.write(vt100.Screen.alternate_exit);
@@ -122,13 +112,11 @@ pub const Renderer = struct {
         const goto = vt100.Cursor.goto(row + 1, 1);
         try self.write(&goto);
 
-        // Reset attributes and ensure ASCII mode at start of line
+        // Reset attributes at start of line
         self.current_fg = .default;
         self.current_bg = .default;
         self.current_attrs = .{};
         try self.write(vt100.Color.reset);
-        // Ensure we stay in ASCII mode (defensive programming)
-        try self.write("\x0f");
 
         // Render each cell in the line
         for (0..self.output.width) |col| {
@@ -153,7 +141,12 @@ pub const Renderer = struct {
 
             // Output character
             var utf8_buf: [4]u8 = undefined;
-            const len = std.unicode.utf8Encode(cell.char, &utf8_buf) catch continue;
+            const len = std.unicode.utf8Encode(cell.char, &utf8_buf) catch |err| {
+                // If encoding fails, write a space as fallback
+                std.debug.print("UTF-8 encode error for char {}: {}\n", .{ cell.char, err });
+                try self.write(" ");
+                continue;
+            };
             try self.write(utf8_buf[0..len]);
         }
     }
