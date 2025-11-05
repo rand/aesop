@@ -194,9 +194,7 @@ pub const EditorApp = struct {
         }
 
         // Create new parser for this language
-        std.debug.print("Creating parser for buffer '{s}', detected language: {s}\n", .{ buffer_name, language.getName() });
         self.syntax_parser = try TreeSitter.Parser.init(self.allocator, language);
-        std.debug.print("Parser created successfully\n", .{});
     }
 
     /// Run the editor
@@ -317,7 +315,6 @@ pub const EditorApp = struct {
             },
 
             .mouse => |m| {
-                std.debug.print("Mouse event received: kind={}, row={}, col={}\n", .{ m.kind, m.row, m.col });
                 try self.handleMouse(m);
             },
 
@@ -1155,19 +1152,14 @@ pub const EditorApp = struct {
             try self.ensureParser();
             if (self.syntax_parser) |*parser| {
                 // Parse text to create syntax tree
-                parser.parse(text) catch |err| {
-                    std.debug.print("Parse failed: {}\n", .{err});
+                parser.parse(text) catch {
                     // If parsing fails, fall back to no highlights
                     break :blk &[_]TreeSitter.HighlightToken{};
                 };
                 break :blk try parser.getHighlights(text, viewport.start_line, viewport.end_line);
             }
-            std.debug.print("No parser available\n", .{});
             break :blk &[_]TreeSitter.HighlightToken{};
-        } else blk: {
-            std.debug.print("Syntax highlighting disabled in config\n", .{});
-            break :blk &[_]TreeSitter.HighlightToken{};
-        };
+        } else &[_]TreeSitter.HighlightToken{};
         defer if (self.editor.config.syntax_highlighting and self.syntax_parser != null) self.allocator.free(syntax_highlights);
 
         // Simple line rendering (just display lines)

@@ -174,7 +174,6 @@ pub const Parser = struct {
 
                 // Check for SGR mouse tracking (ESC[<...)
                 if (self.pos == 1 and byte == '<') {
-                    std.debug.print("DEBUG: Detected mouse SGR sequence start\n", .{});
                     self.state = .mouse;
                     self.pos = 0;
                     return null;
