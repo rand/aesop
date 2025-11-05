@@ -21,7 +21,10 @@ pub const TreeNode = struct {
             .is_dir = is_dir,
             .is_expanded = false,
             .depth = depth,
-            .children = .{},
+            .children = .{
+                .items = &[_]*TreeNode{},
+                .capacity = 0,
+            },
             .allocator = allocator,
         };
         return node;
@@ -54,7 +57,10 @@ pub const FileTree = struct {
         return .{
             .visible = false,
             .root = null,
-            .flat_view = .{},
+            .flat_view = .{
+                .items = &[_]*TreeNode{},
+                .capacity = 0,
+            },
             .selected_index = 0,
             .scroll_offset = 0,
             .width = 30, // Default width
@@ -135,7 +141,10 @@ pub const FileTree = struct {
         defer dir.close();
 
         // Collect entries
-        var entries: std.ArrayList(std.fs.Dir.Entry) = .{};
+        var entries: std.ArrayList(std.fs.Dir.Entry) = .{
+            .items = &[_]std.fs.Dir.Entry{},
+            .capacity = 0,
+        };
         defer entries.deinit(self.allocator);
 
         var iter = dir.iterate();
