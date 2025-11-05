@@ -321,11 +321,10 @@ pub const Parser = struct {
             else => return null,
         };
 
-        // SGR mouse coordinates are 1-indexed, convert to 0-indexed
         return Event{ .mouse = .{
             .kind = kind,
-            .row = if (row > 0) row - 1 else 0,
-            .col = if (col > 0) col - 1 else 0,
+            .row = row,
+            .col = col,
             .mods = mods,
         } };
     }
