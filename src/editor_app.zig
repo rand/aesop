@@ -438,11 +438,15 @@ pub const EditorApp = struct {
                         if (node.is_dir) {
                             try self.editor.file_tree.toggleSelected();
                         } else {
+                            // Open the file
                             self.editor.openFile(node.path) catch |err| {
                                 const msg = try std.fmt.allocPrint(self.allocator, "Failed to open file: {s}", .{@errorName(err)});
                                 defer self.allocator.free(msg);
                                 self.editor.messages.add(msg, .error_msg) catch {};
+                                return true; // Stay in file tree on error
                             };
+                            // Successfully opened file - hide the file tree
+                            self.editor.file_tree.visible = false;
                         }
                         return true;
                     },
@@ -893,7 +897,7 @@ pub const EditorApp = struct {
         }
 
         // Render file tree (sidebar, not an overlay)
-        try filetree.render(&self.renderer, &self.editor, self.allocator);
+        try filetree.render(&self.renderer, &self.editor, size.height - reserved_lines, self.allocator);
 
         // Render cursor (if not in overlay mode or command mode)
         if (!self.editor.palette.visible and
