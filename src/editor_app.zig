@@ -15,6 +15,7 @@ const keyhints = @import("render/keyhints.zig");
 const contextbar = @import("render/contextbar.zig");
 const paletteline = @import("render/paletteline.zig");
 const filefinderline = @import("render/filefinderline.zig");
+const filetree = @import("render/filetree.zig");
 const completionline = @import("render/completion.zig");
 const bufferswitcher = @import("render/bufferswitcher.zig");
 const gutter = @import("render/gutter.zig");
@@ -215,6 +216,13 @@ pub const EditorApp = struct {
             return;
         }
 
+        // Handle file tree input (when visible, intercept navigation keys)
+        if (self.editor.file_tree.visible) {
+            const handled = try self.handleFileTreeInput(event);
+            if (handled) return;
+            // If not handled, fall through to normal input
+        }
+
         // Handle buffer switcher input separately
         if (self.editor.buffer_switcher_visible) {
             try self.handleBufferSwitcherInput(event);
@@ -407,6 +415,55 @@ pub const EditorApp = struct {
             defer self.allocator.free(msg);
             self.editor.messages.add(msg, .error_msg) catch {};
         };
+    }
+
+    /// Handle file tree input - returns true if handled
+    fn handleFileTreeInput(self: *EditorApp, event: input_mod.Event) !bool {
+        switch (event) {
+            .key => |k| {
+                switch (k.key) {
+                    .down, .up => {
+                        // Navigate tree
+                        if (k.key == .down) {
+                            self.editor.file_tree.selectNext();
+                        } else {
+                            self.editor.file_tree.selectPrevious();
+                        }
+                        return true;
+                    },
+                    .enter => {
+                        // Open file or toggle directory
+                        const node = self.editor.file_tree.getSelected() orelse return true;
+
+                        if (node.is_dir) {
+                            try self.editor.file_tree.toggleSelected();
+                        } else {
+                            self.editor.openFile(node.path) catch |err| {
+                                const msg = try std.fmt.allocPrint(self.allocator, "Failed to open file: {s}", .{@errorName(err)});
+                                defer self.allocator.free(msg);
+                                self.editor.messages.add(msg, .error_msg) catch {};
+                            };
+                        }
+                        return true;
+                    },
+                    else => {},
+                }
+            },
+            .char => |c| {
+                // Handle j/k for vim-style navigation
+                if (c.codepoint == 'j') {
+                    self.editor.file_tree.selectNext();
+                    return true;
+                } else if (c.codepoint == 'k') {
+                    self.editor.file_tree.selectPrevious();
+                    return true;
+                }
+            },
+            else => {},
+        }
+
+        // Not handled, allow normal processing
+        return false;
     }
 
     /// Handle buffer switcher input
@@ -827,6 +884,9 @@ pub const EditorApp = struct {
         if (needs_context_bar) {
             try contextbar.render(&self.renderer, &self.editor, self.isEmptyBuffer(), self.allocator);
         }
+
+        // Render file tree (sidebar, not an overlay)
+        try filetree.render(&self.renderer, &self.editor, self.allocator);
 
         // Render cursor (if not in overlay mode or command mode)
         if (!self.editor.palette.visible and

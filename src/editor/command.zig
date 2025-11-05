@@ -995,6 +995,36 @@ fn toggleFileFinder(ctx: *Context) Result {
     return Result.ok();
 }
 
+/// Toggle file tree
+fn toggleFileTree(ctx: *Context) Result {
+    if (ctx.editor.file_tree.visible) {
+        ctx.editor.file_tree.hide();
+    } else {
+        ctx.editor.file_tree.show() catch {
+            return Result.err("Failed to load directory");
+        };
+    }
+    return Result.ok();
+}
+
+/// Open selected file from tree
+fn fileTreeOpen(ctx: *Context) Result {
+    const node = ctx.editor.file_tree.getSelected() orelse return Result.ok();
+
+    if (node.is_dir) {
+        // Toggle directory expand/collapse
+        ctx.editor.file_tree.toggleSelected() catch {
+            return Result.err("Failed to toggle directory");
+        };
+    } else {
+        // Open file
+        ctx.editor.openFile(node.path) catch {
+            return Result.err("Failed to open file");
+        };
+    }
+    return Result.ok();
+}
+
 /// Toggle buffer switcher
 fn toggleBufferSwitcher(ctx: *Context) Result {
     if (ctx.editor.buffer_switcher_visible) {
@@ -4564,6 +4594,21 @@ pub fn registerBuiltins(registry: *Registry) !void {
         .description = "Toggle file finder (Space F)",
         .handler = toggleFileFinder,
         .category = .system,
+    });
+
+    // File tree
+    try registry.register(.{
+        .name = "toggle_file_tree",
+        .description = "Toggle file tree (Space E)",
+        .handler = toggleFileTree,
+        .category = .system,
+    });
+
+    try registry.register(.{
+        .name = "file_tree_open",
+        .description = "Open selected file/toggle directory",
+        .handler = fileTreeOpen,
+        .category = .file,
     });
 
     // Buffer switcher

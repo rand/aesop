@@ -23,6 +23,7 @@ const Window = @import("window.zig");
 const Theme = @import("theme.zig").Theme;
 const yonce_theme = @import("themes/yonce.zig").yonce_dark;
 const FileFinder = @import("file_finder.zig");
+const FileTree = @import("file_tree.zig");
 const AutoPair = @import("autopair.zig");
 const PluginSystem = @import("../plugin/system.zig");
 const Renderer = @import("../render/renderer.zig").Renderer;
@@ -94,6 +95,7 @@ pub const Editor = struct {
     window_manager: Window.WindowManager,
     plugin_manager: PluginSystem.PluginManager,
     file_finder: FileFinder.FileFinder,
+    file_tree: FileTree.FileTree,
     buffer_switcher_visible: bool,
     buffer_switcher_selected: usize,
     lsp_client: ?LspClient, // Optional LSP client (null if not initialized)
@@ -147,6 +149,7 @@ pub const Editor = struct {
             .window_manager = try Window.WindowManager.init(allocator, initial_dims),
             .plugin_manager = PluginSystem.PluginManager.init(allocator),
             .file_finder = FileFinder.FileFinder.init(allocator),
+            .file_tree = FileTree.FileTree.init(allocator),
             .buffer_switcher_visible = false,
             .buffer_switcher_selected = 0,
             .lsp_client = null, // LSP client initialized on-demand
@@ -176,6 +179,7 @@ pub const Editor = struct {
             client.deinit();
         }
         self.file_finder.deinit();
+        self.file_tree.deinit();
         self.plugin_manager.deinit();
         self.window_manager.deinit();
         self.config.deinit();

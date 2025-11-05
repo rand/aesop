@@ -31,6 +31,9 @@ pub const ColorPalette = struct {
     accent_teal: Color,
     accent_cyan: Color,
     accent_purple: Color,
+    accent_yellow: Color,
+    accent_orange: Color,
+    accent_blue: Color,
 
     // Semantic colors
     success: Color,
@@ -89,6 +92,17 @@ pub const UIColors = struct {
     diagnostic_warning: Color,
     diagnostic_info: Color,
     diagnostic_hint: Color,
+
+    // File tree
+    tree_bg: Color,
+    tree_fg: Color,
+    tree_border: Color,
+    tree_title: Color,
+    tree_selected_bg: Color,
+    tree_selected_fg: Color,
+    tree_dir_fg: Color,
+    tree_file_fg: Color,
+    tree_scrollbar: Color,
 };
 
 /// Syntax highlighting colors

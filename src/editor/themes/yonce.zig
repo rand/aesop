@@ -23,6 +23,9 @@ pub const yonce_dark = Theme{
         .accent_teal = Color{ .rgb = .{ .r = 0x00, .g = 0xA7, .b = 0xAA } }, // #00A7AA
         .accent_cyan = Color{ .rgb = .{ .r = 0x37, .g = 0xE5, .b = 0xE7 } }, // #37E5E7
         .accent_purple = Color{ .rgb = .{ .r = 0xA0, .g = 0x6F, .b = 0xCA } }, // #A06FCA
+        .accent_yellow = Color{ .rgb = .{ .r = 0xE5, .g = 0xC0, .b = 0x7B } }, // #E5C07B
+        .accent_orange = Color{ .rgb = .{ .r = 0xD1, .g = 0x9A, .b = 0x66 } }, // #D19A66
+        .accent_blue = Color{ .rgb = .{ .r = 0x61, .g = 0xAF, .b = 0xEF } }, // #61AFEF
 
         // Semantic colors
         .success = Color{ .rgb = .{ .r = 0x37, .g = 0xE5, .b = 0xE7 } }, // Cyan
@@ -82,6 +85,17 @@ pub const yonce_dark = Theme{
         .diagnostic_warning = Color{ .rgb = .{ .r = 0xFC, .g = 0x43, .b = 0x84 } }, // Pink
         .diagnostic_info = Color{ .rgb = .{ .r = 0x37, .g = 0xE5, .b = 0xE7 } }, // Cyan
         .diagnostic_hint = Color{ .rgb = .{ .r = 0x80, .g = 0x80, .b = 0x80 } }, // Gray
+
+        // File tree
+        .tree_bg = Color{ .rgb = .{ .r = 0x1A, .g = 0x1A, .b = 0x1A } }, // Darker than editor bg
+        .tree_fg = Color{ .rgb = .{ .r = 0xCC, .g = 0xCC, .b = 0xCC } }, // Light gray
+        .tree_border = Color{ .rgb = .{ .r = 0x40, .g = 0x40, .b = 0x40 } }, // Medium gray
+        .tree_title = Color{ .rgb = .{ .r = 0xD9, .g = 0x57, .b = 0xFF } }, // Purple
+        .tree_selected_bg = Color{ .rgb = .{ .r = 0x37, .g = 0xE5, .b = 0xE7 } }, // Cyan
+        .tree_selected_fg = Color{ .rgb = .{ .r = 0x00, .g = 0x00, .b = 0x00 } }, // Black
+        .tree_dir_fg = Color{ .rgb = .{ .r = 0xD9, .g = 0x57, .b = 0xFF } }, // Purple for dirs
+        .tree_file_fg = Color{ .rgb = .{ .r = 0xCC, .g = 0xCC, .b = 0xCC } }, // Light gray for files
+        .tree_scrollbar = Color{ .rgb = .{ .r = 0x60, .g = 0x60, .b = 0x60 } }, // Dim gray
     },
 
     .syntax = SyntaxColors{

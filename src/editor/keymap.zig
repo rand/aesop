@@ -297,6 +297,9 @@ pub fn setupDefaults(manager: *KeymapManager) !void {
     // File finder
     try normal_map.bind(Binding.fromChord(.{ .char = ' ' }, .{ .char = 'f' }, "toggle_file_finder"));
 
+    // File tree
+    try normal_map.bind(Binding.fromChord(.{ .char = ' ' }, .{ .char = 'e' }, "toggle_file_tree"));
+
     // Buffer switcher
     try normal_map.bind(Binding.fromChord(.{ .char = ' ' }, .{ .char = 'b' }, "toggle_buffer_switcher"));
 
