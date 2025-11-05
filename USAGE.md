@@ -65,7 +65,17 @@ Once running in a terminal:
 - `:w` - Save
 - `:wq` - Save and quit
 
+### File Tree
+- `Space e` - Toggle file tree sidebar
+- When file tree is visible:
+  - Arrow keys (`↑`/`↓`) or `j`/`k` - Navigate up/down
+  - `Enter` - Open file or toggle directory expand/collapse
+  - `Space e` - Close file tree
+
+The file tree displays the current working directory structure in a sidebar. Files are automatically opened in the editor when selected, and the tree closes to give you full editing space.
+
 ### Features
+- **File Tree Browser**: Navigate project structure with `Space e`
 - **Syntax Highlighting**: Zig, Rust, Go, Python, C
 - **LSP Integration**: Code completion, hover, go-to-definition
 - **Undo/Redo**: With branching support (vim-style undo tree)

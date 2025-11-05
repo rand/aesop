@@ -112,6 +112,42 @@ input was laggy or missed entirely. All three issues are now resolved.
   - Clear error message when run in non-TTY context (pipes, redirects, automation)
   - Prevents cryptic "error: Unexpected" (errno 19 ENODEV on macOS)
 
+### Fixed
+
+- **File Tree Name Truncation**: Correct Nerd Font icon width calculation
+  - Fixed premature truncation of file/directory names in tree view
+  - Nerd Font icons are 3-byte UTF-8 but display as 1 character
+  - Changed icon width calculations from byte count to display character count
+  - Added `truncateWithEllipsis()` helper for proper truncation when needed
+  - Files: src/render/filetree.zig:152,162
+
+- **File Tree Selection Crash**: Prevent out-of-bounds access after collapse
+  - Fixed critical crash when toggling/selecting file tree nodes
+  - Added bounds clamping for `selected_index` after `rebuildFlatView()`
+  - Collapsing directories no longer causes invalid index access
+  - Stack trace: `loadNodeChildren` → `toggleSelected` → `handleFileTreeInput`
+  - Files: src/editor/file_tree.zig:243-251
+
+- **File Tree Performance**: Eliminate double rendering (50% improvement)
+  - Removed redundant full background fill pass
+  - Reduced cell writes from ~1800 to ~900 per frame
+  - Changed from O(height × width + nodes × width) to O(nodes × width + height)
+  - Targeted fills for title row, separator row, empty rows only
+  - Files: src/render/filetree.zig:27-110
+
+- **File Tree Duplicate Entries**: Fixed ArrayList initialization bugs
+  - Corrected ArrayList initialization pattern throughout file tree code
+  - Ensured proper `.empty` initialization and `.deinit(allocator)` cleanup
+  - No more duplicate nodes appearing in tree view
+  - Files: src/editor/file_tree.zig (ArrayList operations)
+
+### Performance
+
+- **File Tree Rendering**: 50% reduction in cell write operations per frame
+  - Before: ~1800 cells written (full background + per-node fills)
+  - After: ~900 cells written (targeted fills only)
+  - Significantly improved responsiveness during tree navigation
+
 ### Planned Features
 
 - Git status display in gutter (editor_app.zig:107)
