@@ -127,8 +127,9 @@ pub const FileTree = struct {
         node.children.clearRetainingCapacity();
 
         // Open directory
-        var dir = std.fs.cwd().openDir(node.path, .{ .iterate = true }) catch {
-            // Can't open directory, skip
+        var dir = std.fs.cwd().openDir(node.path, .{ .iterate = true }) catch |err| {
+            // Log detailed error for debugging
+            std.log.warn("Failed to open directory '{s}': {}", .{ node.path, err });
             return;
         };
         defer dir.close();
@@ -138,29 +139,40 @@ pub const FileTree = struct {
         defer entries.deinit(self.allocator);
 
         var iter = dir.iterate();
-        while (iter.next() catch null) |entry| {
+        while (true) {
+            const entry = iter.next() catch |err| {
+                // Log iteration errors and stop processing this directory
+                std.log.warn("Error iterating directory '{s}': {}", .{ node.path, err });
+                break;
+            };
+            if (entry == null) break;
+            const e = entry.?;
             // Skip entries with empty names (safety check)
-            if (entry.name.len == 0) continue;
+            if (e.name.len == 0) {
+                std.log.debug("Skipping entry with empty name in '{s}'", .{node.path});
+                continue;
+            }
 
             // Skip ONLY "." and ".." special directories
-            if (std.mem.eql(u8, entry.name, ".") or std.mem.eql(u8, entry.name, "..")) {
+            if (std.mem.eql(u8, e.name, ".") or std.mem.eql(u8, e.name, "..")) {
                 continue;
             }
 
             // Skip common build/cache directories (but show dotfiles like .gitignore)
-            if (entry.kind == .directory) {
-                if (std.mem.eql(u8, entry.name, "zig-cache") or
-                    std.mem.eql(u8, entry.name, "zig-out") or
-                    std.mem.eql(u8, entry.name, "node_modules") or
-                    std.mem.eql(u8, entry.name, "target") or
-                    std.mem.eql(u8, entry.name, "__pycache__") or
-                    std.mem.eql(u8, entry.name, ".git")) // Hide .git directory (too large/not useful)
+            if (e.kind == .directory) {
+                if (std.mem.eql(u8, e.name, "zig-cache") or
+                    std.mem.eql(u8, e.name, "zig-out") or
+                    std.mem.eql(u8, e.name, "node_modules") or
+                    std.mem.eql(u8, e.name, "target") or
+                    std.mem.eql(u8, e.name, "__pycache__") or
+                    std.mem.eql(u8, e.name, ".git")) // Hide .git directory (too large/not useful)
                 {
+                    std.log.debug("Skipping build/cache directory: {s}", .{e.name});
                     continue;
                 }
             }
 
-            try entries.append(self.allocator, entry);
+            try entries.append(self.allocator, e);
         }
 
         // Sort: directories first, then alphabetically
@@ -182,19 +194,29 @@ pub const FileTree = struct {
             const child_path = if (std.mem.eql(u8, node.path, "."))
                 try self.allocator.dupe(u8, entry.name)
             else
-                try std.fs.path.join(self.allocator, &[_][]const u8{ node.path, entry.name });
+                std.fs.path.join(self.allocator, &[_][]const u8{ node.path, entry.name }) catch |err| {
+                    std.log.warn("Failed to construct path for '{s}' in '{s}': {}", .{ entry.name, node.path, err });
+                    continue;
+                };
             defer self.allocator.free(child_path);
 
             const is_dir = entry.kind == .directory;
-            const child = try TreeNode.init(
+            const child = TreeNode.init(
                 self.allocator,
                 entry.name,
                 child_path,
                 is_dir,
                 node.depth + 1,
-            );
+            ) catch |err| {
+                std.log.warn("Failed to create tree node for '{s}': {}", .{ entry.name, err });
+                continue;
+            };
 
-            try node.children.append(self.allocator, child);
+            node.children.append(self.allocator, child) catch |err| {
+                std.log.warn("Failed to add child node '{s}' to tree: {}", .{ entry.name, err });
+                child.deinit();
+                continue;
+            };
         }
     }
 
