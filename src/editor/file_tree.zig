@@ -137,9 +137,24 @@ pub const FileTree = struct {
         };
         defer dir.close();
 
-        // Collect entries
-        var entries = std.ArrayList(std.fs.Dir.Entry){};
-        defer entries.deinit(self.allocator);
+        // Entry struct that owns its name string (Dir.Entry.name is ephemeral!)
+        const OwnedEntry = struct {
+            name: []u8,
+            kind: std.fs.File.Kind,
+
+            fn deinit(self: @This(), allocator: std.mem.Allocator) void {
+                allocator.free(self.name);
+            }
+        };
+
+        // Collect entries with owned name strings
+        var entries = std.ArrayList(OwnedEntry){};
+        defer {
+            for (entries.items) |entry| {
+                entry.deinit(self.allocator);
+            }
+            entries.deinit(self.allocator);
+        }
 
         var iter = dir.iterate();
         while (true) {
@@ -175,12 +190,18 @@ pub const FileTree = struct {
                 }
             }
 
-            try entries.append(self.allocator, e);
+            // CRITICAL: Duplicate the name string! Dir.Entry.name points to iterator's
+            // internal buffer which gets reused on each next() call
+            const owned_name = try self.allocator.dupe(u8, e.name);
+            try entries.append(self.allocator, .{
+                .name = owned_name,
+                .kind = e.kind,
+            });
         }
 
         // Sort: directories first, then alphabetically
-        std.mem.sort(std.fs.Dir.Entry, entries.items, {}, struct {
-            fn lessThan(_: void, a: std.fs.Dir.Entry, b: std.fs.Dir.Entry) bool {
+        std.mem.sort(OwnedEntry, entries.items, {}, struct {
+            fn lessThan(_: void, a: OwnedEntry, b: OwnedEntry) bool {
                 // Directories come first
                 if (a.kind == .directory and b.kind != .directory) return true;
                 if (a.kind != .directory and b.kind == .directory) return false;
