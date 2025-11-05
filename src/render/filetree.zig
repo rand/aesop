@@ -24,23 +24,12 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, visible_height: usize, 
 
     // Use provided visible height (already calculated to exclude status bars)
 
-    // Render tree background
-    var row: u16 = 0;
-    while (row < visible_height) : (row += 1) {
-        var col: u16 = 0;
-        while (col < tree_width) : (col += 1) {
-            rend.output.setCell(row, col, .{
-                .char = ' ',
-                .fg = theme.ui.tree_fg,
-                .bg = theme.ui.tree_bg,
-                .attrs = .{},
-            });
-        }
-
-        // Draw vertical separator (Nerd Font box-drawing character)
-        rend.output.setCell(row, tree_width, .{
-            .char = 0x2502, // '│' - Box-drawing character
-            .fg = theme.ui.tree_border,
+    // Fill title row background
+    var col: u16 = 0;
+    while (col < tree_width) : (col += 1) {
+        rend.output.setCell(0, col, .{
+            .char = ' ',
+            .fg = theme.ui.tree_fg,
             .bg = theme.ui.tree_bg,
             .attrs = .{},
         });
@@ -71,6 +60,17 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, visible_height: usize, 
         });
     }
 
+    // Draw vertical separator for all rows (renderNode() handles row backgrounds)
+    var row: u16 = 0;
+    while (row < visible_height) : (row += 1) {
+        rend.output.setCell(row, tree_width, .{
+            .char = 0x2502, // '│' - Box-drawing character
+            .fg = theme.ui.tree_border,
+            .bg = theme.ui.tree_bg,
+            .attrs = .{},
+        });
+    }
+
     // Render tree nodes
     const start_row: u16 = 2; // After title and separator
     const viewport_height = visible_height - start_row;
@@ -93,6 +93,20 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, visible_height: usize, 
 
         // Render node
         try renderNode(rend, node, node_row, tree_width, is_selected, theme);
+    }
+
+    // Fill empty rows below last node
+    var empty_row = start_row + @as(u16, @intCast(visible_count));
+    while (empty_row < visible_height) : (empty_row += 1) {
+        var empty_col: u16 = 0;
+        while (empty_col < tree_width) : (empty_col += 1) {
+            rend.output.setCell(empty_row, empty_col, .{
+                .char = ' ',
+                .fg = theme.ui.tree_fg,
+                .bg = theme.ui.tree_bg,
+                .attrs = .{},
+            });
+        }
     }
 
     // Show scrollbar indicator if needed
