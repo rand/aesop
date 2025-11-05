@@ -118,7 +118,7 @@ pub const EditorApp = struct {
             .width = 5,
         };
 
-        return .{
+        var app = EditorApp{
             .editor = editor,
             .renderer = renderer,
             .allocator = allocator,
@@ -128,6 +128,11 @@ pub const EditorApp = struct {
             .syntax_parser = null,
             .command_buffer = .{}, // Unmanaged ArrayList
         };
+
+        // Install signal handlers for terminal cleanup on crash
+        app.installSignalHandlers();
+
+        return app;
     }
 
     /// Clean up
@@ -138,6 +143,35 @@ pub const EditorApp = struct {
         self.command_buffer.deinit(self.allocator);
         self.editor.deinit();
         self.renderer.deinit();
+    }
+
+    /// Signal handler for SIGINT and SIGTERM
+    fn signalHandler(sig: i32) callconv(.c) void {
+        _ = sig;
+        // Emergency cleanup - restore terminal state
+        renderer_mod.emergencyCleanup();
+        // Exit immediately
+        std.process.exit(130); // 128 + SIGINT(2)
+    }
+
+    /// Install signal handlers for cleanup on crash/kill
+    fn installSignalHandlers(self: *EditorApp) void {
+        _ = self;
+
+        const posix = std.posix;
+
+        // Create sigaction structure for our handler
+        var act = posix.Sigaction{
+            .handler = .{ .handler = signalHandler },
+            .mask = posix.sigemptyset(),
+            .flags = 0,
+        };
+
+        // Install handler for SIGINT (Ctrl+C)
+        posix.sigaction(posix.SIG.INT, &act, null);
+
+        // Install handler for SIGTERM (kill command)
+        posix.sigaction(posix.SIG.TERM, &act, null);
     }
 
     /// Get or create parser for current buffer

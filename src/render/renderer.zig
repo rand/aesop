@@ -14,6 +14,24 @@ pub const Attrs = buffer.Attrs;
 /// Main renderer - manages terminal output and rendering loop
 const WRITE_BUF_SIZE = 65536;
 
+/// Emergency cleanup for signal handlers
+/// This is signal-safe: only writes pre-defined escape sequences
+pub fn emergencyCleanup() void {
+    const stdout = std.fs.File.stdout();
+
+    // Disable mouse tracking (most critical for user experience)
+    _ = stdout.write("\x1b[?1003l\x1b[?1002l\x1b[?1000l\x1b[?1006l") catch {};
+
+    // Show cursor
+    _ = stdout.write("\x1b[?25h") catch {};
+
+    // Exit alternate screen
+    _ = stdout.write("\x1b[?1049l") catch {};
+
+    // Reset colors
+    _ = stdout.write("\x1b[0m") catch {};
+}
+
 pub const Renderer = struct {
     terminal: platform.Terminal,
     output: OutputBuffer,
