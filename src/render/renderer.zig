@@ -58,6 +58,9 @@ pub const Renderer = struct {
         // Enter alternate screen
         try self.write(vt100.Screen.alternate_enter);
 
+        // Select ASCII character set (G0) - prevents line-drawing character issues
+        try self.write("\x1b(B");
+
         // Clear screen and home cursor
         try self.write(vt100.Screen.clear_all);
         const home = vt100.Cursor.goto(1, 1);
@@ -73,6 +76,9 @@ pub const Renderer = struct {
     pub fn exitRawMode(self: *Renderer) !void {
         // Show cursor
         try self.write(vt100.Cursor.show);
+
+        // Reset to ASCII character set
+        try self.write("\x1b(B");
 
         // Exit alternate screen
         try self.write(vt100.Screen.alternate_exit);
