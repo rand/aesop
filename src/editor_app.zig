@@ -1237,6 +1237,7 @@ pub const EditorApp = struct {
                     sel_range,
                     search_matches,
                     syntax_highlights,
+                    text, // Full text buffer for byte offset calculation
                     text_max_width,
                 );
             } else {
@@ -1273,6 +1274,7 @@ pub const EditorApp = struct {
         opt_sel_range: anytype,
         search_matches: []const @import("editor/search.zig").Search.Match,
         syntax_highlights: []const TreeSitter.HighlightToken,
+        full_text: []const u8, // Full text buffer for byte offset calculation
         max_width: u16,
     ) !void {
         if (line_text.len == 0) return;
@@ -1299,7 +1301,7 @@ pub const EditorApp = struct {
         // Calculate byte offset for start of this line (once)
         var line_start_byte: usize = 0;
         var temp_line: usize = 0;
-        for (text, 0..) |byte, idx| {
+        for (full_text, 0..) |byte, idx| {
             if (temp_line == line_num) {
                 line_start_byte = idx;
                 break;
