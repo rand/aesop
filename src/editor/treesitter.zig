@@ -469,14 +469,16 @@ pub const Parser = struct {
 /// Basic regex-free keyword highlighting (temporary until tree-sitter is integrated)
 /// Uses the enhanced tokenizer from highlight.zig
 fn basicHighlight(allocator: std.mem.Allocator, text: []const u8, language: Language) ![]HighlightToken {
-    var tokens = std.ArrayList(HighlightToken).empty;
-    errdefer tokens.deinit(allocator);
-
-    // Convert Language to Highlight.Language
+    // For unsupported languages (markdown, plain_text, etc.), return empty array
+    // This prevents incorrect highlighting of non-code text
     const highlight_lang = switch (language) {
         .zig => Highlight.Language.zig,
+        .markdown, .plain_text => return &[_]HighlightToken{}, // No highlighting for text files
         else => Highlight.Language.unknown,
     };
+
+    var tokens = std.ArrayList(HighlightToken).empty;
+    errdefer tokens.deinit(allocator);
 
     // Process text line by line
     var line_num: usize = 0;
