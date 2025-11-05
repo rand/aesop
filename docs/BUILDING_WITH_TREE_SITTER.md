@@ -63,6 +63,8 @@ Each language requires a compiled grammar library.
 - **tree-sitter-go**: Go language support
 - **tree-sitter-python**: Python language support
 - **tree-sitter-c**: C language support
+- **tree-sitter-markdown**: Markdown language support (block + inline grammars)
+- **tree-sitter-typescript**: TypeScript language support (typescript + tsx grammars)
 
 ### Installation Methods
 
@@ -75,9 +77,21 @@ git clone https://github.com/tree-sitter/tree-sitter-rust.git
 git clone https://github.com/tree-sitter/tree-sitter-go.git
 git clone https://github.com/tree-sitter/tree-sitter-python.git
 git clone https://github.com/tree-sitter/tree-sitter-c.git
+git clone https://github.com/tree-sitter-grammars/tree-sitter-markdown.git
+git clone https://github.com/tree-sitter/tree-sitter-typescript.git
 
 # Build and install each grammar
 cd tree-sitter-zig
+make
+sudo make install
+
+# For markdown (2 grammars: block + inline)
+cd tree-sitter-markdown
+make
+sudo make install
+
+# For TypeScript (2 grammars: typescript + tsx)
+cd tree-sitter-typescript
 make
 sudo make install
 

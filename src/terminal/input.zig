@@ -318,23 +318,12 @@ pub const Parser = struct {
             else => return null,
         };
 
-        const event = Event{ .mouse = .{
+        return Event{ .mouse = .{
             .kind = kind,
             .row = row,
             .col = col,
             .mods = mods,
         } };
-
-        // DEBUG: Log mouse events to verify they're being parsed
-        std.log.debug("MOUSE EVENT: kind={s} row={} col={} btn={} press={}", .{
-            @tagName(kind),
-            row,
-            col,
-            button,
-            is_press,
-        });
-
-        return event;
     }
 };
 

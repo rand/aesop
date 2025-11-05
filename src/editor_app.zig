@@ -671,13 +671,6 @@ pub const EditorApp = struct {
 
     /// Handle mouse events
     fn handleMouse(self: *EditorApp, mouse: anytype) !void {
-        // DEBUG: Log all mouse events reaching the handler
-        std.log.debug("handleMouse: kind={s} row={} col={}", .{
-            @tagName(mouse.kind),
-            mouse.row,
-            mouse.col,
-        });
-
         switch (mouse.kind) {
             .press_left => {
                 try self.handleMousePress(mouse.row, mouse.col);
@@ -701,8 +694,6 @@ pub const EditorApp = struct {
 
     /// Handle mouse scroll
     fn handleMouseScroll(self: *EditorApp, delta: isize) void {
-        std.log.debug("handleMouseScroll: delta={}", .{delta});
-
         if (delta < 0) {
             const abs_delta: usize = @intCast(@abs(delta));
             self.editor.scroll_offset -|= abs_delta;
@@ -719,8 +710,6 @@ pub const EditorApp = struct {
 
     /// Handle mouse press - start selection
     fn handleMousePress(self: *EditorApp, screen_row: u16, screen_col: u16) !void {
-        std.log.debug("handleMousePress: screen_row={} screen_col={}", .{ screen_row, screen_col });
-
         const size = self.renderer.getSize();
         const buffer = self.editor.getActiveBuffer() orelse return;
 
