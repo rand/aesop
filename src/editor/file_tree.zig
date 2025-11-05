@@ -101,9 +101,10 @@ pub const FileTree = struct {
         @memcpy(self.cwd[0..abs_path.len], abs_path);
         self.cwd_len = abs_path.len;
 
-        // Create root node
+        // Create root node with the actual path parameter (not ".")
+        // This ensures loadNodeChildren opens the correct directory
         const root_name = std.fs.path.basename(abs_path);
-        self.root = try TreeNode.init(self.allocator, root_name, ".", true, 0);
+        self.root = try TreeNode.init(self.allocator, root_name, path, true, 0);
 
         // Load immediate children
         try self.loadNodeChildren(self.root.?);
@@ -224,18 +225,11 @@ pub const FileTree = struct {
 
     /// Rebuild flat view from tree (for rendering)
     fn rebuildFlatView(self: *FileTree) !void {
-        // Clear and free to ensure no stale pointers remain
+        // CRITICAL: Clear existing flat_view completely
         self.flat_view.clearAndFree(self.allocator);
+
         if (self.root) |root| {
             try self.addToFlatView(root);
-        }
-
-        // Debug: log what's in flat_view
-        std.log.info("Rebuilt flat_view: {} items", .{self.flat_view.items.len});
-        for (self.flat_view.items, 0..) |node, i| {
-            std.log.info("  [{}] {s} (is_dir={}, expanded={}, children={})", .{
-                i, node.name, node.is_dir, node.is_expanded, node.children.items.len
-            });
         }
     }
 

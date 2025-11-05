@@ -9,14 +9,18 @@ test "file tree loads without corruption" {
     var tree = FileTree.init(allocator);
     defer tree.deinit();
 
-    // Load current directory
-    try tree.loadDirectory(".");
+    // Load parent directory (where the user's issue occurs)
+    try tree.loadDirectory("..");
 
     // Verify flat_view has valid entries
     try testing.expect(tree.flat_view.items.len > 0);
 
     std.debug.print("\n=== File Tree Loaded ===\n", .{});
     std.debug.print("Total items: {}\n", .{tree.flat_view.items.len});
+
+    // Check for duplicates
+    var seen = std.StringHashMap(void).init(allocator);
+    defer seen.deinit();
 
     // Check each entry for validity
     for (tree.flat_view.items, 0..) |node, i| {
@@ -30,6 +34,13 @@ test "file tree loads without corruption" {
         // Verify path is not empty
         try testing.expect(node.path.len > 0);
 
+        // Check for duplicates
+        if (seen.contains(node.name)) {
+            std.debug.print("ERROR: Duplicate entry found: {s}\n", .{node.name});
+            return error.DuplicateEntry;
+        }
+        try seen.put(node.name, {});
+
         // Verify name contains only valid characters (no garbage)
         for (node.name) |c| {
             if (c < 32 or c > 126) {
@@ -41,7 +52,7 @@ test "file tree loads without corruption" {
         }
     }
 
-    std.debug.print("=== All Entries Valid ===\n\n", .{});
+    std.debug.print("=== All Entries Valid, No Duplicates ===\n\n", .{});
 }
 
 test "file tree toggle doesn't cause corruption" {
