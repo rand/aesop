@@ -130,12 +130,13 @@ input was laggy or missed entirely. All three issues are now resolved.
 
 ### Fixed
 
-- **File Tree Memory Corruption - ArrayList Undefined Initialization** (CRITICAL)
-  - Fixed catastrophic memory corruption from undefined ArrayList fields
-  - Root cause: std.ArrayList (unmanaged) has NO default field values
-  - Using `.{}` left items.ptr pointing to undefined memory (0xaaaaaaaaaaaaaaaa)
-  - Caused duplicate entries, garbage text, corrupted names, random crashes
-  - Fix: Explicitly initialize all fields: `items = &[_]T{}`, `capacity = 0`
+- **File Tree Memory Corruption - ArrayList Initialization Panic** (CRITICAL)
+  - Fixed "unreachable code" panic from incorrect ArrayList initialization
+  - Root cause: Explicitly setting ArrayList fields with temporary array literals
+  - The unmanaged ArrayList HAS default field values, should use `.{}` syntax
+  - Explicit initialization `items = &[_]T{}` may create invalid lifetimes
+  - Fix: Use proper `.{}` syntax to rely on struct default values
+  - Simpler and safer: `var list = ArrayList(T){}` or `.children = .{}`
   - Affects: TreeNode.children, FileTree.flat_view, temporary entry lists
   - File: src/editor/file_tree.zig
 
