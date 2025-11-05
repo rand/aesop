@@ -105,6 +105,49 @@ input was laggy or missed entirely. All three issues are now resolved.
 
 ## [Unreleased]
 
+### Fixed
+
+- **Syntax Highlighting Not Working** (CRITICAL)
+  - Fixed missing `parser.parse(text)` call before `getHighlights()`
+  - Tree-sitter was initialized but never parsed the file content
+  - Result: Syntax highlighting appeared broken despite grammar libraries being loaded
+  - File: src/editor_app.zig:1151-1162
+
+- **Syntax Highlighting Coordinate System Mismatch** (CRITICAL)
+  - Fixed comparison between column numbers (0-100) and byte offsets (0-50000)
+  - Added proper calculation of byte offset from line start
+  - Changed from `buffer_col >= token.start_byte` to `byte_offset >= token.start_byte`
+  - Result: Syntax colors now apply to correct characters
+  - File: src/editor_app.zig:1301-1312,1379-1390
+
+- **Mouse Event Parsing Failure**
+  - Fixed terminator byte ('M'/'m') being added to buffer before checking
+  - Parser saw "35;47;59M" instead of "35;47;59", failed to extract all 3 numbers
+  - Moved terminator check BEFORE buffer append
+  - Result: Mouse clicks and movements now parse correctly
+  - File: src/terminal/input.zig:192-210
+
+- **Mouse Coordinate Offset Issue**
+  - Fixed SGR mouse coordinates (1-indexed) being used as 0-indexed
+  - Added conversion with underflow protection in handleMouse()
+  - Clicks were landing one position down and right from intended location
+  - Result: Cursor now lands exactly where clicked
+  - File: src/editor_app.zig:673-700
+
+- **Trackpad Drag Selection Not Working**
+  - Fixed motion bit (bit 5, 0x20) not being checked in button code
+  - Drag events were misidentified as press events
+  - Added explicit motion_bit check before release/press logic
+  - Result: Click-and-drag text selection now works with trackpad/mouse
+  - File: src/terminal/input.zig:297,314-316
+
+- **Tree-sitter Library Loading on macOS**
+  - Added rpath to all executables to find libraries in ~/lib
+  - macOS System Integrity Protection (SIP) can block DYLD_LIBRARY_PATH
+  - Grammar libraries now load without wrapper script
+  - Applied to: exe, mod_tests, exe_tests, integration_tests, input_integration_tests
+  - File: build.zig:127-128 (and 4 other targets)
+
 ### Added
 
 - **Terminal Detection**: Proper TTY detection before terminal operations
