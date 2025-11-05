@@ -59,6 +59,7 @@ Aesop is a terminal-based text editor that combines the modal editing paradigm o
 
 - [Zig 0.15.1](https://ziglang.org/download/) (required)
 - [tree-sitter](https://tree-sitter.github.io/) (required for syntax highlighting)
+- [Nerd Fonts](https://www.nerdfonts.com/) (required for icons and UI elements)
 
 ### Building from Source
 
@@ -107,6 +108,34 @@ sudo make install
 ```
 
 For detailed setup including language-specific grammar installation, see [docs/BUILDING_WITH_TREE_SITTER.md](docs/BUILDING_WITH_TREE_SITTER.md).
+
+### Nerd Fonts Setup
+
+Aesop requires a [Nerd Font](https://www.nerdfonts.com/) for proper display of icons, file type indicators, and UI elements.
+
+**Recommended fonts**:
+- [JetBrains Mono Nerd Font](https://www.nerdfonts.com/font-downloads) (recommended)
+- [Fira Code Nerd Font](https://www.nerdfonts.com/font-downloads)
+- [Hack Nerd Font](https://www.nerdfonts.com/font-downloads)
+
+**Installation**:
+
+macOS (Homebrew):
+```bash
+brew tap homebrew/cask-fonts
+brew install --cask font-jetbrains-mono-nerd-font
+```
+
+Linux:
+```bash
+# Download from https://www.nerdfonts.com/font-downloads
+# Extract to ~/.local/share/fonts/
+mkdir -p ~/.local/share/fonts
+unzip JetBrainsMono.zip -d ~/.local/share/fonts/
+fc-cache -fv
+```
+
+After installation, configure your terminal to use the Nerd Font. Without a Nerd Font installed, icons and UI elements may display incorrectly.
 
 ### Running
 
