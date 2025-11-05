@@ -142,16 +142,19 @@ pub const FileTree = struct {
             // Skip entries with empty names (safety check)
             if (entry.name.len == 0) continue;
 
-            // Skip hidden files/dirs
-            if (entry.name[0] == '.') continue;
+            // Skip ONLY "." and ".." special directories
+            if (std.mem.eql(u8, entry.name, ".") or std.mem.eql(u8, entry.name, "..")) {
+                continue;
+            }
 
-            // Skip common build directories
+            // Skip common build/cache directories (but show dotfiles like .gitignore)
             if (entry.kind == .directory) {
                 if (std.mem.eql(u8, entry.name, "zig-cache") or
                     std.mem.eql(u8, entry.name, "zig-out") or
                     std.mem.eql(u8, entry.name, "node_modules") or
                     std.mem.eql(u8, entry.name, "target") or
-                    std.mem.eql(u8, entry.name, "__pycache__"))
+                    std.mem.eql(u8, entry.name, "__pycache__") or
+                    std.mem.eql(u8, entry.name, ".git")) // Hide .git directory (too large/not useful)
                 {
                     continue;
                 }
