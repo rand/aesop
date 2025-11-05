@@ -8,12 +8,12 @@ const LspDiagnostics = @import("../lsp/diagnostics.zig");
 const DiagnosticSeverity = @import("../lsp/response_parser.zig").DiagnosticSeverity;
 const Theme = @import("../editor/theme.zig").Theme;
 
-/// Diagnostic icon configuration
+/// Diagnostic icon configuration (Nerd Font icons)
 pub const DiagnosticIcons = struct {
-    error_icon: []const u8 = "●", // Red circle for errors
-    warning_icon: []const u8 = "▲", // Yellow triangle for warnings
-    info_icon: []const u8 = "ⓘ", // Blue info circle
-    hint_icon: []const u8 = "💡", // Light bulb for hints
+    error_icon: []const u8 = "", // Error icon (cross in circle)
+    warning_icon: []const u8 = "", // Warning icon (triangle with exclamation)
+    info_icon: []const u8 = "", // Info icon (circle with i)
+    hint_icon: []const u8 = "", // Hint icon (light bulb)
 };
 
 /// Get color for diagnostic severity
@@ -128,10 +128,10 @@ test "diagnostics: get severity color" {
 test "diagnostics: get severity icon" {
     const icons = DiagnosticIcons{};
 
-    try std.testing.expectEqualStrings("●", getSeverityIcon(.@"error", icons));
-    try std.testing.expectEqualStrings("▲", getSeverityIcon(.warning, icons));
-    try std.testing.expectEqualStrings("ⓘ", getSeverityIcon(.information, icons));
-    try std.testing.expectEqualStrings("💡", getSeverityIcon(.hint, icons));
+    try std.testing.expectEqualStrings("", getSeverityIcon(.@"error", icons));
+    try std.testing.expectEqualStrings("", getSeverityIcon(.warning, icons));
+    try std.testing.expectEqualStrings("", getSeverityIcon(.information, icons));
+    try std.testing.expectEqualStrings("", getSeverityIcon(.hint, icons));
 }
 
 test "diagnostics: format counts - errors and warnings" {

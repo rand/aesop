@@ -51,34 +51,34 @@ pub const CompletionKind = enum(u8) {
     operator = 24,
     type_parameter = 25,
 
-    /// Get icon/symbol for completion kind
+    /// Get Nerd Font icon for completion kind
     pub fn icon(self: CompletionKind) []const u8 {
         return switch (self) {
-            .text => "T",
-            .method => "m",
-            .function => "f",
-            .constructor => "C",
-            .field => "F",
-            .variable => "v",
-            .class => "c",
-            .interface => "i",
-            .module => "M",
-            .property => "p",
-            .unit => "U",
-            .value => "V",
-            .enum_type => "E",
-            .keyword => "k",
-            .snippet => "S",
-            .color => "#",
-            .file => "F",
-            .reference => "r",
-            .folder => "D",
-            .enum_member => "e",
-            .constant => "C",
-            .struct_type => "s",
-            .event => "E",
-            .operator => "o",
-            .type_parameter => "t",
+            .text => "", // Text file icon
+            .method => "", // Method icon
+            .function => "", // Function icon
+            .constructor => "", // Constructor/gear icon
+            .field => "", // Field icon
+            .variable => "", // Variable icon
+            .class => "", // Class icon
+            .interface => "", // Interface icon
+            .module => "", // Module/package icon
+            .property => "", // Property icon
+            .unit => "", // Unit icon
+            .value => "", // Value/constant icon
+            .enum_type => "", // Enum icon
+            .keyword => "", // Keyword icon
+            .snippet => "", // Snippet/code icon
+            .color => "", // Color palette icon
+            .file => "", // File icon
+            .reference => "", // Reference/link icon
+            .folder => "", // Folder icon
+            .enum_member => "", // Enum member icon
+            .constant => "", // Constant icon
+            .struct_type => "", // Struct icon
+            .event => "", // Event/signal icon
+            .operator => "", // Operator icon
+            .type_parameter => "", // Type parameter icon
         };
     }
 };
