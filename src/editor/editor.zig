@@ -105,6 +105,7 @@ pub const Editor = struct {
 
     // Viewport (legacy - will be replaced by window_manager)
     scroll_offset: usize, // Line offset for scrolling
+    col_offset: usize, // Column offset for horizontal scrolling
 
     /// Initialize editor
     pub fn init(allocator: std.mem.Allocator) !Editor {
@@ -157,6 +158,7 @@ pub const Editor = struct {
             .diagnostic_manager = LspDiagnostics.DiagnosticManager.init(allocator),
             .hover_content = null,
             .scroll_offset = 0,
+            .col_offset = 0,
         };
 
         // Register built-in commands
@@ -220,6 +222,7 @@ pub const Editor = struct {
         // Reset selections for new buffer
         try self.selections.setSingleCursor(self.allocator, .{ .line = 0, .col = 0 });
         self.scroll_offset = 0;
+        self.col_offset = 0;
     }
 
     /// Open file
@@ -228,6 +231,7 @@ pub const Editor = struct {
         // Reset selections for new buffer
         try self.selections.setSingleCursor(self.allocator, .{ .line = 0, .col = 0 });
         self.scroll_offset = 0;
+        self.col_offset = 0;
 
         // Dispatch buffer open event to plugins
         self.plugin_manager.dispatchBufferOpen(buffer_id) catch {};
@@ -863,13 +867,38 @@ pub const Editor = struct {
         };
     }
 
-    /// Scroll viewport
+    /// Scroll viewport vertically
     pub fn scroll(self: *Editor, delta: isize) void {
         if (delta < 0) {
             const abs_delta: usize = @intCast(@abs(delta));
             self.scroll_offset -|= abs_delta;
         } else {
             self.scroll_offset += @intCast(delta);
+        }
+    }
+
+    /// Scroll viewport horizontally
+    pub fn scrollHorizontal(self: *Editor, delta: isize) void {
+        if (delta < 0) {
+            const abs_delta: usize = @intCast(@abs(delta));
+            self.col_offset -|= abs_delta;
+        } else {
+            self.col_offset += @intCast(delta);
+        }
+    }
+
+    /// Auto-scroll horizontally to keep cursor visible
+    /// viewport_width: visible columns for text content
+    pub fn adjustHorizontalScroll(self: *Editor, viewport_width: usize) void {
+        const cursor_col = self.getCursorPosition().col;
+
+        // If cursor is before visible area, scroll left
+        if (cursor_col < self.col_offset) {
+            self.col_offset = cursor_col;
+        }
+        // If cursor is beyond visible area, scroll right
+        else if (cursor_col >= self.col_offset + viewport_width) {
+            self.col_offset = cursor_col - viewport_width + 1;
         }
     }
 
