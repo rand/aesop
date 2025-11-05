@@ -1160,9 +1160,7 @@ pub const EditorApp = struct {
                     // If parsing fails, fall back to no highlights
                     break :blk &[_]TreeSitter.HighlightToken{};
                 };
-                const highlights = try parser.getHighlights(text, viewport.start_line, viewport.end_line);
-                std.debug.print("Got {} highlight tokens\n", .{highlights.len});
-                break :blk highlights;
+                break :blk try parser.getHighlights(text, viewport.start_line, viewport.end_line);
             }
             std.debug.print("No parser available\n", .{});
             break :blk &[_]TreeSitter.HighlightToken{};
@@ -1298,6 +1296,19 @@ pub const EditorApp = struct {
         var batch_start_screen_col: u16 = start_col;
         var current_style: ?StyleState = null;
 
+        // Calculate byte offset for start of this line (once)
+        var line_start_byte: usize = 0;
+        var temp_line: usize = 0;
+        for (text, 0..) |byte, idx| {
+            if (temp_line == line_num) {
+                line_start_byte = idx;
+                break;
+            }
+            if (byte == '\n') {
+                temp_line += 1;
+            }
+        }
+
         // Helper to flush current batch
         const flushBatch = struct {
             fn call(
@@ -1364,12 +1375,13 @@ pub const EditorApp = struct {
 
             // Check for syntax highlighting (only if not selected or search matched)
             const syntax_group: ?TreeSitter.HighlightGroup = if (!is_selected and !is_search_match) blk: {
+                // Calculate byte offset of current character
+                const byte_offset = line_start_byte + buffer_col;
+
+                // Check if this byte_offset falls within any syntax token
                 for (syntax_highlights) |token| {
-                    if (token.line == line_num) {
-                        // Simplified: assume 1 byte per char (works for ASCII-heavy code)
-                        if (buffer_col >= token.start_byte and buffer_col < token.end_byte) {
-                            break :blk token.group;
-                        }
+                    if (byte_offset >= token.start_byte and byte_offset < token.end_byte) {
+                        break :blk token.group;
                     }
                 }
                 break :blk null;
