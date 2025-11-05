@@ -676,8 +676,6 @@ pub const EditorApp = struct {
         const row = if (mouse.row > 0) mouse.row - 1 else 0;
         const col = if (mouse.col > 0) mouse.col - 1 else 0;
 
-        std.debug.print("After conversion: row={}, col={}\n", .{ row, col });
-
         switch (mouse.kind) {
             .press_left => {
                 try self.handleMousePress(row, col);
@@ -717,7 +715,6 @@ pub const EditorApp = struct {
 
     /// Handle mouse press - start selection
     fn handleMousePress(self: *EditorApp, screen_row: u16, screen_col: u16) !void {
-        std.debug.print("handleMousePress: screen_row={}, screen_col={}\n", .{ screen_row, screen_col });
         const size = self.renderer.getSize();
         const buffer = self.editor.getActiveBuffer() orelse return;
 
@@ -754,9 +751,6 @@ pub const EditorApp = struct {
         const buffer_line = viewport.start_line + screen_row;
         const buffer_col = (screen_col - gutter_end) + self.editor.col_offset;
 
-        std.debug.print("  tree_offset={}, gutter_width={}, gutter_end={}\n", .{ tree_offset, gutter_width, gutter_end });
-        std.debug.print("  viewport.start_line={}, buffer_line={}, buffer_col={}\n", .{ viewport.start_line, buffer_line, buffer_col });
-
         // Clamp to valid buffer position
         const total_lines = buffer.lineCount();
         if (buffer_line >= total_lines) return;
@@ -766,7 +760,6 @@ pub const EditorApp = struct {
             .line = buffer_line,
             .col = buffer_col,
         };
-        std.debug.print("  final pos: line={}, col={}\n", .{ pos.line, pos.col });
 
         // Start drag tracking
         self.mouse_drag_start = pos;

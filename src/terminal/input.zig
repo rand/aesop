@@ -321,7 +321,6 @@ pub const Parser = struct {
             else => return null,
         };
 
-        std.debug.print("parseMouseSgr: raw row={}, col={}, button={}, kind={}\n", .{ row, col, button, kind });
         return Event{ .mouse = .{
             .kind = kind,
             .row = row,
