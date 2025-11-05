@@ -251,6 +251,20 @@ pub fn build(b: *std.Build) void {
 
     const run_integration_tests = b.addRunArtifact(integration_tests);
 
+    // File tree corruption tests
+    const file_tree_corruption_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tests/test_file_tree_corruption.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "aesop", .module = mod },
+            },
+        }),
+    });
+
+    const run_file_tree_corruption_tests = b.addRunArtifact(file_tree_corruption_tests);
+
     // Input integration tests
     const input_integration_tests = b.addTest(.{
         .root_module = b.createModule(.{
@@ -290,11 +304,13 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_exe_tests.step);
     test_step.dependOn(&run_integration_tests.step);
     test_step.dependOn(&run_input_integration_tests.step);
+    test_step.dependOn(&run_file_tree_corruption_tests.step);
 
     // Separate integration test step for selective testing
     const integration_test_step = b.step("test-integration", "Run integration tests only");
     integration_test_step.dependOn(&run_integration_tests.step);
     integration_test_step.dependOn(&run_input_integration_tests.step);
+    integration_test_step.dependOn(&run_file_tree_corruption_tests.step);
 
     // Unit tests only
     const unit_test_step = b.step("test-unit", "Run unit tests only");

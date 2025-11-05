@@ -4,6 +4,11 @@ const std = @import("std");
 // Export test helpers for integration tests
 pub const test_helpers = @import("test_helpers.zig");
 
+// Export editor modules for testing
+pub const editor = struct {
+    pub const file_tree = @import("editor/file_tree.zig");
+};
+
 pub fn bufferedPrint() !void {
     // Stdout is for the actual output of your application, for example if you
     // are implementing gzip, then only the compressed bytes should be sent to

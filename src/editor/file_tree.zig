@@ -229,6 +229,14 @@ pub const FileTree = struct {
         if (self.root) |root| {
             try self.addToFlatView(root);
         }
+
+        // Debug: log what's in flat_view
+        std.log.info("Rebuilt flat_view: {} items", .{self.flat_view.items.len});
+        for (self.flat_view.items, 0..) |node, i| {
+            std.log.info("  [{}] {s} (is_dir={}, expanded={}, children={})", .{
+                i, node.name, node.is_dir, node.is_expanded, node.children.items.len
+            });
+        }
     }
 
     /// Recursively add node and its visible children to flat view
