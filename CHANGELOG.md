@@ -112,7 +112,43 @@ input was laggy or missed entirely. All three issues are now resolved.
   - Clear error message when run in non-TTY context (pipes, redirects, automation)
   - Prevents cryptic "error: Unexpected" (errno 19 ENODEV on macOS)
 
+- **Signal Handlers for Terminal Cleanup** (Phase 5)
+  - Cross-platform signal handlers for SIGINT (Ctrl+C) and SIGTERM
+  - `emergencyCleanup()` restores terminal state on crash/kill
+  - Disables mouse tracking, shows cursor, exits alternate screen
+  - Prevents mouse reporting from persisting after crashes
+  - Signal-safe implementation using only pre-defined escape sequences
+  - Files: src/render/renderer.zig, src/editor_app.zig
+
+- **Comprehensive Error Handling and Logging** (Phase 6)
+  - Error logging for directory open/iteration failures
+  - Debug logging for skipped entries (build dirs, empty names)
+  - Graceful error handling for path construction and node creation
+  - Partial trees rendered when individual operations fail
+  - All errors include context (filename, path, operation)
+  - File: src/editor/file_tree.zig
+
 ### Fixed
+
+- **File Tree Border Drawing** (Phase 1)
+  - Fixed separator drawing with proper bounds checking
+  - Changed from unsafe `tree_width` to safe `if (tree_width < size.width)` guard
+  - Fixed name clipping math: replaced saturating subtraction with explicit bounds
+  - Added early return when no space available for names
+  - File: src/render/filetree.zig:64-77,200-216
+
+- **File Tree Dotfile Visibility** (Phase 3)
+  - Changed from hiding ALL dotfiles to only hiding "." and ".."
+  - Dotfiles like .gitignore, .env, .config, .github now visible
+  - Still hide build/cache directories (.git, zig-cache, node_modules, etc.)
+  - File: src/editor/file_tree.zig:146-173
+
+- **File Tree Scrollbar Removal** (Phase 4)
+  - Removed problematic scrollbar implementation
+  - Eliminated visual clutter and positioning bugs
+  - Users can still see scroll position from visible items
+  - Navigation works the same without scrollbar
+  - File: src/render/filetree.zig:117-118 (removed lines)
 
 - **File Tree Name Truncation**: Correct Nerd Font icon width calculation
   - Fixed premature truncation of file/directory names in tree view
