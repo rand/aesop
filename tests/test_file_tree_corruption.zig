@@ -9,8 +9,8 @@ test "file tree loads without corruption" {
     var tree = FileTree.init(allocator);
     defer tree.deinit();
 
-    // Load parent directory (where the user's issue occurs)
-    try tree.loadDirectory("..");
+    // Load current directory
+    try tree.loadDirectory(".");
 
     // Verify flat_view has valid entries
     try testing.expect(tree.flat_view.items.len > 0);

@@ -142,8 +142,8 @@ pub const FileTree = struct {
             name: []u8,
             kind: std.fs.File.Kind,
 
-            fn deinit(self: @This(), allocator: std.mem.Allocator) void {
-                allocator.free(self.name);
+            fn deinit(entry: @This(), allocator: std.mem.Allocator) void {
+                allocator.free(entry.name);
             }
         };
 
