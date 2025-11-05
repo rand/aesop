@@ -831,6 +831,12 @@ pub const EditorApp = struct {
         } else null;
         defer if (file_uri) |uri| self.allocator.free(uri);
 
+        // Calculate gutter offset based on file tree visibility
+        const gutter_col_offset: u16 = if (self.editor.file_tree.visible)
+            self.editor.file_tree.width + 1 // +1 for separator
+        else
+            0;
+
         try gutter.renderWithDiagnostics(
             &self.renderer,
             self.gutter_config,
@@ -840,6 +846,7 @@ pub const EditorApp = struct {
             &self.editor.diagnostic_manager,
             file_uri,
             self.editor.getTheme(),
+            gutter_col_offset,
         );
 
         // Render message line (if message exists)
@@ -1000,6 +1007,12 @@ pub const EditorApp = struct {
         const viewport = self.editor.getViewport(visible_lines);
         const gutter_width = gutter.calculateWidth(self.gutter_config, buffer.lineCount());
 
+        // Calculate buffer start column (accounting for file tree if visible)
+        const buffer_start_col = if (self.editor.file_tree.visible)
+            gutter_width + self.editor.file_tree.width + 1 // +1 for separator
+        else
+            gutter_width;
+
         // Get selection (for highlighting)
         const primary_sel = self.editor.selections.primary(self.allocator) orelse return;
         const in_visual_mode = self.editor.getMode() == .select and !primary_sel.isCollapsed();
@@ -1080,7 +1093,7 @@ pub const EditorApp = struct {
                 // Render line character by character with highlighting
                 try self.renderLineWithHighlights(
                     row,
-                    gutter_width,
+                    buffer_start_col,
                     line_text,
                     line_num,
                     sel_range,
@@ -1091,7 +1104,7 @@ pub const EditorApp = struct {
                 // Render line normally
                 self.renderer.writeText(
                     row,
-                    gutter_width,
+                    buffer_start_col,
                     line_text,
                     .default,
                     .default,

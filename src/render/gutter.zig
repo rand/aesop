@@ -44,6 +44,7 @@ pub fn renderWithDiagnostics(
     diagnostic_manager: ?*const LspDiagnostics.DiagnosticManager,
     file_uri: ?[]const u8,
     theme: *const Theme,
+    col_offset: u16,
 ) !void {
     if (!config.show_line_numbers) return;
 
@@ -80,7 +81,7 @@ pub fn renderWithDiagnostics(
 
         rend.writeText(
             row,
-            0,
+            col_offset,
             text,
             fg_color,
             .default,
