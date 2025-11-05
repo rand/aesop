@@ -243,6 +243,12 @@ pub fn setupDefaults(manager: *KeymapManager) !void {
     try normal_map.bind(Binding.fromSingleKey(.{ .char = 'k' }, "move_up"));
     try normal_map.bind(Binding.fromSingleKey(.{ .char = 'l' }, "move_right"));
 
+    // Motion: arrow keys
+    try normal_map.bind(Binding.fromSingleKey(.{ .special = .left }, "move_left"));
+    try normal_map.bind(Binding.fromSingleKey(.{ .special = .down }, "move_down"));
+    try normal_map.bind(Binding.fromSingleKey(.{ .special = .up }, "move_up"));
+    try normal_map.bind(Binding.fromSingleKey(.{ .special = .right }, "move_right"));
+
     // Motion: word movements
     try normal_map.bind(Binding.fromSingleKey(.{ .char = 'w' }, "move_word_forward"));
     try normal_map.bind(Binding.fromSingleKey(.{ .char = 'b' }, "move_word_backward"));
@@ -349,6 +355,12 @@ pub fn setupDefaults(manager: *KeymapManager) !void {
     try select_map.bind(Binding.fromSingleKey(.{ .char = 'j' }, "move_down"));
     try select_map.bind(Binding.fromSingleKey(.{ .char = 'k' }, "move_up"));
     try select_map.bind(Binding.fromSingleKey(.{ .char = 'l' }, "move_right"));
+
+    // Arrow keys in select mode
+    try select_map.bind(Binding.fromSingleKey(.{ .special = .left }, "move_left"));
+    try select_map.bind(Binding.fromSingleKey(.{ .special = .down }, "move_down"));
+    try select_map.bind(Binding.fromSingleKey(.{ .special = .up }, "move_up"));
+    try select_map.bind(Binding.fromSingleKey(.{ .special = .right }, "move_right"));
     try select_map.bind(Binding.fromSingleKey(.{ .char = 'w' }, "move_word_forward"));
     try select_map.bind(Binding.fromSingleKey(.{ .char = 'b' }, "move_word_backward"));
     try select_map.bind(Binding.fromSingleKey(.{ .char = 'e' }, "move_word_end"));

@@ -689,12 +689,22 @@ pub const EditorApp = struct {
         const viewport = self.editor.getViewport(size.height - reserved_lines);
         const gutter_width = gutter.calculateWidth(self.gutter_config, buffer.lineCount());
 
-        // Ignore clicks in gutter
-        if (screen_col < gutter_width) return;
+        // Calculate file tree offset
+        const tree_offset: u16 = if (self.editor.file_tree.visible)
+            self.editor.file_tree.width + 1 // +1 for separator
+        else
+            0;
 
-        // Convert screen position to buffer position
+        // Ignore clicks in file tree
+        if (screen_col < tree_offset) return;
+
+        // Ignore clicks in gutter
+        const gutter_end = tree_offset + gutter_width;
+        if (screen_col < gutter_end) return;
+
+        // Convert screen position to buffer position (accounting for file tree and horizontal scroll)
         const buffer_line = viewport.start_line + screen_row;
-        const buffer_col = screen_col - gutter_width;
+        const buffer_col = (screen_col - gutter_end) + self.editor.col_offset;
 
         // Clamp to valid buffer position
         const total_lines = buffer.lineCount();
@@ -735,12 +745,22 @@ pub const EditorApp = struct {
         const viewport = self.editor.getViewport(size.height - reserved_lines);
         const gutter_width = gutter.calculateWidth(self.gutter_config, buffer.lineCount());
 
-        // Ignore drags in gutter
-        if (screen_col < gutter_width) return;
+        // Calculate file tree offset
+        const tree_offset: u16 = if (self.editor.file_tree.visible)
+            self.editor.file_tree.width + 1 // +1 for separator
+        else
+            0;
 
-        // Convert screen position to buffer position
+        // Ignore drags in file tree
+        if (screen_col < tree_offset) return;
+
+        // Ignore drags in gutter
+        const gutter_end = tree_offset + gutter_width;
+        if (screen_col < gutter_end) return;
+
+        // Convert screen position to buffer position (accounting for file tree and horizontal scroll)
         const buffer_line = viewport.start_line + screen_row;
-        const buffer_col = screen_col - gutter_width;
+        const buffer_col = (screen_col - gutter_end) + self.editor.col_offset;
 
         // Clamp to valid buffer position
         const total_lines = buffer.lineCount();

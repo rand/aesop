@@ -69,6 +69,12 @@ pub const Renderer = struct {
         // Hide cursor (will be repositioned during render)
         try self.write(vt100.Cursor.hide);
 
+        // Enable mouse tracking (SGR mode)
+        try self.write("\x1b[?1000h"); // Enable mouse tracking
+        try self.write("\x1b[?1002h"); // Enable button event tracking
+        try self.write("\x1b[?1003h"); // Enable all mouse events
+        try self.write("\x1b[?1006h"); // Enable SGR extended mouse mode
+
         try self.flush();
     }
 
@@ -76,6 +82,12 @@ pub const Renderer = struct {
     pub fn exitRawMode(self: *Renderer) !void {
         // Show cursor
         try self.write(vt100.Cursor.show);
+
+        // Disable mouse tracking
+        try self.write("\x1b[?1003l"); // Disable all mouse events
+        try self.write("\x1b[?1002l"); // Disable button event tracking
+        try self.write("\x1b[?1000l"); // Disable mouse tracking
+        try self.write("\x1b[?1006l"); // Disable SGR extended mouse mode
 
         // Exit alternate screen
         try self.write(vt100.Screen.alternate_exit);
