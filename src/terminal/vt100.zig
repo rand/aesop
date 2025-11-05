@@ -9,39 +9,48 @@ const CSI = ESC ++ "[";
 
 /// Cursor movement commands
 pub const Cursor = struct {
+    pub const SeqResult = struct {
+        data: [32]u8,
+        len: usize,
+
+        pub fn slice(self: *const SeqResult) []const u8 {
+            return self.data[0..self.len];
+        }
+    };
+
     /// Move cursor to position (row, col) - 1-indexed
-    pub fn goto(row: u16, col: u16) [32]u8 {
+    pub fn goto(row: u16, col: u16) SeqResult {
         var buf: [32]u8 = undefined;
-        _ = std.fmt.bufPrint(&buf, CSI ++ "{d};{d}H", .{ row, col }) catch unreachable;
-        return buf;
+        const written = std.fmt.bufPrint(&buf, CSI ++ "{d};{d}H", .{ row, col }) catch unreachable;
+        return .{ .data = buf, .len = written.len };
     }
 
     /// Move cursor up by n lines
-    pub fn up(n: u16) [16]u8 {
-        var buf: [16]u8 = undefined;
-        _ = std.fmt.bufPrint(&buf, CSI ++ "{d}A", .{n}) catch unreachable;
-        return buf;
+    pub fn up(n: u16) SeqResult {
+        var buf: [32]u8 = undefined;
+        const written = std.fmt.bufPrint(&buf, CSI ++ "{d}A", .{n}) catch unreachable;
+        return .{ .data = buf, .len = written.len };
     }
 
     /// Move cursor down by n lines
-    pub fn down(n: u16) [16]u8 {
-        var buf: [16]u8 = undefined;
-        _ = std.fmt.bufPrint(&buf, CSI ++ "{d}B", .{n}) catch unreachable;
-        return buf;
+    pub fn down(n: u16) SeqResult {
+        var buf: [32]u8 = undefined;
+        const written = std.fmt.bufPrint(&buf, CSI ++ "{d}B", .{n}) catch unreachable;
+        return .{ .data = buf, .len = written.len };
     }
 
     /// Move cursor right by n columns
-    pub fn right(n: u16) [16]u8 {
-        var buf: [16]u8 = undefined;
-        _ = std.fmt.bufPrint(&buf, CSI ++ "{d}C", .{n}) catch unreachable;
-        return buf;
+    pub fn right(n: u16) SeqResult {
+        var buf: [32]u8 = undefined;
+        const written = std.fmt.bufPrint(&buf, CSI ++ "{d}C", .{n}) catch unreachable;
+        return .{ .data = buf, .len = written.len };
     }
 
     /// Move cursor left by n columns
-    pub fn left(n: u16) [16]u8 {
-        var buf: [16]u8 = undefined;
-        _ = std.fmt.bufPrint(&buf, CSI ++ "{d}D", .{n}) catch unreachable;
-        return buf;
+    pub fn left(n: u16) SeqResult {
+        var buf: [32]u8 = undefined;
+        const written = std.fmt.bufPrint(&buf, CSI ++ "{d}D", .{n}) catch unreachable;
+        return .{ .data = buf, .len = written.len };
     }
 
     /// Hide cursor
@@ -98,18 +107,28 @@ pub const Color = struct {
         g: u8,
         b: u8,
 
+        /// Result type for color escape sequences
+        pub const SeqResult = struct {
+            data: [32]u8,
+            len: usize,
+
+            pub fn slice(self: *const SeqResult) []const u8 {
+                return self.data[0..self.len];
+            }
+        };
+
         /// Generate foreground color escape sequence
-        pub fn fg(self: Rgb) [32]u8 {
+        pub fn fg(self: Rgb) SeqResult {
             var buf: [32]u8 = undefined;
-            _ = std.fmt.bufPrint(&buf, CSI ++ "38;2;{d};{d};{d}m", .{ self.r, self.g, self.b }) catch unreachable;
-            return buf;
+            const written = std.fmt.bufPrint(&buf, CSI ++ "38;2;{d};{d};{d}m", .{ self.r, self.g, self.b }) catch unreachable;
+            return .{ .data = buf, .len = written.len };
         }
 
         /// Generate background color escape sequence
-        pub fn bg(self: Rgb) [32]u8 {
+        pub fn bg(self: Rgb) SeqResult {
             var buf: [32]u8 = undefined;
-            _ = std.fmt.bufPrint(&buf, CSI ++ "48;2;{d};{d};{d}m", .{ self.r, self.g, self.b }) catch unreachable;
-            return buf;
+            const written = std.fmt.bufPrint(&buf, CSI ++ "48;2;{d};{d};{d}m", .{ self.r, self.g, self.b }) catch unreachable;
+            return .{ .data = buf, .len = written.len };
         }
     };
 
@@ -132,18 +151,27 @@ pub const Color = struct {
         bright_cyan = 14,
         bright_white = 15,
 
-        pub fn fg(self: Standard) [8]u8 {
-            var buf: [8]u8 = undefined;
+        pub const SeqResult = struct {
+            data: [16]u8,
+            len: usize,
+
+            pub fn slice(self: *const SeqResult) []const u8 {
+                return self.data[0..self.len];
+            }
+        };
+
+        pub fn fg(self: Standard) SeqResult {
+            var buf: [16]u8 = undefined;
             const code = if (@intFromEnum(self) < 8) 30 + @intFromEnum(self) else 82 + @intFromEnum(self);
-            _ = std.fmt.bufPrint(&buf, CSI ++ "{d}m", .{code}) catch unreachable;
-            return buf;
+            const written = std.fmt.bufPrint(&buf, CSI ++ "{d}m", .{code}) catch unreachable;
+            return .{ .data = buf, .len = written.len };
         }
 
-        pub fn bg(self: Standard) [8]u8 {
-            var buf: [8]u8 = undefined;
+        pub fn bg(self: Standard) SeqResult {
+            var buf: [16]u8 = undefined;
             const code = if (@intFromEnum(self) < 8) 40 + @intFromEnum(self) else 92 + @intFromEnum(self);
-            _ = std.fmt.bufPrint(&buf, CSI ++ "{d}m", .{code}) catch unreachable;
-            return buf;
+            const written = std.fmt.bufPrint(&buf, CSI ++ "{d}m", .{code}) catch unreachable;
+            return .{ .data = buf, .len = written.len };
         }
     };
 

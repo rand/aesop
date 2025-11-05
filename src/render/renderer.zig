@@ -64,7 +64,7 @@ pub const Renderer = struct {
         // Clear screen and home cursor
         try self.write(vt100.Screen.clear_all);
         const home = vt100.Cursor.goto(1, 1);
-        try self.write(&home);
+        try self.write(home.slice());
 
         // Hide cursor (will be repositioned during render)
         try self.write(vt100.Cursor.hide);
@@ -110,7 +110,7 @@ pub const Renderer = struct {
     fn renderLine(self: *Renderer, row: u16) !void {
         // Move cursor to beginning of line
         const goto = vt100.Cursor.goto(row + 1, 1);
-        try self.write(&goto);
+        try self.write(goto.slice());
 
         // Reset attributes at start of line
         self.current_fg = .default;
@@ -156,11 +156,11 @@ pub const Renderer = struct {
             .default => try self.write("\x1b[39m"),
             .standard => |s| {
                 const seq = s.fg();
-                try self.write(&seq);
+                try self.write(seq.slice());
             },
             .rgb => |r| {
                 const seq = r.fg();
-                try self.write(&seq);
+                try self.write(seq.slice());
             },
         }
     }
@@ -170,11 +170,11 @@ pub const Renderer = struct {
             .default => try self.write("\x1b[49m"),
             .standard => |s| {
                 const seq = s.bg();
-                try self.write(&seq);
+                try self.write(seq.slice());
             },
             .rgb => |r| {
                 const seq = r.bg();
-                try self.write(&seq);
+                try self.write(seq.slice());
             },
         }
     }
