@@ -121,12 +121,20 @@ input was laggy or missed entirely. All three issues are now resolved.
   - Added `truncateWithEllipsis()` helper for proper truncation when needed
   - Files: src/render/filetree.zig:152,162
 
+- **File Tree Panic: "Unreachable Code"** (CRITICAL - Post-release hotfix)
+  - Fixed panic accessing `entry.name[0]` without checking if name is empty
+  - Fixed path accumulation bug: "." + "subdir" = "./subdir" caused invalid paths
+  - Added graceful error handling for directory iteration failures
+  - Added safety check for empty entry names before index access
+  - Prevents crash with error recovery instead of propagating failures
+  - Stack trace: `loadNodeChildren` → `toggleSelected` → `handleFileTreeInput`
+  - Files: src/editor/file_tree.zig:141-146,179-182,245-249
+
 - **File Tree Selection Crash**: Prevent out-of-bounds access after collapse
   - Fixed critical crash when toggling/selecting file tree nodes
   - Added bounds clamping for `selected_index` after `rebuildFlatView()`
   - Collapsing directories no longer causes invalid index access
-  - Stack trace: `loadNodeChildren` → `toggleSelected` → `handleFileTreeInput`
-  - Files: src/editor/file_tree.zig:243-251
+  - Files: src/editor/file_tree.zig:257-265
 
 - **File Tree Performance**: Eliminate double rendering (50% improvement)
   - Removed redundant full background fill pass
