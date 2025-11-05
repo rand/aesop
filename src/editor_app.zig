@@ -671,10 +671,8 @@ pub const EditorApp = struct {
 
     /// Handle mouse events
     fn handleMouse(self: *EditorApp, mouse: anytype) !void {
-        std.debug.print("DEBUG: handleMouse: kind={}, row={}, col={}\n", .{ mouse.kind, mouse.row, mouse.col });
         switch (mouse.kind) {
             .press_left => {
-                std.debug.print("DEBUG: Calling handleMousePress\n", .{});
                 try self.handleMousePress(mouse.row, mouse.col);
             },
             .move => {
@@ -685,11 +683,9 @@ pub const EditorApp = struct {
                 self.handleMouseRelease();
             },
             .scroll_up => {
-                std.debug.print("DEBUG: Scrolling up\n", .{});
                 self.handleMouseScroll(-3); // Scroll up 3 lines
             },
             .scroll_down => {
-                std.debug.print("DEBUG: Scrolling down\n", .{});
                 self.handleMouseScroll(3); // Scroll down 3 lines
             },
             else => {},

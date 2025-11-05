@@ -337,7 +337,6 @@ pub const Parser = struct {
         }
 
         // Load and compile highlight query (if language grammar available)
-        std.debug.print("DEBUG: Loading highlight query for language={s}\n", .{language.getName()});
         const ts_query: ?*ts.TSQuery = if (ts_language) |lang|
             loadHighlightQuery(allocator, lang, language) catch |err| blk: {
                 std.debug.print("Warning: Failed to load highlight query: {}\n", .{err});
@@ -345,7 +344,6 @@ pub const Parser = struct {
             }
         else
             null;
-        std.debug.print("DEBUG: Query loaded: {}\n", .{ts_query != null});
 
         // Create query cursor (if we have a query)
         var ts_query_cursor: ?*ts.TSQueryCursor = null;
@@ -381,11 +379,7 @@ pub const Parser = struct {
 
     /// Parse buffer and create/update syntax tree
     pub fn parse(self: *Parser, text: []const u8) !void {
-        std.debug.print("DEBUG: parse() called for language={s}, text_len={}\n", .{ self.language.getName(), text.len });
-        const parser = self.ts_parser orelse {
-            std.debug.print("DEBUG: No parser available\n", .{});
-            return error.NoParser;
-        };
+        const parser = self.ts_parser orelse return error.NoParser;
 
         // Parse the text (uses old tree for incremental parsing)
         const new_tree = ts.ts_parser_parse_string(
@@ -393,12 +387,7 @@ pub const Parser = struct {
             self.ts_tree, // old tree for incremental parsing
             text.ptr,
             @intCast(text.len),
-        ) orelse {
-            std.debug.print("DEBUG: Parse failed\n", .{});
-            return error.ParseFailed;
-        };
-
-        std.debug.print("DEBUG: Parse succeeded, tree created\n", .{});
+        ) orelse return error.ParseFailed;
 
         // Delete old tree if it exists
         if (self.ts_tree) |old_tree| {
@@ -426,16 +415,10 @@ pub const Parser = struct {
         _ = start_line;
         _ = end_line;
 
-        std.debug.print("DEBUG: getHighlights called for language={s}, text_len={}\n", .{ self.language.getName(), text.len });
-        std.debug.print("DEBUG: ts_query={}, ts_query_cursor={}, ts_tree={}\n", .{ self.ts_query != null, self.ts_query_cursor != null, self.ts_tree != null });
-
         // If query-based highlighting is not available, fall back to basic highlighting
         if (self.ts_query == null or self.ts_query_cursor == null or self.ts_tree == null) {
-            std.debug.print("DEBUG: Using basicHighlight fallback\n", .{});
             return try basicHighlight(self.allocator, text, self.language);
         }
-
-        std.debug.print("DEBUG: Using tree-sitter query-based highlighting\n", .{});
 
         const query = self.ts_query.?;
         const cursor = self.ts_query_cursor.?;
