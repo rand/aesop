@@ -40,7 +40,7 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, allocator: std.mem.Allo
 
         // Draw vertical separator
         rend.output.setCell(row, tree_width, .{
-            .char = '│',
+            .char = '|',
             .fg = theme.ui.tree_border,
             .bg = theme.ui.tree_bg,
             .attrs = .{},
@@ -65,7 +65,7 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, allocator: std.mem.Allo
     var sep_col: u16 = 0;
     while (sep_col < tree_width) : (sep_col += 1) {
         rend.output.setCell(1, sep_col, .{
-            .char = '─',
+            .char = '-',
             .fg = theme.ui.tree_border,
             .bg = theme.ui.tree_bg,
             .attrs = .{},
@@ -149,7 +149,7 @@ fn renderNode(
 
     // Draw expand/collapse icon for directories
     if (node.is_dir) {
-        const icon = if (node.is_expanded) "▼ " else "▶ ";
+        const icon = if (node.is_expanded) "- " else "+ ";
         rend.writeText(row, col, icon, fg, bg, .{});
         col += @intCast(icon.len);
     } else {
@@ -186,28 +186,29 @@ fn renderNode(
 
 /// Get icon for file/directory
 fn getIcon(node: *const TreeNode) []const u8 {
-    if (node.is_dir) return "📁";
+    if (node.is_dir) return "/";
 
     const ext = std.fs.path.extension(node.name);
 
-    if (std.mem.eql(u8, ext, ".zig")) return "⚡";
-    if (std.mem.eql(u8, ext, ".js") or std.mem.eql(u8, ext, ".ts")) return "📜";
+    if (std.mem.eql(u8, ext, ".zig")) return "Z";
+    if (std.mem.eql(u8, ext, ".js")) return "J";
+    if (std.mem.eql(u8, ext, ".ts")) return "T";
     if (std.mem.eql(u8, ext, ".json")) return "{}";
-    if (std.mem.eql(u8, ext, ".md")) return "📝";
-    if (std.mem.eql(u8, ext, ".txt")) return "📄";
+    if (std.mem.eql(u8, ext, ".md")) return "M";
+    if (std.mem.eql(u8, ext, ".txt")) return "t";
     if (std.mem.eql(u8, ext, ".toml") or
         std.mem.eql(u8, ext, ".yaml") or
-        std.mem.eql(u8, ext, ".yml")) return "⚙";
-    if (std.mem.eql(u8, ext, ".rs")) return "🦀";
-    if (std.mem.eql(u8, ext, ".go")) return "🐹";
-    if (std.mem.eql(u8, ext, ".py")) return "🐍";
+        std.mem.eql(u8, ext, ".yml")) return "c";
+    if (std.mem.eql(u8, ext, ".rs")) return "R";
+    if (std.mem.eql(u8, ext, ".go")) return "G";
+    if (std.mem.eql(u8, ext, ".py")) return "P";
     if (std.mem.eql(u8, ext, ".c") or
-        std.mem.eql(u8, ext, ".h") or
-        std.mem.eql(u8, ext, ".cpp") or
-        std.mem.eql(u8, ext, ".hpp")) return "C";
-    if (std.mem.eql(u8, ext, ".sh")) return "🐚";
+        std.mem.eql(u8, ext, ".h")) return "C";
+    if (std.mem.eql(u8, ext, ".cpp") or
+        std.mem.eql(u8, ext, ".hpp")) return "C+";
+    if (std.mem.eql(u8, ext, ".sh")) return "sh";
 
-    return "📄";
+    return "·";
 }
 
 /// Get color for icon
