@@ -130,6 +130,22 @@ input was laggy or missed entirely. All three issues are now resolved.
 
 ### Fixed
 
+- **File Tree Memory Corruption - ArrayList Undefined Initialization** (CRITICAL)
+  - Fixed catastrophic memory corruption from undefined ArrayList fields
+  - Root cause: std.ArrayList (unmanaged) has NO default field values
+  - Using `.{}` left items.ptr pointing to undefined memory (0xaaaaaaaaaaaaaaaa)
+  - Caused duplicate entries, garbage text, corrupted names, random crashes
+  - Fix: Explicitly initialize all fields: `items = &[_]T{}`, `capacity = 0`
+  - Affects: TreeNode.children, FileTree.flat_view, temporary entry lists
+  - File: src/editor/file_tree.zig
+
+- **File Tree Rendering - Unsigned Integer Underflow** (CRITICAL)
+  - Fixed buffer overrun from unsigned arithmetic in visible_count calculation
+  - If scroll_offset >= flat_view.len, subtraction wraps to huge number
+  - Caused reading beyond array bounds into garbage memory
+  - Added bounds check before subtraction to prevent underflow
+  - File: src/render/filetree.zig:89-93
+
 - **File Tree Border Drawing** (Phase 1)
   - Fixed separator drawing with proper bounds checking
   - Changed from unsafe `tree_width` to safe `if (tree_width < size.width)` guard
