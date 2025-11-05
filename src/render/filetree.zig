@@ -98,11 +98,21 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, visible_height: usize, 
         if (node_idx >= flat_view.len) break;
 
         const node = flat_view[node_idx];
+
+        // Safety check: ensure node and name are valid
+        if (node.name.len == 0) {
+            std.log.warn("Invalid node at index {}: empty name", .{node_idx});
+            continue;
+        }
+
         const is_selected = node_idx == editor.file_tree.selected_index;
         const node_row = start_row + @as(u16, @intCast(i));
 
         // Render node
-        try renderNode(rend, node, node_row, tree_width, is_selected, theme);
+        renderNode(rend, node, node_row, tree_width, is_selected, theme) catch |err| {
+            std.log.warn("Failed to render node '{}': {}", .{std.zig.fmtEscapes(node.name), err});
+            continue;
+        };
     }
 
     // Fill empty rows below last node

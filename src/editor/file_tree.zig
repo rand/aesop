@@ -86,11 +86,13 @@ pub const FileTree = struct {
 
     /// Load directory tree starting from path
     pub fn loadDirectory(self: *FileTree, path: []const u8) !void {
-        // Clear existing tree
+        // Clear flat view first to remove all references to nodes
+        self.flat_view.clearAndFree(self.allocator);
+
+        // Then clear existing tree
         if (self.root) |root| {
             root.deinit();
         }
-        self.flat_view.clearRetainingCapacity();
 
         // Get absolute path
         const abs_path = try std.fs.cwd().realpathAlloc(self.allocator, path);
@@ -222,7 +224,8 @@ pub const FileTree = struct {
 
     /// Rebuild flat view from tree (for rendering)
     fn rebuildFlatView(self: *FileTree) !void {
-        self.flat_view.clearRetainingCapacity();
+        // Clear and free to ensure no stale pointers remain
+        self.flat_view.clearAndFree(self.allocator);
         if (self.root) |root| {
             try self.addToFlatView(root);
         }
