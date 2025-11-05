@@ -399,7 +399,7 @@ q    - Stop recording
 
 ### Tree-sitter Syntax Highlighting
 
-**Supported languages**: Zig, Rust, Go, Python, C
+**Supported languages**: Zig, Rust, Go, Python, C, Markdown, TypeScript, TSX
 
 **How it works**:
 - Incremental parsing (only re-parse changed regions)
@@ -589,8 +589,8 @@ ldconfig -p | grep tree-sitter
 ### Syntax Highlighting Not Working
 
 **Verify language support**:
-- Supported: Zig, Rust, Go, Python, C
-- File extension must match (`.zig`, `.rs`, `.go`, `.py`, `.c`)
+- Supported: Zig, Rust, Go, Python, C, Markdown, TypeScript, TSX
+- File extension must match (`.zig`, `.rs`, `.go`, `.py`, `.c`, `.md`, `.ts`, `.tsx`)
 
 **Check grammars installed**:
 ```bash
