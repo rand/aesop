@@ -50,6 +50,7 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, visible_height: usize, 
     }
 
     // Draw separator below title (Nerd Font box-drawing character)
+    // Only draw within tree area (0..tree_width-1)
     var sep_col: u16 = 0;
     while (sep_col < tree_width) : (sep_col += 1) {
         rend.output.setCell(1, sep_col, .{
@@ -60,15 +61,19 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, visible_height: usize, 
         });
     }
 
-    // Draw vertical separator for all rows (renderNode() handles row backgrounds)
+    // Draw vertical separator for all rows at rightmost column of tree
+    // tree_width is the separator column (e.g., for width 30, draws at column 30)
+    // This is OUTSIDE the tree content area but before the buffer
     var row: u16 = 0;
     while (row < visible_height) : (row += 1) {
-        rend.output.setCell(row, tree_width, .{
-            .char = 0x2502, // '│' - Box-drawing character
-            .fg = theme.ui.tree_border,
-            .bg = theme.ui.tree_bg,
-            .attrs = .{},
-        });
+        if (tree_width < size.width) {
+            rend.output.setCell(row, tree_width, .{
+                .char = 0x2502, // '│' - Box-drawing character
+                .fg = theme.ui.tree_border,
+                .bg = theme.ui.tree_bg,
+                .attrs = .{},
+            });
+        }
     }
 
     // Render tree nodes
@@ -175,6 +180,7 @@ fn renderNode(
 
     // ALWAYS fill the entire row background to prevent artifacts
     // This ensures any previous content is completely overwritten
+    // Fill only up to width (not including the separator column)
     var c: u16 = 0;
     while (c < width) : (c += 1) {
         rend.output.setCell(row, c, .{
@@ -206,7 +212,15 @@ fn renderNode(
     col += 1;
 
     // Draw name (smart truncation with ellipsis if needed)
-    const max_name_len = width -| col -| 1;
+    // Ensure we have at least some space for the name
+    // width is tree_width (e.g., 30), col is current position (e.g., 6-10)
+    // We want: name ends before width, leaving at least 1 char of space
+    const remaining_width = if (col >= width) 0 else width - col;
+    const max_name_len = if (remaining_width > 1) remaining_width - 1 else 0;
+
+    // Only draw if we have space
+    if (max_name_len == 0) return;
+
     const name = truncateWithEllipsis(node.name, max_name_len, node.is_dir);
 
     rend.writeText(
