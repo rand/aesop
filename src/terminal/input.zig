@@ -294,6 +294,7 @@ pub const Parser = struct {
         // Decode button and modifiers
         const button_base = button & 0x3; // Lower 2 bits are button
         const modifiers_bits = button & 0x1c; // Bits 2-4 are modifiers
+        const motion_bit = button & 0x20; // Bit 5 indicates motion/drag
         const scroll_bits = button & 0x40; // Bit 6 indicates scroll
 
         // Build modifiers
@@ -310,6 +311,9 @@ pub const Parser = struct {
             } else {
                 break :blk .scroll_down;
             }
+        } else if (motion_bit != 0) blk: {
+            // Motion/drag events (bit 5 set)
+            break :blk .move;
         } else if (!is_press) blk: {
             // Release event
             break :blk .release;
@@ -317,7 +321,6 @@ pub const Parser = struct {
             0 => .press_left,
             1 => .press_middle,
             2 => .press_right,
-            3 => .move, // Motion events when button is held
             else => return null,
         };
 
