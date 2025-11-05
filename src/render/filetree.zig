@@ -39,8 +39,13 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, allocator: std.mem.Allo
         }
 
         // Draw vertical separator
+        const style = IconStyle.detect();
+        const border_char: u21 = switch (style) {
+            .nerd_font => 0x2502, // '│' - Box-drawing character
+            .ascii => '|',
+        };
         rend.output.setCell(row, tree_width, .{
-            .char = '|',
+            .char = border_char,
             .fg = theme.ui.tree_border,
             .bg = theme.ui.tree_bg,
             .attrs = .{},
@@ -62,10 +67,15 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, allocator: std.mem.Allo
     }
 
     // Draw separator below title
+    const style = IconStyle.detect();
+    const sep_char: u21 = switch (style) {
+        .nerd_font => 0x2500, // '─' - Box-drawing character
+        .ascii => '-',
+    };
     var sep_col: u16 = 0;
     while (sep_col < tree_width) : (sep_col += 1) {
         rend.output.setCell(1, sep_col, .{
-            .char = '-',
+            .char = sep_char,
             .fg = theme.ui.tree_border,
             .bg = theme.ui.tree_bg,
             .attrs = .{},
@@ -149,7 +159,11 @@ fn renderNode(
 
     // Draw expand/collapse icon for directories
     if (node.is_dir) {
-        const icon = if (node.is_expanded) "- " else "+ ";
+        const style = IconStyle.detect();
+        const icon = switch (style) {
+            .nerd_font => if (node.is_expanded) " " else " ", // Nerd Font chevrons
+            .ascii => if (node.is_expanded) "- " else "+ ",
+        };
         rend.writeText(row, col, icon, fg, bg, .{});
         col += @intCast(icon.len);
     } else {
@@ -184,31 +198,93 @@ fn renderNode(
     );
 }
 
-/// Get icon for file/directory
+/// Icon style configuration
+const IconStyle = enum {
+    nerd_font, // Nerd Font icons (most terminals with patched fonts)
+    ascii, // Pure ASCII fallback
+
+    /// Detect best icon style based on environment
+    fn detect() IconStyle {
+        // Check for Nerd Font indicator environment variable
+        if (std.process.getEnvVarOwned(std.heap.page_allocator, "NERD_FONT") catch null) |val| {
+            std.heap.page_allocator.free(val);
+            return .nerd_font;
+        }
+
+        // Check TERM for known compatible terminals
+        if (std.process.getEnvVarOwned(std.heap.page_allocator, "TERM_PROGRAM") catch null) |term_program| {
+            defer std.heap.page_allocator.free(term_program);
+            // iTerm2, Warp, Kitty, Alacritty typically have Nerd Fonts
+            if (std.mem.indexOf(u8, term_program, "iTerm") != null or
+                std.mem.indexOf(u8, term_program, "WezTerm") != null or
+                std.mem.indexOf(u8, term_program, "kitty") != null or
+                std.mem.indexOf(u8, term_program, "Alacritty") != null)
+            {
+                return .nerd_font;
+            }
+        }
+
+        // Default to ASCII for safety
+        return .ascii;
+    }
+};
+
+/// Get icon for file/directory with style detection
 fn getIcon(node: *const TreeNode) []const u8 {
-    if (node.is_dir) return "/";
+    const style = IconStyle.detect();
+
+    if (node.is_dir) {
+        return switch (style) {
+            .nerd_font => "", // Nerd Font folder icon
+            .ascii => "/",
+        };
+    }
 
     const ext = std.fs.path.extension(node.name);
 
-    if (std.mem.eql(u8, ext, ".zig")) return "Z";
-    if (std.mem.eql(u8, ext, ".js")) return "J";
-    if (std.mem.eql(u8, ext, ".ts")) return "T";
-    if (std.mem.eql(u8, ext, ".json")) return "{}";
-    if (std.mem.eql(u8, ext, ".md")) return "M";
-    if (std.mem.eql(u8, ext, ".txt")) return "t";
-    if (std.mem.eql(u8, ext, ".toml") or
-        std.mem.eql(u8, ext, ".yaml") or
-        std.mem.eql(u8, ext, ".yml")) return "c";
-    if (std.mem.eql(u8, ext, ".rs")) return "R";
-    if (std.mem.eql(u8, ext, ".go")) return "G";
-    if (std.mem.eql(u8, ext, ".py")) return "P";
-    if (std.mem.eql(u8, ext, ".c") or
-        std.mem.eql(u8, ext, ".h")) return "C";
-    if (std.mem.eql(u8, ext, ".cpp") or
-        std.mem.eql(u8, ext, ".hpp")) return "C+";
-    if (std.mem.eql(u8, ext, ".sh")) return "sh";
-
-    return "·";
+    return switch (style) {
+        .nerd_font => blk: {
+            // Nerd Font file type icons
+            if (std.mem.eql(u8, ext, ".zig")) break :blk ""; // Lightning bolt
+            if (std.mem.eql(u8, ext, ".js")) break :blk "";
+            if (std.mem.eql(u8, ext, ".ts")) break :blk "";
+            if (std.mem.eql(u8, ext, ".json")) break :blk "";
+            if (std.mem.eql(u8, ext, ".md")) break :blk "";
+            if (std.mem.eql(u8, ext, ".txt")) break :blk "";
+            if (std.mem.eql(u8, ext, ".toml")) break :blk "";
+            if (std.mem.eql(u8, ext, ".yaml") or std.mem.eql(u8, ext, ".yml")) break :blk "";
+            if (std.mem.eql(u8, ext, ".rs")) break :blk "";
+            if (std.mem.eql(u8, ext, ".go")) break :blk "";
+            if (std.mem.eql(u8, ext, ".py")) break :blk "";
+            if (std.mem.eql(u8, ext, ".c") or std.mem.eql(u8, ext, ".h")) break :blk "";
+            if (std.mem.eql(u8, ext, ".cpp") or std.mem.eql(u8, ext, ".hpp")) break :blk "";
+            if (std.mem.eql(u8, ext, ".sh")) break :blk "";
+            if (std.mem.eql(u8, ext, ".lua")) break :blk "";
+            if (std.mem.eql(u8, ext, ".vim")) break :blk "";
+            if (std.mem.eql(u8, ext, ".git")) break :blk "";
+            if (std.mem.eql(u8, ext, ".gitignore")) break :blk "";
+            break :blk ""; // Generic file
+        },
+        .ascii => blk: {
+            // ASCII fallback
+            if (std.mem.eql(u8, ext, ".zig")) break :blk "Z";
+            if (std.mem.eql(u8, ext, ".js")) break :blk "J";
+            if (std.mem.eql(u8, ext, ".ts")) break :blk "T";
+            if (std.mem.eql(u8, ext, ".json")) break :blk "{}";
+            if (std.mem.eql(u8, ext, ".md")) break :blk "M";
+            if (std.mem.eql(u8, ext, ".txt")) break :blk "t";
+            if (std.mem.eql(u8, ext, ".toml") or
+                std.mem.eql(u8, ext, ".yaml") or
+                std.mem.eql(u8, ext, ".yml")) break :blk "c";
+            if (std.mem.eql(u8, ext, ".rs")) break :blk "R";
+            if (std.mem.eql(u8, ext, ".go")) break :blk "G";
+            if (std.mem.eql(u8, ext, ".py")) break :blk "P";
+            if (std.mem.eql(u8, ext, ".c") or std.mem.eql(u8, ext, ".h")) break :blk "C";
+            if (std.mem.eql(u8, ext, ".cpp") or std.mem.eql(u8, ext, ".hpp")) break :blk "C+";
+            if (std.mem.eql(u8, ext, ".sh")) break :blk "sh";
+            break :blk "·";
+        },
+    };
 }
 
 /// Get color for icon
