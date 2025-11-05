@@ -729,7 +729,13 @@ pub const EditorApp = struct {
         else
             0;
 
-        // Ignore clicks in file tree
+        // Handle clicks in file tree
+        if (self.editor.file_tree.visible and screen_col < self.editor.file_tree.width) {
+            try self.handleFileTreeClick(screen_row);
+            return;
+        }
+
+        // Ignore clicks on file tree separator
         if (screen_col < tree_offset) return;
 
         // Ignore clicks in gutter
@@ -823,6 +829,46 @@ pub const EditorApp = struct {
     /// Handle mouse release - finalize selection
     fn handleMouseRelease(self: *EditorApp) void {
         self.mouse_drag_start = null;
+    }
+
+    /// Handle mouse click in file tree
+    fn handleFileTreeClick(self: *EditorApp, screen_row: u16) !void {
+        if (!self.editor.file_tree.visible) return;
+
+        const size = self.renderer.getSize();
+
+        // Check if we have a message displayed
+        const has_message = self.editor.messages.current() != null;
+        const reserved_lines: usize = if (has_message) 2 else 1;
+
+        // File tree viewport height (total height minus status/message lines)
+        const viewport_height: usize = if (size.height > reserved_lines)
+            size.height - reserved_lines
+        else
+            0;
+
+        // Calculate which file tree item was clicked
+        const item_index = self.editor.file_tree.scroll_offset + screen_row;
+
+        // Check if click is within valid range
+        if (item_index >= self.editor.file_tree.flat_view.items.len) return;
+
+        // Update selection
+        self.editor.file_tree.selected_index = item_index;
+        self.editor.file_tree.adjustScroll(viewport_height);
+
+        // Get the clicked node
+        const node = self.editor.file_tree.getSelected() orelse return;
+
+        if (node.is_dir) {
+            // Toggle directory expansion
+            try self.editor.file_tree.toggleSelected();
+        } else {
+            // Open file
+            try self.editor.openFile(node.path);
+            // Optionally hide file tree after opening
+            // self.editor.file_tree.hide();
+        }
     }
 
     /// Check if context bar should be shown
