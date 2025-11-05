@@ -137,6 +137,8 @@ pub fn build(b: *std.Build) void {
         exe.linkSystemLibrary("tree-sitter-c");
         exe.linkSystemLibrary("tree-sitter-markdown");
         exe.linkSystemLibrary("tree-sitter-markdown-inline");
+        exe.linkSystemLibrary("tree-sitter-typescript");
+        exe.linkSystemLibrary("tree-sitter-tsx");
     }
 
     // This declares intent for the executable to be installed into the
@@ -193,6 +195,8 @@ pub fn build(b: *std.Build) void {
         mod_tests.linkSystemLibrary("tree-sitter-c");
         mod_tests.linkSystemLibrary("tree-sitter-markdown");
         mod_tests.linkSystemLibrary("tree-sitter-markdown-inline");
+        mod_tests.linkSystemLibrary("tree-sitter-typescript");
+        mod_tests.linkSystemLibrary("tree-sitter-tsx");
     }
 
     // A run step that will run the test executable.
@@ -220,6 +224,8 @@ pub fn build(b: *std.Build) void {
         exe_tests.linkSystemLibrary("tree-sitter-c");
         exe_tests.linkSystemLibrary("tree-sitter-markdown");
         exe_tests.linkSystemLibrary("tree-sitter-markdown-inline");
+        exe_tests.linkSystemLibrary("tree-sitter-typescript");
+        exe_tests.linkSystemLibrary("tree-sitter-tsx");
     }
 
     // A run step that will run the second test executable.
@@ -255,6 +261,8 @@ pub fn build(b: *std.Build) void {
         integration_tests.linkSystemLibrary("tree-sitter-c");
         integration_tests.linkSystemLibrary("tree-sitter-markdown");
         integration_tests.linkSystemLibrary("tree-sitter-markdown-inline");
+        integration_tests.linkSystemLibrary("tree-sitter-typescript");
+        integration_tests.linkSystemLibrary("tree-sitter-tsx");
     }
 
     const run_integration_tests = b.addRunArtifact(integration_tests);
@@ -302,6 +310,8 @@ pub fn build(b: *std.Build) void {
         input_integration_tests.linkSystemLibrary("tree-sitter-c");
         input_integration_tests.linkSystemLibrary("tree-sitter-markdown");
         input_integration_tests.linkSystemLibrary("tree-sitter-markdown-inline");
+        input_integration_tests.linkSystemLibrary("tree-sitter-typescript");
+        input_integration_tests.linkSystemLibrary("tree-sitter-tsx");
     }
 
     const run_input_integration_tests = b.addRunArtifact(input_integration_tests);

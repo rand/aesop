@@ -310,6 +310,12 @@ pub extern fn tree_sitter_markdown() *const TSLanguage;
 /// Markdown inline content (inline-level parsing)
 pub extern fn tree_sitter_markdown_inline() *const TSLanguage;
 
+/// TypeScript language
+pub extern fn tree_sitter_typescript() *const TSLanguage;
+
+/// TSX language (TypeScript with JSX)
+pub extern fn tree_sitter_tsx() *const TSLanguage;
+
 // === Tests ===
 
 test "TSNode size" {

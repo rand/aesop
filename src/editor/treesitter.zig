@@ -89,6 +89,7 @@ pub const Language = enum {
     python,
     javascript,
     typescript,
+    tsx,
     json,
     markdown,
     plain_text,
@@ -100,6 +101,7 @@ pub const Language = enum {
         if (std.mem.endsWith(u8, filename, ".go")) return .go;
         if (std.mem.endsWith(u8, filename, ".py")) return .python;
         if (std.mem.endsWith(u8, filename, ".js")) return .javascript;
+        if (std.mem.endsWith(u8, filename, ".tsx")) return .tsx; // Check .tsx before .ts
         if (std.mem.endsWith(u8, filename, ".ts")) return .typescript;
         if (std.mem.endsWith(u8, filename, ".json")) return .json;
         if (std.mem.endsWith(u8, filename, ".md")) return .markdown;
@@ -115,6 +117,7 @@ pub const Language = enum {
             .python => "python",
             .javascript => "javascript",
             .typescript => "typescript",
+            .tsx => "tsx",
             .json => "json",
             .markdown => "markdown",
             .plain_text => "plain_text",
@@ -296,10 +299,11 @@ fn getTreeSitterLanguage(language: Language) ?*const ts.TSLanguage {
         .go => ts.tree_sitter_go(),
         .python => ts.tree_sitter_python(),
         .markdown => ts.tree_sitter_markdown(),
+        .typescript => ts.tree_sitter_typescript(),
+        .tsx => ts.tree_sitter_tsx(),
 
         // These don't have tree-sitter grammars in our bindings yet
         .javascript,
-        .typescript,
         .json,
         .plain_text,
         => null,
