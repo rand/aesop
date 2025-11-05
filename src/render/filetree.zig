@@ -114,26 +114,8 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, visible_height: usize, 
         }
     }
 
-    // Show scrollbar indicator if needed
-    if (flat_view.len > viewport_height) {
-        const total = flat_view.len;
-        const scroll_percent = if (total > 0) (scroll_offset * 100) / total else 0;
-
-        var scrollbar_buf: [16]u8 = undefined;
-        const scrollbar_text = std.fmt.bufPrint(&scrollbar_buf, " {d}% ", .{scroll_percent}) catch " ";
-
-        const scroll_row: u16 = @intCast(visible_height - 1);
-        const scroll_col = tree_width -| @as(u16, @intCast(scrollbar_text.len));
-
-        rend.writeText(
-            scroll_row,
-            scroll_col,
-            scrollbar_text,
-            theme.ui.tree_scrollbar,
-            theme.ui.tree_bg,
-            .{ .dim = true },
-            null);
-    }
+    // NOTE: Scrollbar removed - caused visual clutter and positioning issues
+    // Users can see scroll position from visible items and navigation still works
 }
 
 /// Smart truncation with ellipsis that preserves file extensions
