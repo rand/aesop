@@ -86,16 +86,16 @@ pub const yonce_dark = Theme{
         .diagnostic_info = Color{ .rgb = .{ .r = 0x37, .g = 0xE5, .b = 0xE7 } }, // Cyan
         .diagnostic_hint = Color{ .rgb = .{ .r = 0x80, .g = 0x80, .b = 0x80 } }, // Gray
 
-        // File tree
-        .tree_bg = Color{ .rgb = .{ .r = 0x1A, .g = 0x1A, .b = 0x1A } }, // Darker than editor bg
-        .tree_fg = Color{ .rgb = .{ .r = 0xCC, .g = 0xCC, .b = 0xCC } }, // Light gray
-        .tree_border = Color{ .rgb = .{ .r = 0x40, .g = 0x40, .b = 0x40 } }, // Medium gray
-        .tree_title = Color{ .rgb = .{ .r = 0xD9, .g = 0x57, .b = 0xFF } }, // Purple
-        .tree_selected_bg = Color{ .rgb = .{ .r = 0x37, .g = 0xE5, .b = 0xE7 } }, // Cyan
-        .tree_selected_fg = Color{ .rgb = .{ .r = 0x00, .g = 0x00, .b = 0x00 } }, // Black
-        .tree_dir_fg = Color{ .rgb = .{ .r = 0xD9, .g = 0x57, .b = 0xFF } }, // Purple for dirs
-        .tree_file_fg = Color{ .rgb = .{ .r = 0xCC, .g = 0xCC, .b = 0xCC } }, // Light gray for files
-        .tree_scrollbar = Color{ .rgb = .{ .r = 0x60, .g = 0x60, .b = 0x60 } }, // Dim gray
+        // File tree - improved contrast and visual hierarchy
+        .tree_bg = Color{ .rgb = .{ .r = 0x16, .g = 0x16, .b = 0x16 } }, // Very dark background
+        .tree_fg = Color{ .rgb = .{ .r = 0xA0, .g = 0xA0, .b = 0xA0 } }, // Medium gray for regular items
+        .tree_border = Color{ .rgb = .{ .r = 0x30, .g = 0x30, .b = 0x30 } }, // Subtle border
+        .tree_title = Color{ .rgb = .{ .r = 0xD9, .g = 0x57, .b = 0xFF } }, // Purple title
+        .tree_selected_bg = Color{ .rgb = .{ .r = 0x2A, .g = 0x2A, .b = 0x3A } }, // Subtle purple-ish selection
+        .tree_selected_fg = Color{ .rgb = .{ .r = 0xFF, .g = 0xFF, .b = 0xFF } }, // White text on selection
+        .tree_dir_fg = Color{ .rgb = .{ .r = 0x37, .g = 0xE5, .b = 0xE7 } }, // Bright cyan for directories
+        .tree_file_fg = Color{ .rgb = .{ .r = 0xB0, .g = 0xB0, .b = 0xB0 } }, // Light gray for files
+        .tree_scrollbar = Color{ .rgb = .{ .r = 0x50, .g = 0x50, .b = 0x50 } }, // Subtle scrollbar
     },
 
     .syntax = SyntaxColors{
