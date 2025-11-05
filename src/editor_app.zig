@@ -1151,6 +1151,11 @@ pub const EditorApp = struct {
         const syntax_highlights = if (self.editor.config.syntax_highlighting) blk: {
             try self.ensureParser();
             if (self.syntax_parser) |*parser| {
+                // Parse text to create syntax tree
+                parser.parse(text) catch {
+                    // If parsing fails, fall back to no highlights
+                    break :blk &[_]TreeSitter.HighlightToken{};
+                };
                 break :blk try parser.getHighlights(text, viewport.start_line, viewport.end_line);
             }
             break :blk &[_]TreeSitter.HighlightToken{};
