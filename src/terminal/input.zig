@@ -202,7 +202,13 @@ pub const Parser = struct {
                     const seq = self.buf[0..self.pos];
                     std.debug.print("DEBUG: Mouse sequence complete: {s}{c}\n", .{ seq, byte });
                     self.state = .normal;
-                    return try self.parseMouseSgr(seq, byte == 'M');
+                    const event = try self.parseMouseSgr(seq, byte == 'M');
+                    if (event) |e| {
+                        std.debug.print("DEBUG: Parsed event: {}\n", .{e});
+                    } else {
+                        std.debug.print("DEBUG: parseMouseSgr returned null\n", .{});
+                    }
+                    return event;
                 }
                 return null;
             },
