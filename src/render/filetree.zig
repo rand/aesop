@@ -85,7 +85,12 @@ pub fn render(rend: *renderer.Renderer, editor: *Editor, visible_height: usize, 
 
     const flat_view = editor.file_tree.flat_view.items;
     const scroll_offset = editor.file_tree.scroll_offset;
-    const visible_count = @min(flat_view.len - scroll_offset, viewport_height);
+
+    // Prevent underflow: if scroll_offset >= flat_view.len, visible_count should be 0
+    const visible_count = if (scroll_offset >= flat_view.len)
+        0
+    else
+        @min(flat_view.len - scroll_offset, viewport_height);
 
     var i: usize = 0;
     while (i < visible_count) : (i += 1) {
