@@ -130,15 +130,19 @@ input was laggy or missed entirely. All three issues are now resolved.
 
 ### Fixed
 
-- **File Tree Memory Corruption - ArrayList Initialization Panic** (CRITICAL)
-  - Fixed "unreachable code" panic from incorrect ArrayList initialization
-  - Root cause: Explicitly setting ArrayList fields with temporary array literals
-  - The unmanaged ArrayList HAS default field values, should use `.{}` syntax
-  - Explicit initialization `items = &[_]T{}` may create invalid lifetimes
-  - Fix: Use proper `.{}` syntax to rely on struct default values
-  - Simpler and safer: `var list = ArrayList(T){}` or `.children = .{}`
-  - Affects: TreeNode.children, FileTree.flat_view, temporary entry lists
-  - File: src/editor/file_tree.zig
+- **File Tree Memory Corruption - Use-After-Free and Invalid Pointers** (CRITICAL)
+  - Fixed use-after-free bugs causing garbage text and panics when selecting items
+  - Root causes:
+    1. `clearRetainingCapacity()` left stale pointers in flat_view memory
+    2. flat_view contained references to freed tree nodes
+    3. No validation before accessing node pointers during rendering
+  - Fixes:
+    1. Use `clearAndFree()` to actually clear flat_view memory
+    2. Clear flat_view BEFORE freeing tree nodes (order matters!)
+    3. Add safety checks: validate node names, catch rendering errors
+    4. Skip invalid nodes instead of crashing
+  - Prevents: garbage text, selection panics, invalid pointer access
+  - Files: src/editor/file_tree.zig, src/render/filetree.zig
 
 - **File Tree Rendering - Unsigned Integer Underflow** (CRITICAL)
   - Fixed buffer overrun from unsigned arithmetic in visible_count calculation
