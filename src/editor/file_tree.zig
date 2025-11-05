@@ -239,6 +239,16 @@ pub const FileTree = struct {
 
         // Rebuild flat view
         try self.rebuildFlatView();
+
+        // Clamp selected_index to valid range after rebuild
+        // (collapsing can make flat_view shorter, invalidating selected_index)
+        if (self.flat_view.items.len > 0) {
+            if (self.selected_index >= self.flat_view.items.len) {
+                self.selected_index = self.flat_view.items.len - 1;
+            }
+        } else {
+            self.selected_index = 0;
+        }
     }
 
     /// Get selected node (for opening files)
