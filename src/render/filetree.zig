@@ -130,21 +130,20 @@ fn renderNode(
     const indent = node.depth * 2;
     var col: u16 = @intCast(indent);
 
-    // Highlight selected row
-    if (is_selected) {
-        var c: u16 = 0;
-        while (c < width) : (c += 1) {
-            rend.output.setCell(row, c, .{
-                .char = ' ',
-                .fg = theme.ui.tree_selected_fg,
-                .bg = theme.ui.tree_selected_bg,
-                .attrs = .{},
-            });
-        }
-    }
-
     const fg = if (is_selected) theme.ui.tree_selected_fg else theme.ui.tree_fg;
     const bg = if (is_selected) theme.ui.tree_selected_bg else theme.ui.tree_bg;
+
+    // ALWAYS fill the entire row background to prevent artifacts
+    // This ensures any previous content is completely overwritten
+    var c: u16 = 0;
+    while (c < width) : (c += 1) {
+        rend.output.setCell(row, c, .{
+            .char = ' ',
+            .fg = fg,
+            .bg = bg,
+            .attrs = .{},
+        });
+    }
 
     // Draw expand/collapse icon for directories (Nerd Font chevrons)
     if (node.is_dir) {
