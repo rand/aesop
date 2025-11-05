@@ -304,6 +304,12 @@ pub extern fn tree_sitter_python() *const TSLanguage;
 /// C language
 pub extern fn tree_sitter_c() *const TSLanguage;
 
+/// Markdown language (block-level parsing)
+pub extern fn tree_sitter_markdown() *const TSLanguage;
+
+/// Markdown inline content (inline-level parsing)
+pub extern fn tree_sitter_markdown_inline() *const TSLanguage;
+
 // === Tests ===
 
 test "TSNode size" {

@@ -135,6 +135,8 @@ pub fn build(b: *std.Build) void {
         exe.linkSystemLibrary("tree-sitter-go");
         exe.linkSystemLibrary("tree-sitter-python");
         exe.linkSystemLibrary("tree-sitter-c");
+        exe.linkSystemLibrary("tree-sitter-markdown");
+        exe.linkSystemLibrary("tree-sitter-markdown-inline");
     }
 
     // This declares intent for the executable to be installed into the
@@ -189,6 +191,8 @@ pub fn build(b: *std.Build) void {
         mod_tests.linkSystemLibrary("tree-sitter-go");
         mod_tests.linkSystemLibrary("tree-sitter-python");
         mod_tests.linkSystemLibrary("tree-sitter-c");
+        mod_tests.linkSystemLibrary("tree-sitter-markdown");
+        mod_tests.linkSystemLibrary("tree-sitter-markdown-inline");
     }
 
     // A run step that will run the test executable.
@@ -214,6 +218,8 @@ pub fn build(b: *std.Build) void {
         exe_tests.linkSystemLibrary("tree-sitter-go");
         exe_tests.linkSystemLibrary("tree-sitter-python");
         exe_tests.linkSystemLibrary("tree-sitter-c");
+        exe_tests.linkSystemLibrary("tree-sitter-markdown");
+        exe_tests.linkSystemLibrary("tree-sitter-markdown-inline");
     }
 
     // A run step that will run the second test executable.
@@ -247,6 +253,8 @@ pub fn build(b: *std.Build) void {
         integration_tests.linkSystemLibrary("tree-sitter-go");
         integration_tests.linkSystemLibrary("tree-sitter-python");
         integration_tests.linkSystemLibrary("tree-sitter-c");
+        integration_tests.linkSystemLibrary("tree-sitter-markdown");
+        integration_tests.linkSystemLibrary("tree-sitter-markdown-inline");
     }
 
     const run_integration_tests = b.addRunArtifact(integration_tests);
@@ -292,6 +300,8 @@ pub fn build(b: *std.Build) void {
         input_integration_tests.linkSystemLibrary("tree-sitter-go");
         input_integration_tests.linkSystemLibrary("tree-sitter-python");
         input_integration_tests.linkSystemLibrary("tree-sitter-c");
+        input_integration_tests.linkSystemLibrary("tree-sitter-markdown");
+        input_integration_tests.linkSystemLibrary("tree-sitter-markdown-inline");
     }
 
     const run_input_integration_tests = b.addRunArtifact(input_integration_tests);

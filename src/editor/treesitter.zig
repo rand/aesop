@@ -295,12 +295,12 @@ fn getTreeSitterLanguage(language: Language) ?*const ts.TSLanguage {
         .rust => ts.tree_sitter_rust(),
         .go => ts.tree_sitter_go(),
         .python => ts.tree_sitter_python(),
+        .markdown => ts.tree_sitter_markdown(),
 
         // These don't have tree-sitter grammars in our bindings yet
         .javascript,
         .typescript,
         .json,
-        .markdown,
         .plain_text,
         => null,
     };
@@ -469,11 +469,11 @@ pub const Parser = struct {
 /// Basic regex-free keyword highlighting (temporary until tree-sitter is integrated)
 /// Uses the enhanced tokenizer from highlight.zig
 fn basicHighlight(allocator: std.mem.Allocator, text: []const u8, language: Language) ![]HighlightToken {
-    // For unsupported languages (markdown, plain_text, etc.), return empty array
+    // For unsupported languages (plain_text, etc.), return empty array
     // This prevents incorrect highlighting of non-code text
     const highlight_lang = switch (language) {
         .zig => Highlight.Language.zig,
-        .markdown, .plain_text => return &[_]HighlightToken{}, // No highlighting for text files
+        .plain_text => return &[_]HighlightToken{}, // No highlighting for plain text files
         else => Highlight.Language.unknown,
     };
 
