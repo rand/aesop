@@ -381,7 +381,11 @@ pub const Parser = struct {
 
     /// Parse buffer and create/update syntax tree
     pub fn parse(self: *Parser, text: []const u8) !void {
-        const parser = self.ts_parser orelse return error.NoParser;
+        std.debug.print("DEBUG: parse() called for language={s}, text_len={}\n", .{ self.language.getName(), text.len });
+        const parser = self.ts_parser orelse {
+            std.debug.print("DEBUG: No parser available\n", .{});
+            return error.NoParser;
+        };
 
         // Parse the text (uses old tree for incremental parsing)
         const new_tree = ts.ts_parser_parse_string(
@@ -389,7 +393,12 @@ pub const Parser = struct {
             self.ts_tree, // old tree for incremental parsing
             text.ptr,
             @intCast(text.len),
-        ) orelse return error.ParseFailed;
+        ) orelse {
+            std.debug.print("DEBUG: Parse failed\n", .{});
+            return error.ParseFailed;
+        };
+
+        std.debug.print("DEBUG: Parse succeeded, tree created\n", .{});
 
         // Delete old tree if it exists
         if (self.ts_tree) |old_tree| {
